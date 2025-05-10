@@ -1,0 +1,140 @@
+.right-sidebar .right-icons {
+  max-width: max-content;
+  box-shadow: 2px 2px 2px #a2a2a2;
+  overflow-y: scroll;
+  max-height: 80vh;
+  background-color: black;
+  z-index: 10;
+  padding-bottom: 20px;
+}
+
+.right-sidebar .right-icons::-webkit-scrollbar {
+  display: none;
+}
+
+.right-sidebar .right-icons .right-icon {
+  cursor: pointer;
+  font-size: 20px;
+  color: white;
+}
+
+.right-sidebar .right-icons .right-icon:hover {
+  background-color: gray;
+}
+
+.right-bottom-icons {
+  border-top-right-radius: 0px !important;
+  box-shadow: 2px 2px 2px #a2a2a2;
+  background-color: black;
+  cursor: pointer;
+  font-size: 20px;
+  color: white;
+  position: absolute;
+  bottom: 7%;
+  right: 102%;
+  border-radius: 9px;
+
+}
+
+.right-sidebar {
+  position: relative;
+  width: 100%;
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* Sidebar styling */
+.sidebar {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 325px;
+  height: 100%;
+  background-color: gray;
+  box-shadow: -2px 0 5px rgba(0, 0, 0, 0.2);
+  transition: transform 0.3s ease-in-out;
+  transform: translateX(100%);
+  z-index: 5;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+}
+
+.sidebar.open {
+  transform: translateX(0);
+}
+
+.sidebar h5 {
+  margin-top: 0;
+  color: white;
+}
+
+.layer-tools .layer-tool {
+  cursor: pointer;
+  color: white;
+}
+
+/**/
+/* main styles */
+/**/
+/* Base Styles for the Sidebar and Tabs */
+.undo-history {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  outline: none;
+  font-size: 14px;
+  text-align: left;
+}
+
+.undo-history>input {
+  display: none;
+  /* Hide the radio buttons */
+}
+
+.undo-history>label {
+  position: relative;
+  display: inline-block;
+  margin: 0;
+  padding: 10px;
+  border: 1px solid #ccc;
+  outline: none;
+  cursor: pointer;
+  transition: all 0.1s ease-in-out;
+  background-color: #f9f9f9;
+  color: #333;
+}
+
+.undo-history>label:hover {
+  background-color: #e6e6e6;
+}
+
+.undo-history>input:checked+label {
+  background-color: #222;
+  color: #fff;
+  cursor: default;
+}
+
+.undo-history>ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  outline: none;
+  font-size: 13px;
+}
+
+.undo-history>ul>li {
+  display: none;
+  width: 100%;
+  padding: 10px;
+  box-sizing: border-box;
+  opacity: 0;
+  transition: opacity 0.3s ease-in-out;
+}
+
+.undo-history>ul>li.active {
+  display: block;
+  /* Show the active tab */
+  opacity: 1;
+}

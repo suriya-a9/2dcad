@@ -1,0 +1,75 @@
+.fill-stroke-dialog {
+    position: fixed;
+    top: 50%;
+    right: 0;
+    transform: translate(-25%, -50%);
+    background: black;
+    border: 1px solid #ccc;
+    border-radius: 8px;
+    padding: 20px;
+    z-index: 1000;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+}
+
+.dialog-content {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.dialog-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+}
+
+.dialog-actions button {
+    padding: 5px 10px;
+    cursor: pointer;
+}
+
+.fill-stroke-dialog h3 {
+    color: white;
+    font-size: 18px;
+    letter-spacing: 0.6px;
+    text-transform: capitalize;
+    cursor: auto;
+}
+
+.fill-stroke-dialog label {
+    color: white;
+    font-size: 14px;
+    letter-spacing: 0.6px;
+    text-transform: capitalize;
+}
+
+.dialog-actions button {
+    font-size: 14px;
+    padding: 5px 10px;
+    cursor: pointer;
+    background: white;
+    border: 2px solid white;
+    border-radius: 3px;
+    letter-spacing: 0.6px;
+}
+
+.dialog-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.fill-stroke-dialog p {
+    font-size: 12px;
+    border: 1px solid white;
+    padding: 5px 10px;
+    border-radius: 100px;
+    margin-bottom: 0px;
+    cursor: pointer;
+}

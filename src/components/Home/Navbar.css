@@ -1,0 +1,51 @@
+.nav-bar.home {
+  max-width: 100%;
+  background: #a9a9a9;
+  display: flex;
+  justify-content: space-between;
+  padding: 10px 40px;
+  z-index: 1;
+}
+.logo {
+  display: flex;
+  align-items: center;
+}
+.logo img {
+  width: 40px;
+  height: 40px;
+}
+.logo h2 {
+  padding-left: 10px;
+}
+.user {
+  align-content: center;
+  position: relative;
+}
+.user .user-img {
+  width: 25px;
+  height: 25px;
+}
+.dropdown-icon {
+  width: 25px;
+  height: 25px;
+  cursor: pointer;
+}
+.dp-home {
+  position: absolute;
+  background: gray;
+  color: white;
+  width: 140px;
+  right: 0;
+  padding-left: 10px;
+  z-index: 1;
+  display: none;
+}
+.dp-home p {
+  font-size: 15px;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+}
+.user:hover .dp-home {
+  display: block;
+}

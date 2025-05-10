@@ -1,0 +1,11 @@
+.cursor-pointer {
+  cursor: pointer;
+}
+
+.cursor-select {
+  cursor: url('../../assets/select.png'), auto;
+}
+
+.cursor-node {
+  cursor: url('../../assets/node.png'), auto;
+}

@@ -1,0 +1,50 @@
+.scroll-container {
+  max-height: 270px;
+  overflow-y: auto;
+  padding-right: 10px;
+}
+
+::-webkit-scrollbar {
+  display: none;
+}
+
+.grid-container {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 3px;
+}
+
+.page-card {
+  cursor: pointer;
+  transition: 0.3s ease-in-out;
+  border: 1px solid #ddd;
+}
+
+.cardcolor {
+  border: none;
+  width: 116px;
+  height: 180px;
+}
+
+
+.cardcolor:hover {
+  background-color: #0d6efd;
+  border-radius: 5px;
+}
+
+.modal-dark {
+  background-color: #121212;
+  color: white;
+}
+
+.modal-light {
+  background-color: white;
+  color: black;
+}
+
+.card-body.p-2 {
+  justify-content: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}

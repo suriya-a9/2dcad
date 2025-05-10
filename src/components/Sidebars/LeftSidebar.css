@@ -1,0 +1,30 @@
+.left-sidebar .left-icons {
+  max-width: max-content;
+  box-shadow: 2px 2px 2px #a2a2a2;
+  overflow-y: scroll;
+  max-height: 80vh;
+  background-color: black;
+  padding-bottom: 20px;
+}
+
+.left-sidebar .left-icons::-webkit-scrollbar {
+  display: none;
+}
+
+.left-sidebar .left-icons .left-icon {
+  cursor: pointer;
+  font-size: 20px;
+  color: white;
+}
+
+.left-sidebar .left-icons .left-icon:hover {
+  background-color: gray;
+}
+
+.cursor-select {
+  cursor: url('../../assets/arrow.png'), auto;
+}
+
+#tool-left {
+  z-index: 9999;
+}

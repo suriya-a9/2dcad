@@ -824,6 +824,11 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
   const handleDragMove = (e, index) => {
     console.log("handleDragMove triggered for:", e.target);
     const node = e.target;
+    if (selectedTool === "Node" && selectedShapeId) {
+      const { x, y } = e.target.position();
+      dispatch(updateNodePosition({ shapeId: selectedShapeId, nodeIndex: index, newPosition: { x, y } }));
+      console.log(`Control point dragged to: x=${x}, y=${y}`);
+    }
     if (selectedTool === "Bezier" && bezierOption === "Spiro Path") {
       const { x, y } = e.target.position();
       dispatch(updateControlPoint({ index, point: { x, y } }));
@@ -3079,7 +3084,7 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
                           stroke={shape.stroke || "black"}
                           strokeWidth={shape.strokeWidth || 1}
                           rotation={shape.rotation || 0}
-                          scaleX={shape.horizontalRadius / shape.radius || 1} 
+                          scaleX={shape.horizontalRadius / shape.radius || 1}
                           scaleY={shape.verticalRadius / shape.radius || 1}
                           draggable={selectedTool !== "Node"}
                           onDragMove={handleDragMove}

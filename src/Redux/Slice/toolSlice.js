@@ -1,5 +1,6 @@
 import { createSlice } from "@reduxjs/toolkit";
 import { shapes } from "konva/lib/Shape";
+import { generateSpiralPath } from "../../components/Panel/Panel"
 
 
 const toolSlice = createSlice({
@@ -61,6 +62,7 @@ const toolSlice = createSlice({
     pencilScale: 0,
     showInitialScreen: JSON.parse(localStorage.getItem("showEveryTime")) ?? true,
   },
+
   reducers: {
 
     clearSelectedNodePoints: (state) => {
@@ -68,7 +70,7 @@ const toolSlice = createSlice({
     },
 
     separateSelectedPaths: (state) => {
-      console.log("Separate Selected Paths action triggered");
+      console.log("Separate Selected Paths action triggered", state);
 
     },
     setScale: (state, action) => {
@@ -1089,7 +1091,27 @@ const toolSlice = createSlice({
     },
     updateSpiralProperties: (state, action) => {
       const { key, value } = action.payload;
+
+
       state[key] = value;
+
+
+      const selectedShape = state.layers[state.selectedLayerIndex].shapes.find(
+        (shape) => shape.id === state.selectedShapeId
+      );
+
+      if (selectedShape && selectedShape.type === "Spiral") {
+        selectedShape[key] = value;
+
+
+        selectedShape.path = generateSpiralPath(
+          selectedShape.x,
+          selectedShape.y,
+          selectedShape.turns,
+          selectedShape.innerRadius,
+          selectedShape.divergence
+        );
+      }
     },
     jumpToHistory: (state, action) => {
       const targetIndex = action.payload;
@@ -2061,6 +2083,7 @@ const toolSlice = createSlice({
       state.isSnappingEnabled = action.payload;
     },
   },
+  
 });
 
 export const {

@@ -75,7 +75,7 @@ import {
   setStrokeToPathMode,
 } from "../../Redux/Slice/toolSlice";
 
-const generateSpiralPath = (x, y, turns = 5, radius = 50, divergence = 1) => {
+export const generateSpiralPath = (x, y, turns = 5, radius = 50, divergence = 1) => {
   const path = [];
   const angleStep = (Math.PI * 2 * turns) / 100;
 
@@ -572,6 +572,11 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
         corners: 5,
         innerRadius: 0,
         outerRadius: 0,
+        spokeRatio: 0.5,
+        rounded: 0,
+        randomized: 0,
+        cornerRadius: 0,
+        randomOffsets: [],
         fill: fillColor || "black",
         stroke: strokeColor,
         strokeWidth: 1,
@@ -814,7 +819,6 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
       }
     };
   };
-
   useEffect(() => {
     console.log("TextArea Visible:", textAreaVisible);
     console.log("TextArea Position:", textAreaPosition);
@@ -3141,6 +3145,7 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
                     );
                   } else if (shape.type === "Star") {
                     const isSelected = selectedShapeIds.includes(shape.id);
+
                     return (
                       <React.Fragment key={shape.id}>
                         <Star
@@ -3148,22 +3153,30 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
                           x={shape.x}
                           y={shape.y}
                           numPoints={shape.corners}
-                          innerRadius={shape.innerRadius}
-                          outerRadius={shape.outerRadius}
+                          innerRadius={
+                            shape.outerRadius *
+                            (shape.spokeRatio || 0.5) *
+                            (1 - (shape.rounded || 0) * 0.5) * 
+                            (shape.randomOffsets?.[1] || 1) 
+                          }
+                          outerRadius={
+                            shape.outerRadius *
+                            (1 - (shape.rounded || 0) * 0.2) * 
+                            (shape.randomOffsets?.[0] || 1) 
+                          }
                           rotation={shape.rotation || 0}
                           scaleX={shape.scaleX || 1}
                           scaleY={shape.scaleY || 1}
                           fill={shape.fill || "transparent"}
                           stroke={shape.stroke || "black"}
                           strokeWidth={shape.strokeWidth || 1}
-                          onDragMove={handleDragMove}
                           draggable={selectedTool !== "Node"}
+                          onDragMove={handleDragMove}
                           onTransformEnd={(e) => handleBezierTransformEnd(e, shape)}
                           onClick={(e) => {
                             e.cancelBubble = true;
 
                             if (e.evt.ctrlKey && selectedShape) {
-
                               dispatch(
                                 selectNodePoint({
                                   shapeId: selectedShape.id,
@@ -3173,7 +3186,6 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
                                 })
                               );
                             } else {
-
                               dispatch(selectShape(shape.id));
                             }
                           }}

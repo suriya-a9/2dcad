@@ -1497,6 +1497,36 @@ function DefaultTopbar() {
     dispatch(setSnapping(newState));
     console.log("Snapping is now:", newState ? "Enabled" : "Disabled");
   };
+  const handleStarPropertyChange = (property, value) => {
+    const newValue = parseFloat(value);
+    console.log("Star Property Change:", property, newValue);
+    if (!isNaN(newValue) && selectedShapeId) {
+      dispatch(updateShapePosition({ id: selectedShapeId, [property]: newValue }));
+    }
+  };
+
+  const generateRandomOffsets = (numPoints, randomized) => {
+    return Array.from({ length: numPoints }, () => {
+      const offset = Math.random() * randomized;
+      return 1 + offset;
+    });
+  };
+  const handleRandomizedChange = (shapeId, randomized) => {
+    console.log(`handleRandomizedChange called for shapeId: ${shapeId}, randomized: ${randomized}`);
+    const shape = shapes.find((s) => s.id === shapeId);
+    if (shape) {
+      const numPoints = shape.corners * 2;
+      const randomOffsets = generateRandomOffsets(numPoints, randomized);
+
+      dispatch(
+        updateShapePosition({
+          id: shapeId,
+          randomized,
+          randomOffsets,
+        })
+      );
+    }
+  };
   return (
     <>
       <div className="d-flex flex-row mb-3">
@@ -1713,6 +1743,63 @@ function DefaultTopbar() {
               0
             }
             onChange={handleCorners}
+          />
+        </div>
+        <div
+          className="p-2 value"
+          style={selectedTool === "Star" ? { display: "block" } : { display: "none" }}
+        >
+          <label htmlFor="spokeRatio">Spoke Ratio: &nbsp;</label>
+          <input
+            type="number"
+            name="spokeRatio"
+            id="spokeRatio"
+            step={0.1}
+            min={0}
+            max={1}
+            placeholder="0.5"
+            value={selectedShape.spokeRatio || 0.5}
+            onChange={(e) => handleStarPropertyChange("spokeRatio", e.target.value)}
+          />
+        </div>
+        <div
+          className="p-2 value"
+          style={selectedTool === "Star" ? { display: "block" } : { display: "none" }}
+        >
+          <label htmlFor="rounded">Rounded: &nbsp;</label>
+          <input
+            type="number"
+            name="rounded"
+            id="rounded"
+            step={0.1}
+            min={0}
+            max={1}
+            placeholder="0"
+            value={selectedShape.rounded || 0}
+            onChange={(e) => handleStarPropertyChange("rounded", e.target.value)}
+          />
+        </div>
+        <div
+          className="p-2 value"
+          style={selectedTool === "Star" ? { display: "block" } : { display: "none" }}
+        >
+          <label htmlFor="randomized">Randomized: &nbsp;</label>
+          <input
+            type="number"
+            name="randomized"
+            id="randomized"
+            step={0.1}
+            min={0}
+            max={1}
+            placeholder="0"
+            value={selectedShape.randomized || 0}
+            onChange={(e) => {
+              const newValue = parseFloat(e.target.value);
+              if (!isNaN(newValue) && selectedShapeId) {
+                dispatch(updateShapePosition({ id: selectedShapeId, randomized: newValue }));
+                handleRandomizedChange(selectedShapeId, newValue);
+              }
+            }}
           />
         </div>
         {/* <div className="p-2 value">
@@ -2155,7 +2242,10 @@ function SpiralTopbar() {
   };
 
   const handleChange = (key, value) => {
-    dispatch(updateSpiralProperties({ key, value: parseFloat(value) || 0 }));
+    if (selectedShapeId) {
+
+      dispatch(updateSpiralProperties({ key, value: parseFloat(value) || 0 }));
+    }
   };
   return (
     <>
@@ -2209,7 +2299,7 @@ function SpiralTopbar() {
             name="turns"
             id="turns"
             step={1}
-            value={turns}
+            value={selectedShape.turns || turns}
             onChange={(e) => handleChange("turns", e.target.value)}
             placeholder="1"
           />
@@ -2221,7 +2311,7 @@ function SpiralTopbar() {
             name="divergence"
             id="divergence"
             step={1}
-            value={divergence}
+            value={selectedShape.divergence || divergence}
             onChange={(e) => handleChange("divergence", e.target.value)}
             placeholder="1"
           />
@@ -2233,7 +2323,7 @@ function SpiralTopbar() {
             name="innerRadius"
             id="innerRadius"
             step={1}
-            value={innerRadius}
+            value={selectedShape.innerRadius || innerRadius}
             onChange={(e) => handleChange("innerRadius", e.target.value)}
             placeholder="1"
           />

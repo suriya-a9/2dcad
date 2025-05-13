@@ -538,6 +538,39 @@ const toolSlice = createSlice({
         console.error("No selected layer found.");
       }
     },
+    raiseShapeToTop: (state, action) => {
+      const shapeId = action.payload;
+      const selectedLayer = state.layers[state.selectedLayerIndex];
+      if (selectedLayer) {
+        const shapeIndex = selectedLayer.shapes.findIndex((shape) => shape.id === shapeId);
+        if (shapeIndex > -1) {
+          const [shape] = selectedLayer.shapes.splice(shapeIndex, 1);
+          selectedLayer.shapes.push(shape);
+          console.log("Shape raised to top:", shape);
+        } else {
+          console.error("Shape not found in the current layer.");
+        }
+      } else {
+        console.error("No selected layer found.");
+      }
+    },
+
+    lowerShape: (state, action) => {
+      const shapeId = action.payload;
+      const selectedLayer = state.layers[state.selectedLayerIndex];
+      if (selectedLayer) {
+        const shapeIndex = selectedLayer.shapes.findIndex((shape) => shape.id === shapeId);
+        if (shapeIndex > -1) {
+          const [shape] = selectedLayer.shapes.splice(shapeIndex, 1);
+          selectedLayer.shapes.unshift(shape);
+          console.log("Shape lowered to bottom:", shape);
+        } else {
+          console.error("Shape not found in the current layer.");
+        }
+      } else {
+        console.error("No selected layer found.");
+      }
+    },
     updateNodePosition: (state, action) => {
       const { shapeId, nodeIndex, newPosition } = action.payload;
 
@@ -2083,7 +2116,7 @@ const toolSlice = createSlice({
       state.isSnappingEnabled = action.payload;
     },
   },
-  
+
 });
 
 export const {
@@ -2199,6 +2232,8 @@ export const {
   handleUnion,
   intersection,
   setSnapping,
+  raiseShapeToTop,
+  lowerShape,
 } = toolSlice.actions;
 
 export default toolSlice.reducer;

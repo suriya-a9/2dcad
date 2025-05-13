@@ -264,6 +264,8 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
             fontFamily: selectedFontFamily,
             fontStyle: selectedFontStyle,
             alignment: selectedAlignment,
+            textDirection: selectedShape?.textDirection || "ltr",
+            blockProgression: selectedShape?.blockProgression || "normal",
           })
         );
       } else {
@@ -271,6 +273,8 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
         const newTextShape = {
           id: `text-${Date.now()}`,
           type: "Text",
+          blockProgression: "normal",
+          textDirection: selectedShape?.textDirection || "ltr",
           x: (textAreaPosition.x - position.x) / scale,
           y: (textAreaPosition.y - position.y) / scale,
           text: textContent,
@@ -281,6 +285,8 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
           fill: strokeColor,
           width: 200,
         };
+        console.log("Selected Text Direction:", selectedShape?.textDirection);
+        console.log("Textarea Direction Attribute:", selectedShape?.textDirection || "ltr");
         dispatch(addShape(newTextShape));
       }
     }
@@ -802,6 +808,7 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
         const newTextShape = {
           id: `text-${Date.now()}`,
           type: "Text",
+          textDirection: "ltr",
           x: textAreaPosition.x / scale - position.x / scale,
           y: textAreaPosition.y / scale - position.y / scale,
           text: textContent,
@@ -2360,7 +2367,12 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
     }
     return { x, y };
   };
-  const selectedShape = shapes.find((shape) => shape.id === selectedShapeId);
+
+  const selectedShape = useSelector((state) =>
+    state.tool.layers[state.tool.selectedLayerIndex]?.shapes.find(
+      (shape) => shape.id === state.tool.selectedShapeId
+    )
+  );
   const calligraphyOption = useSelector((state) => state.tool.calligraphyOption);
   const calligraphySettings = useSelector((state) => state.tool.calligraphySettings);
   const pencilOption = useSelector((state) => state.tool.pencilOption);
@@ -3092,6 +3104,8 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
                           scaleY={shape.verticalRadius / shape.radius || 1}
                           draggable={selectedTool !== "Node"}
                           onDragMove={handleDragMove}
+                          skewX={shape.skewX || 0}
+                          skewY={shape.skewY || 0}
                           onClick={(e) => {
                             e.cancelBubble = true;
 
@@ -3156,13 +3170,13 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
                           innerRadius={
                             shape.outerRadius *
                             (shape.spokeRatio || 0.5) *
-                            (1 - (shape.rounded || 0) * 0.5) * 
-                            (shape.randomOffsets?.[1] || 1) 
+                            (1 - (shape.rounded || 0) * 0.5) *
+                            (shape.randomOffsets?.[1] || 1)
                           }
                           outerRadius={
                             shape.outerRadius *
-                            (1 - (shape.rounded || 0) * 0.2) * 
-                            (shape.randomOffsets?.[0] || 1) 
+                            (1 - (shape.rounded || 0) * 0.2) *
+                            (shape.randomOffsets?.[0] || 1)
                           }
                           rotation={shape.rotation || 0}
                           scaleX={shape.scaleX || 1}
@@ -3172,6 +3186,8 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
                           strokeWidth={shape.strokeWidth || 1}
                           draggable={selectedTool !== "Node"}
                           onDragMove={handleDragMove}
+                          skewX={shape.skewX || 0}
+                          skewY={shape.skewY || 0}
                           onTransformEnd={(e) => handleBezierTransformEnd(e, shape)}
                           onClick={(e) => {
                             e.cancelBubble = true;
@@ -3225,6 +3241,8 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
                           closed
                           draggable={selectedTool !== "Node"}
                           onDragMove={handleDragMove}
+                          skewX={shape.skewX || 0}
+                          skewY={shape.skewY || 0}
                           onClick={(e) => {
                             e.cancelBubble = true;
 
@@ -3339,6 +3357,8 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
                           onDragMove={handleDragMove}
                           scaleX={shape.scaleX || 1}
                           scaleY={shape.scaleY || 1}
+                          skewX={shape.skewX || 0}
+                          skewY={shape.skewY || 0}
                           onClick={(e) => {
                             e.cancelBubble = true;
 
@@ -3397,6 +3417,8 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
                           scaleY={shape.scaleY || 1}
                           offsetX={shape.width / 2}
                           offsetY={shape.height / 2}
+                          skewX={shape.skewX || 0}
+                          skewY={shape.skewY || 0}
                           onClick={(e) => {
                             e.cancelBubble = true;
 
@@ -3596,31 +3618,33 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
                     );
                   } else if (shape.type === "Text") {
                     const isSelected = selectedShapeIds.includes(shape.id);
+                    const textDirection = shape.textDirection || "ltr";
+                    const blockProgression = shape.blockProgression || "normal";
+
+                    const renderedText =
+                      blockProgression === "topToBottom"
+                        ? shape.text.split("").join("\n")
+                        : shape.text;
+
                     return (
                       <React.Fragment key={shape.id}>
                         <KonvaText
                           key={shape.id}
                           id={shape.id}
-                          x={shape.x}
+                          x={textDirection === "rtl" ? shape.x + shape.width : shape.x}
                           y={shape.y}
-                          text={shape.text}
+                          text={renderedText}
                           fontSize={shape.fontSize || 16}
                           fontFamily={shape.fontFamily || "Arial"}
-                          dash={getDashArray(shape.strokeStyle)}
                           fontStyle={shape.fontStyle || "normal"}
-                          align={shape.alignment || "left"}
+                          align={textDirection === "rtl" ? "right" : shape.alignment || "left"}
                           width={shape.width || 200}
                           fill={shape.fill || "black"}
                           rotation={shape.rotation || 0}
-                          offsetX={shape.width / 2}
-                          offsetY={shape.height / 2}
-                          scaleX={shape.scaleX || 1}
-                          scaleY={shape.scaleY || 1}
-                          onDragMove={handleDragMove}
                           draggable
+                          onDragMove={handleDragMove}
                           onClick={(e) => {
                             e.cancelBubble = true;
-                            console.log("Text clicked:", shape.text);
                             setTextAreaPosition({
                               x: shape.x * scale + position.x,
                               y: shape.y * scale + position.y,
@@ -4086,7 +4110,10 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
             border: "1px solid black",
             resize: "none",
             zIndex: 1000,
+            direction: selectedShape?.textDirection || "ltr",
+            textAlign: selectedShape?.textDirection === "rtl" ? "right" : "left",
           }}
+          dir={selectedShape?.textDirection || "ltr"}
           value={textContent}
           onChange={(e) => setTextContent(e.target.value)}
           onBlur={handleTextAreaBlur}

@@ -6,7 +6,8 @@ import { setBezierOption } from "../../Redux/Slice/toolSlice";
 import { BsVectorPen } from "react-icons/bs";
 import { TbBrandSnapseed } from "react-icons/tb";
 import { FaBezierCurve, FaProjectDiagram, FaDrawPolygon, FaPlus, FaLink, FaUnlink } from "react-icons/fa";
-import { MdRoundedCorner } from "react-icons/md";
+import { MdRoundedCorner, MdOutlineVerticalAlignTop } from "react-icons/md";
+import { AiOutlineVerticalAlignBottom } from "react-icons/ai";
 import { GiStraightPipe } from "react-icons/gi";
 import { PiPath } from "react-icons/pi";
 import { setSelectedTool } from "../../Redux/Slice/toolSlice";
@@ -60,6 +61,8 @@ import {
   strokePath,
   setStrokeToPathMode,
   setSnapping,
+  raiseShapeToTop,
+  lowerShape,
 } from "../../Redux/Slice/toolSlice";
 import {
   TbDeselect,
@@ -1408,6 +1411,32 @@ function DefaultTopbar() {
     }
   };
 
+  const handleSkewChange = (axis, value) => {
+    const newValue = parseFloat(value);
+    if (!isNaN(newValue) && selectedShapeId) {
+      dispatch(
+        updateShapePosition({
+          id: selectedShapeId,
+          [axis]: newValue,
+        })
+      );
+    }
+  };
+
+  const handleRaiseToTop = () => {
+    if (selectedShapeId) {
+      console.log("Raise to Top clicked for shape ID:", selectedShapeId);
+      dispatch(raiseShapeToTop(selectedShapeId));
+    }
+  };
+
+  const handleLower = () => {
+    if (selectedShapeId) {
+      console.log("Lower clicked for shape ID:", selectedShapeId);
+      dispatch(lowerShape(selectedShapeId));
+    }
+  };
+
   const handleStrokeChange = (e) => {
     const newStrokeWidth = parseFloat(e.target.value);
     if (!isNaN(newStrokeWidth) && selectedShapeId) {
@@ -1529,7 +1558,7 @@ function DefaultTopbar() {
   };
   return (
     <>
-      <div className="d-flex flex-row mb-3">
+      <div className="d-flex flex-row mb-3" style={{ alignItems: "center" }}>
         <div
           className={`p-2 top-icon ${isSnappingEnabled ? "active" : ""}`}
           onClick={toggleSnapping}
@@ -1605,7 +1634,51 @@ function DefaultTopbar() {
             onChange={handleInputChange}
           />
         </div>
+        <div className="p-2 value">
+          <label htmlFor="skewX">Skew X: &nbsp;</label>
+          <input
+            type="number"
+            name="skewX"
+            id="skewX"
+            step={1}
+            placeholder="0"
+            value={selectedShape.skewX || 0}
+            onChange={(e) => handleSkewChange("skewX", e.target.value)}
+          />
+        </div>
+        <div className="p-2 value">
+          <label htmlFor="skewY">Skew Y: &nbsp;</label>
+          <input
+            type="number"
+            name="skewY"
+            id="skewY"
+            step={1}
+            placeholder="0"
+            value={selectedShape.skewY || 0}
+            onChange={(e) => handleSkewChange("skewY", e.target.value)}
+          />
+        </div>
         { }
+        <div
+          className="p-2 value"
+          style={
+            selectedTool === "Select"
+              ? { display: "block" }
+              : { display: "none" }
+          }
+        >
+          <AiOutlineVerticalAlignBottom onClick={handleRaiseToTop} disabled={!selectedShapeId} style={{ fontSize: '25px', color: 'white' }} />
+        </div>
+        <div
+          className="p-2 value"
+          style={
+            selectedTool === "Select"
+              ? { display: "block" }
+              : { display: "none" }
+          }
+        >
+          <MdOutlineVerticalAlignTop onClick={handleLower} disabled={!selectedShapeId} style={{ fontSize: '25px', color: 'white' }} />
+        </div>
         <div
           className="p-2 value"
           style={
@@ -2410,9 +2483,45 @@ function TextEditorTopbar({ onStyleChange, selectedShapeId }) {
       })
     );
   };
+  const selectedShape = useSelector(
+    (state) =>
+      state.tool.layers[state.tool.selectedLayerIndex].shapes.find(
+        (shape) => shape.id === selectedShapeId
+      ) || {}
+  );
+  const textDirection = selectedShape.textDirection || "ltr";
+  const handleTextDirectionChange = (direction) => {
+    if (selectedShapeId) {
+      dispatch(
+        updateShapePosition({
+          id: selectedShapeId,
+          textDirection: direction,
+        })
+      );
+    }
+    console.log("Text Direction Changed To:", direction);
+  };
+  const handleBlockProgressionChange = (progression) => {
+    console.log("Block Progression Change Triggered:", progression);
+    console.log("Selected Shape ID:", selectedShapeId);
 
+    if (selectedShapeId) {
+      dispatch(
+        updateShapePosition({
+          id: selectedShapeId,
+          blockProgression: progression,
+        })
+      );
+      console.log("Block Progression Changed To:", progression);
+    } else {
+      console.error("No shape is selected. Cannot update block progression.");
+    }
+  };
   return (
-    <div className="text-editor-topbar">
+    <div className="text-editor-topbar" style={{
+      direction: textDirection,
+      textAlign: textDirection === "rtl" ? "right" : "left",
+    }}>
       <label>Font Family</label>
       <select value={selectedFontFamily} onChange={handleFontFamilyChange}>
         <option value="Arial">Arial</option>
@@ -2475,6 +2584,22 @@ function TextEditorTopbar({ onStyleChange, selectedShapeId }) {
         <option value="uppercase">Uppercase</option>
         <option value="lowercase">Lowercase</option>
         <option value="capitalize">Capitalize</option>
+      </select>
+      <label>Text Direction</label>
+      <select
+        onChange={(e) => handleTextDirectionChange(e.target.value)}
+        defaultValue="ltr"
+      >
+        <option value="ltr">Left to Right</option>
+        <option value="rtl">Right to Left</option>
+      </select>
+      <label>Block Progression</label>
+      <select
+        onChange={(e) => handleBlockProgressionChange(e.target.value)}
+        defaultValue="normal"
+      >
+        <option value="normal">Normal</option>
+        <option value="topToBottom">Top to Bottom</option>
       </select>
     </div>
   );

@@ -52,14 +52,15 @@ const LeftSidebar = () => {
               data-tooltip-id="tool-left"
             />
           </div>
-          {/* <div
+          <div
             className="p-2 left-icon"
+            onClick={() => handleToolSelect("ShapeBuilder")}
           >
             <CgPathDivide
               data-tooltip-content="Shape Builder Tool"
               data-tooltip-id="tool-left"
             />
-          </div> */}
+          </div>
           <div
             className="p-2 left-icon"
             onClick={() => handleToolSelect("Rectangle")}

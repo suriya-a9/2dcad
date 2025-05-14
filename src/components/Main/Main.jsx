@@ -20,6 +20,8 @@ const Main = () => {
   const [contextMenu, setContextMenu] = useState({ visible: false, x: 0, y: 0 });
   const [guidelines, setGuidelines] = useState([]);
   const [draggingGuide, setDraggingGuide] = useState(null);
+  const [cursorPosition, setCursorPosition] = useState({ x: 0, y: 0 });
+  const [canvasRotation, setCanvasRotation] = useState(0);
   const toggleSidebar = (state) => {
     if (typeof state === "boolean") {
       setIsSidebarOpen(state);
@@ -28,7 +30,7 @@ const Main = () => {
     }
   };
   const { width, height } = useSelector((state) => state.tool);
-
+  console.log("main width and height", width, height);
   const stageRef = useRef(null);
 
   const downloadURI = (uri, name) => {
@@ -484,6 +486,10 @@ const Main = () => {
 
       setDraggingGuide(updatedGuide);
     }
+    setCursorPosition({
+      x: e.clientX,
+      y: e.clientY,
+    });
   };
 
   const handleMouseUp = () => {
@@ -494,6 +500,22 @@ const Main = () => {
         )
       );
       setDraggingGuide(null);
+    }
+  };
+
+  const handleZoomChange = (value) => {
+    const newScale = parseFloat(value);
+
+    if (!isNaN(newScale)) {
+      const clampedScale = Math.max(0.5, Math.min(newScale, 3));
+      setPanelScale(clampedScale);
+    }
+  };
+  const handleRotationChange = (value) => {
+    const newRotation = parseFloat(value);
+
+    if (!isNaN(newRotation)) {
+      setCanvasRotation(newRotation);
     }
   };
 
@@ -677,9 +699,9 @@ const Main = () => {
           >
             <div
               style={{
-                transform: `scale(${panelScale})`,
+                transform: `scale(${panelScale}) rotate(${canvasRotation}deg)`,
                 transformOrigin: 'top center',
-                width: `${width}px`,
+                width: `${width} px`,
                 height: `${height}px`,
               }}
             >
@@ -720,9 +742,54 @@ const Main = () => {
         <div style={{ display: 'flex', alignItems: 'stretch' }}>
           <div style={{ flexGrow: '1', position: 'fixed', bottom: '0px', overflowY: 'scroll', scrollbarWidth: 'thin' }}>
             <ColorPalette />
+            <div
+              style={{
+                marginTop: '10px',
+                textAlign: 'right',
+                fontSize: '14px',
+                color: '#333',
+                backgroundColor: 'white'
+              }}
+            >
+              <span>X: {cursorPosition.x.toFixed(2)}</span> |{' '}
+              <span>Y: {cursorPosition.y.toFixed(2)}</span> &nbsp; |{' '}
+              <label htmlFor="zoom">Z: </label>
+              <input
+                title='Zoom Canvas'
+                type="number"
+                id="zoom"
+                name="zoom"
+                step={0.1}
+                min={0.5}
+                max={3}
+                value={panelScale.toFixed(2)}
+                onChange={(e) => handleZoomChange(e.target.value)}
+                style={{
+                  width: '60px',
+                  textAlign: 'center',
+                }}
+              />
+              &nbsp; |{' '}
+              <label htmlFor="rotation">R: </label>
+              <input
+                title='Rotate Canvas'
+                type="number"
+                id="rotation"
+                name="rotation"
+                step={1}
+                min={-360}
+                max={360}
+                value={canvasRotation.toFixed(0)}
+                onChange={(e) => handleRotationChange(e.target.value)}
+                style={{
+                  width: '60px',
+                  textAlign: 'center',
+                }}
+              />
+            </div>
           </div>
         </div>
-      </div>
+      </div >
     </>
   )
 }

@@ -61,6 +61,7 @@ const toolSlice = createSlice({
     pencilMode: "Bezier Path",
     pencilScale: 0,
     showInitialScreen: JSON.parse(localStorage.getItem("showEveryTime")) ?? true,
+    shapeBuilderMode: "combine",
   },
 
   reducers: {
@@ -2115,6 +2116,9 @@ const toolSlice = createSlice({
     setSnapping: (state, action) => {
       state.isSnappingEnabled = action.payload;
     },
+    setShapeBuilderMode: (state, action) => {
+      state.shapeBuilderMode = action.payload; 
+    },
   },
 
 });
@@ -2234,6 +2238,7 @@ export const {
   setSnapping,
   raiseShapeToTop,
   lowerShape,
+  setShapeBuilderMode,
 } = toolSlice.actions;
 
 export default toolSlice.reducer;

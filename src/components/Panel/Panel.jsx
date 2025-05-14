@@ -16,6 +16,7 @@ import {
   FastLayer,
   Rect,
   Circle,
+  Arc,
   Star,
   RegularPolygon as KonvaPolygon,
   Line,
@@ -438,6 +439,19 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
 
         dispatch(clearSelection());
       }
+    }
+
+    if (selectedTool === "ShapeBuilder") {
+      console.log("Shape Builder Tool is active.");
+      if (clickedShape && clickedShape.attrs && clickedShape.attrs.id) {
+        console.log("Shape Builder Tool: Selecting shape with ID:", clickedShape.attrs.id);
+        dispatch(selectShape(clickedShape.attrs.id));
+      } else {
+        console.log("Shape Builder Tool: No shape selected.");
+        dispatch(clearSelection());
+      }
+      handleShapeBuilder(pointerPosition);
+      return;
     }
 
     if (selectedTool === "Rectangle") {
@@ -2434,37 +2448,43 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
       setSnappingLines([]);
     }
   }, [isSnappingEnabled]);
-  const renderGrid = () => {
-    const gridSize = 20;
-    const lines = [];
 
 
-    for (let i = 0; i <= Math.ceil(width / gridSize); i++) {
-      lines.push(
-        <Line
-          key={`v-${i}`}
-          points={[i * gridSize, 0, i * gridSize, height]}
-          stroke="#ddd"
-          strokeWidth={0.5}
-          listening={false}
-        />
-      );
-    }
 
-    for (let i = 0; i <= Math.ceil(height / gridSize); i++) {
-      lines.push(
-        <Line
-          key={`h-${i}`}
-          points={[0, i * gridSize, width, i * gridSize]}
-          stroke="#ddd"
-          strokeWidth={0.5}
-          listening={false}
-        />
-      );
-    }
 
-    return lines;
-  };
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
   const snapToObjects = (node, objects, threshold = 10) => {
     console.log("snapToObjects called with:", { node, objects, threshold });
@@ -2561,6 +2581,92 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
       />
     )
   }
+  const handleShapeBuilder = (pointerPosition) => {
+    console.log("Pointer Position:", pointerPosition);
+
+    const overlappingShapes = shapes.filter((shape) => {
+      return (
+        pointerPosition.x >= shape.x &&
+        pointerPosition.x <= shape.x + shape.width &&
+        pointerPosition.y >= shape.y &&
+        pointerPosition.y <= shape.y + shape.height
+      );
+    });
+
+    console.log("Overlapping Shapes:", overlappingShapes);
+
+    if (overlappingShapes.length === 0) {
+      console.log("No shapes found at the pointer position.");
+      return;
+    }
+
+    if (overlappingShapes.length === 1) {
+      console.log("Single shape selected:", overlappingShapes[0].id);
+      dispatch(selectShape(overlappingShapes[0].id));
+    } else {
+      console.log("Multiple overlapping shapes found:", overlappingShapes);
+
+      if (shapeBuilderMode === "combine") {
+        console.log("Combining shapes...");
+        combineShapes(overlappingShapes);
+      } else if (shapeBuilderMode === "subtract") {
+        console.log("Subtracting shapes...");
+        subtractShapes(overlappingShapes);
+      }
+    }
+  };
+  const combineShapes = (shapesToCombine) => {
+    console.log("combineShapes called with:", shapesToCombine);
+
+    if (shapesToCombine.length < 2) {
+      console.error("Not enough shapes to combine.");
+      return;
+    }
+
+    const combinedShape = {
+      id: `combined-shape-${Date.now()}`,
+      type: "Rectangle",
+      x: Math.min(...shapesToCombine.map((shape) => shape.x)),
+      y: Math.min(...shapesToCombine.map((shape) => shape.y)),
+      width: Math.max(
+        ...shapesToCombine.map((shape) => shape.x + shape.width)
+      ) - Math.min(...shapesToCombine.map((shape) => shape.x)),
+      height: Math.max(
+        ...shapesToCombine.map((shape) => shape.y + shape.height)
+      ) - Math.min(...shapesToCombine.map((shape) => shape.y)),
+      fill: "gray",
+      stroke: "black",
+      strokeWidth: 1,
+    };
+
+    console.log("Combined Shape:", combinedShape);
+
+    dispatch(removeShapes(shapesToCombine.map((shape) => shape.id)));
+    dispatch(addShape(combinedShape));
+  };
+
+  const subtractShapes = (shapesToSubtract) => {
+    console.log("subtractShapes called with:", shapesToSubtract);
+
+    if (shapesToSubtract.length < 2) {
+      console.error("Not enough shapes to subtract.");
+      return;
+    }
+
+    const baseShape = shapesToSubtract[0];
+    const subtractedShapes = shapesToSubtract.slice(1);
+
+    const remainingShape = {
+      ...baseShape,
+      width: baseShape.width - subtractedShapes.reduce((acc, shape) => acc + shape.width, 0),
+      height: baseShape.height - subtractedShapes.reduce((acc, shape) => acc + shape.height, 0),
+    };
+
+    console.log("Remaining Shape after subtraction:", remainingShape);
+
+    dispatch(removeShapes(shapesToSubtract.map((shape) => shape.id)));
+    dispatch(addShape(remainingShape));
+  };
   useEffect(() => {
     if (transformerRef.current) {
       console.log("Transformer nodes:", transformerRef.current.nodes());
@@ -2630,7 +2736,7 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
                   listening={false}
                   draggable
                 />
-                {isSnappingEnabled && renderGrid()}
+                {/* {isSnappingEnabled && renderGrid()} */}
                 {snappingLines.map((line, index) => (
                   <Line
                     key={index}
@@ -3091,11 +3197,14 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
                     const isSelected = selectedShapeIds.includes(shape.id);
                     return (
                       <React.Fragment key={shape.id}>
-                        <Circle
+                        <Arc
                           id={shape.id}
                           x={shape.x}
                           y={shape.y}
                           radius={shape.radius}
+                          innerRadius={0}
+                          outerRadius={shape.radius || 0}
+                          angle={shape.arcAngle || 360}
                           fill={shape.fill || "transparent"}
                           stroke={shape.stroke || "black"}
                           strokeWidth={shape.strokeWidth || 1}

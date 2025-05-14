@@ -63,6 +63,7 @@ import {
   setSnapping,
   raiseShapeToTop,
   lowerShape,
+  setShapeBuilderMode,
 } from "../../Redux/Slice/toolSlice";
 import {
   TbDeselect,
@@ -99,7 +100,6 @@ const Topbar = ({
   const layers = useSelector((state) => state.tool.layers);
   const fillColor = useSelector((state) => state.tool.fillColor);
   const strokeColor = useSelector((state) => state.tool.strokeColor);
-
   const navigate = useNavigate();
 
   let selectedShapeId = useSelector((state) => state.tool.selectedShapeId);
@@ -1386,6 +1386,7 @@ export default Topbar;
 function DefaultTopbar() {
   const selectedTool = useSelector((state) => state.tool.selectedTool);
   const dispatch = useDispatch();
+  const shapeBuilderMode = useSelector((state) => state.tool.shapeBuilderMode);
   const [isSnappingEnabled, setIsSnappingEnabled] = useState(false);
   const handleSelectAll = () => {
     dispatch(selecteAllShapes());
@@ -1458,17 +1459,14 @@ function DefaultTopbar() {
       const updatedShape = { id: selectedShapeId, [name]: newValue };
 
 
-      if (name === "horizontalRadius" || name === "verticalRadius") {
-        const shape = shapes.find((shape) => shape.id === selectedShapeId);
-        if (shape) {
-          const horizontalRadius = name === "horizontalRadius" ? newValue : shape.horizontalRadius || 0;
-          const verticalRadius = name === "verticalRadius" ? newValue : shape.verticalRadius || 0;
-
-          updatedShape.radius = Math.max(horizontalRadius, verticalRadius);
-        }
+      if (!isNaN(newValue) && selectedShapeId) {
+        dispatch(
+          updateShapePosition({
+            id: selectedShapeId,
+            [name]: newValue,
+          })
+        );
       }
-
-      dispatch(updateShapePosition(updatedShape));
     }
   };
 
@@ -1556,6 +1554,22 @@ function DefaultTopbar() {
       );
     }
   };
+  const handleArcAngleChange = (value) => {
+    const newAngle = parseFloat(value);
+
+    if (!isNaN(newAngle) && selectedShapeId) {
+      dispatch(
+        updateShapePosition({
+          id: selectedShapeId,
+          arcAngle: Math.max(0, Math.min(newAngle, 360)),
+        })
+      );
+    }
+  };
+
+  const handleShapeBuilderModeChange = (e) => {
+    dispatch(setShapeBuilderMode(e.target.value));
+  };
   return (
     <>
       <div className="d-flex flex-row mb-3" style={{ alignItems: "center" }}>
@@ -1616,7 +1630,7 @@ function DefaultTopbar() {
             type="number"
             name="x"
             id="X"
-            step={0.01}
+            step={1}
             placeholder="0.00"
             value={selectedShape.x ?? shapes?.[shapes?.length - 1]?.x ?? 0}
             onChange={handleInputChange}
@@ -1628,7 +1642,7 @@ function DefaultTopbar() {
             type="number"
             name="y"
             id="Y"
-            step={0.01}
+            step={1}
             placeholder="0.00"
             value={selectedShape.y ?? shapes?.[shapes?.length - 1]?.y ?? 0}
             onChange={handleInputChange}
@@ -1640,7 +1654,7 @@ function DefaultTopbar() {
             type="number"
             name="skewX"
             id="skewX"
-            step={1}
+            step={0.1}
             placeholder="0"
             value={selectedShape.skewX || 0}
             onChange={(e) => handleSkewChange("skewX", e.target.value)}
@@ -1652,7 +1666,7 @@ function DefaultTopbar() {
             type="number"
             name="skewY"
             id="skewY"
-            step={1}
+            step={0.1}
             placeholder="0"
             value={selectedShape.skewY || 0}
             onChange={(e) => handleSkewChange("skewY", e.target.value)}
@@ -1692,7 +1706,7 @@ function DefaultTopbar() {
             type="number"
             name="width"
             id="W"
-            step={0.01}
+            step={1}
             placeholder="0.00"
             value={
               selectedShape.width ?? shapes?.[shapes?.length - 1]?.width ?? 0
@@ -1713,7 +1727,7 @@ function DefaultTopbar() {
             type="number"
             name="height"
             id="H"
-            step={0.01}
+            step={1}
             placeholder="0.00"
             value={
               selectedShape.height ?? shapes?.[shapes?.length - 1]?.height ?? 0
@@ -1757,17 +1771,20 @@ function DefaultTopbar() {
             type="number"
             name="radius"
             id="radius"
-            step={0.01}
+            step={1}
             placeholder="0.00"
             value={
-              selectedShape.radius || shapes?.[shapes?.length - 1]?.radius || 0
+              (selectedShape.radius || shapes?.[shapes?.length - 1]?.radius || 0).toFixed(2)
             }
             onChange={handleRadiusChange}
           />
         </div>
-        <div
-          className="p-2 value"
-          style={selectedTool === "Circle" ? { display: "block" } : { display: "none" }}
+        <div className="p-2 value"
+          style={
+            selectedTool === "Circle"
+              ? { display: "block" }
+              : { display: "none" }
+          }
         >
           <label htmlFor="horizontalRadius">Horizontal Radius: &nbsp;</label>
           <input
@@ -1776,13 +1793,16 @@ function DefaultTopbar() {
             id="horizontalRadius"
             step={1}
             placeholder="0"
-            value={selectedShape.horizontalRadius || 0}
+            value={(selectedShape.horizontalRadius || selectedShape.radius || 0).toFixed(2)}
             onChange={handleRadiusChange}
           />
         </div>
-        <div
-          className="p-2 value"
-          style={selectedTool === "Circle" ? { display: "block" } : { display: "none" }}
+        <div className="p-2 value"
+          style={
+            selectedTool === "Circle"
+              ? { display: "block" }
+              : { display: "none" }
+          }
         >
           <label htmlFor="verticalRadius">Vertical Radius: &nbsp;</label>
           <input
@@ -1791,14 +1811,53 @@ function DefaultTopbar() {
             id="verticalRadius"
             step={1}
             placeholder="0"
-            value={selectedShape.verticalRadius || 0}
+            value={(selectedShape.verticalRadius || selectedShape.radius || 0).toFixed(2)}
             onChange={handleRadiusChange}
           />
         </div>
         <div
           className="p-2 value"
           style={
-            selectedTool === "Star" || selectedTool === "Polygon"
+            selectedTool === "ShapeBuilder"
+              ? { display: "block" }
+              : { display: "none" }
+          }
+        >
+          <label htmlFor="shapeBuilderMode">Mode: &nbsp;</label>
+          <select
+            id="shapeBuilderMode"
+            value={shapeBuilderMode}
+            onChange={(e) => dispatch(setShapeBuilderMode(e.target.value))}
+          >
+            <option value="combine">Combine</option>
+            <option value="subtract">Subtract</option>
+          </select>
+        </div>
+        <div
+          className="p-2 value"
+          style={
+            selectedTool === "Circle"
+              ? { display: "block" }
+              : { display: "none" }
+          }
+        >
+          <label htmlFor="arcAngle">Arc Angle: &nbsp;</label>
+          <input
+            type="number"
+            name="arcAngle"
+            id="arcAngle"
+            step={1}
+            min={0}
+            max={360}
+            placeholder="360"
+            value={(selectedShape.arcAngle || 360).toFixed(0)}
+            onChange={(e) => handleArcAngleChange(e.target.value)}
+          />
+        </div>
+        <div
+          className="p-2 value"
+          style={
+            selectedTool === "Star"
               ? { display: "block" }
               : { display: "none" }
           }

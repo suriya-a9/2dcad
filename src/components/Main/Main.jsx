@@ -684,7 +684,7 @@ const Main = () => {
             style={{
               flexGrow: '10',
               position: 'relative',
-              marginLeft: '4%',
+              marginLeft: '6%',
               top: '160px',
               overflow: 'auto',
               scrollbarWidth: 'none',

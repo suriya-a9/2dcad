@@ -41,9 +41,9 @@ const toolSlice = createSlice({
     selectedShapeIds: [],
     undoHistory: [],
     sprayWidth: 100,
-    sprayAmount: 5,
+    sprayAmount: 1,
     sprayScale: 1,
-    sprayScatter: 10,
+    sprayScatter: 1,
     sprayFocus: 1,
     sprayMode: "random",
     turns: 5,
@@ -62,6 +62,7 @@ const toolSlice = createSlice({
     pencilScale: 0,
     showInitialScreen: JSON.parse(localStorage.getItem("showEveryTime")) ?? true,
     shapeBuilderMode: "combine",
+    sprayEraserMode: false,
   },
 
   reducers: {
@@ -267,7 +268,10 @@ const toolSlice = createSlice({
       state.shapes.push(action.payload);
       console.log("New shape added with name:", newShape.name);
     },
-
+    addShapes: (state, action) => {
+      const selectedLayer = state.layers[state.selectedLayerIndex];
+      selectedLayer.shapes.push(...action.payload);
+    },
     zoomIn: (state) => {
       state.zoomLevel = Math.min(state.zoomLevel + 0.1, 3);
     },
@@ -1066,6 +1070,7 @@ const toolSlice = createSlice({
       state.sprayMode = sprayMode || state.sprayMode;
       state.sprayRotation = sprayRotation || state.sprayRotation;
       state.sprayScatter = sprayScatter || state.sprayScatter;
+      console.log("sprayScale", sprayScale);
     },
     addSprayShapes: (state, action) => {
       const { pathPoints, bounds } = action.payload;
@@ -2117,7 +2122,19 @@ const toolSlice = createSlice({
       state.isSnappingEnabled = action.payload;
     },
     setShapeBuilderMode: (state, action) => {
-      state.shapeBuilderMode = action.payload; 
+      state.shapeBuilderMode = action.payload;
+    },
+    setSprayMode: (state, action) => {
+      state.sprayMode = action.payload;
+    },
+    setSprayEraserMode: (state, action) => {
+      state.sprayEraserMode = action.payload;
+    },
+    removeShapes: (state, action) => {
+      const selectedLayer = state.layers[state.selectedLayerIndex];
+      selectedLayer.shapes = selectedLayer.shapes.filter(
+        (shape) => !action.payload.includes(shape.id)
+      );
     },
   },
 
@@ -2239,6 +2256,10 @@ export const {
   raiseShapeToTop,
   lowerShape,
   setShapeBuilderMode,
+  setSprayMode,
+  setSprayEraserMode,
+  addShapes,
+  removeShapes,
 } = toolSlice.actions;
 
 export default toolSlice.reducer;

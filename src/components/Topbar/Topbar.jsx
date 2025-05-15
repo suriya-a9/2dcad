@@ -64,6 +64,8 @@ import {
   raiseShapeToTop,
   lowerShape,
   setShapeBuilderMode,
+  setSprayMode,
+  setSprayEraserMode,
 } from "../../Redux/Slice/toolSlice";
 import {
   TbDeselect,
@@ -2676,8 +2678,10 @@ function SprayTopbar() {
     sprayFocus,
   } = useSelector((state) => state.tool);
   const [selectedTool, setSelectedTool] = useState(null);
-
+  // const [sprayEraserMode, setSprayEraserMode] = useState(false);
   const selectedShapeId = useSelector((state) => state.tool.selectedShapeId);
+  const sprayEraserMode = useSelector((state) => state.tool.sprayEraserMode);
+  console.log("spray eraser mode", sprayEraserMode);
   const layers = useSelector((state) => state.tool.layers);
   const selectedLayerIndex = useSelector(
     (state) => state.tool.selectedLayerIndex
@@ -2686,7 +2690,7 @@ function SprayTopbar() {
   const handleInputChange = (field, value) => {
     dispatch(setSprayProperties({ [field]: value }));
   };
-
+  const sprayMode = useSelector((state) => state.tool.sprayMode);
   return (
     <>
       <div className="d-flex flex-row mb-3">
@@ -2714,13 +2718,19 @@ function SprayTopbar() {
             data-tooltip-id="tool-top"
           />
         </div>
-        <div className="p-2 top-icon">
+        <div
+          className={`p-2 top-icon ${sprayMode === "singlePath" ? "active" : ""}`}
+          onClick={() => dispatch(setSprayMode("singlePath"))}
+        >
           <FaClone
             data-tooltip-content="Spray Objects in a Single Path"
             data-tooltip-id="tool-top"
           />
         </div>
-        <div className="p-2 top-icon">
+        <div
+          className={`p-2 top-icon ${sprayEraserMode ? "active" : ""}`}
+          onClick={() => dispatch(setSprayEraserMode(!sprayEraserMode))}
+        >
           <BiEraser
             data-tooltip-content="Delete Sprayed Items"
             data-tooltip-id="tool-top"
@@ -2745,9 +2755,10 @@ function SprayTopbar() {
           <input
             type="number"
             name="amount"
+            min={2}
             value={sprayAmount}
             onChange={(e) =>
-              handleInputChange("sprayAmount", Number(e.target.value))
+              handleInputChange("sprayAmount", Math.max(2, Number(e.target.value)))
             }
             id="amount"
             step={1}
@@ -2778,7 +2789,8 @@ function SprayTopbar() {
               handleInputChange("sprayScale", Number(e.target.value))
             }
             id="scale"
-            step={1}
+            step={0.1}
+            max={2}
             placeholder="0"
           />
         </div>

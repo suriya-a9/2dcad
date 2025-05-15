@@ -26,6 +26,7 @@ import {
   Image,
   Group,
   Shape,
+
 } from "react-konva";
 import { useSelector, useDispatch } from "react-redux";
 import {
@@ -74,6 +75,8 @@ import {
   updateNodePosition,
   updateStrokeControlPoint,
   setStrokeToPathMode,
+  addShapes,
+  removeShapes,
 } from "../../Redux/Slice/toolSlice";
 
 export const generateSpiralPath = (x, y, turns = 5, radius = 50, divergence = 1) => {
@@ -146,7 +149,10 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
   const innerRadius = useSelector((state) => state.tool.innerRadius);
   const selectedShapeIds = useSelector((state) => state.tool.selectedShapeIds);
   const [snappingLines, setSnappingLines] = useState([]);
-
+  const sprayMode = useSelector((state) => state.tool.sprayMode)
+  const sprayRotation = useSelector((state) => state.tool.sprayRotation);
+  const sprayScatter = useSelector((state) => state.tool.sprayScatter);
+  const sprayEraserMode = useSelector((state) => state.tool.sprayEraserMode);
   const selectedLayerIndex = useSelector(
     (state) => state.tool.selectedLayerIndex
   );
@@ -190,13 +196,10 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
   }, [selectedTool, selectedShapeIds, shapes]);
 
   const handleSprayTool = (e) => {
-
     const stage = e.target.getStage();
-    const pointerPosition = stage.getPointerPosition();
-
-    if (!pointerPosition) return;
-
-    const { x, y } = pointerPosition;
+    const adjustedPointerPosition = getAdjustedPointerPosition(stage, position, scale);
+    if (!adjustedPointerPosition) return;
+    const { x, y } = adjustedPointerPosition;
 
     const bounds = {
       x: x - sprayWidth / 2,
@@ -227,14 +230,120 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
       height: baseShape.height * sprayScale,
     };
 
-    dispatch(
-      addSprayShapes({
-        baseShape: sprayBaseShape,
-        count: sprayAmount,
-        bounds,
-        focus: sprayFocus,
-      })
-    );
+
+    const rotationRad = (sprayRotation || 0) * (Math.PI / 180);
+
+    if (sprayMode === "singlePath") {
+      const shapesInPath = [];
+      const amount = Math.max(2, sprayAmount);
+      const radius = Math.max(50, sprayWidth / 2);
+
+      for (let i = 0; i < amount; i++) {
+        const angle = (2 * Math.PI * i) / amount;
+        const px0 = Math.cos(angle) * radius;
+        const py0 = Math.sin(angle) * radius;
+        const px = x + (px0 * Math.cos(rotationRad) - py0 * Math.sin(rotationRad));
+        const py = y + (px0 * Math.sin(rotationRad) + py0 * Math.cos(rotationRad));
+        const randomScale = sprayScale * (0.7 + Math.random() * 0.6);
+
+        let shapeData = {
+          ...sprayBaseShape,
+          id: `spray-singlepath-${Date.now()}-${i}`,
+          x: px,
+          y: py,
+          rotation: sprayRotation,
+        };
+
+        if (baseShape.type === "Rectangle") {
+          shapeData.width = baseShape.width * randomScale;
+          shapeData.height = baseShape.height * randomScale;
+        } else if (baseShape.type === "Circle") {
+          shapeData.radius = baseShape.radius * randomScale;
+        } else if (baseShape.type === "Star") {
+          shapeData.innerRadius = baseShape.innerRadius * randomScale;
+          shapeData.outerRadius = baseShape.outerRadius * randomScale;
+        } else if (baseShape.type === "Polygon") {
+          shapeData.radius = baseShape.radius * randomScale;
+
+          const corners = baseShape.corners || (baseShape.points ? baseShape.points.length : 6);
+          const angleStep = (2 * Math.PI) / corners;
+          shapeData.points = Array.from({ length: corners }).map((_, i) => {
+            const angle = i * angleStep;
+            return {
+              x: shapeData.radius * Math.cos(angle),
+              y: shapeData.radius * Math.sin(angle),
+            };
+          });
+        }
+
+        shapesInPath.push(shapeData);
+      }
+
+
+      const groupShape = {
+        id: `spray-group-${Date.now()}`,
+        type: "Group",
+        shapes: shapesInPath,
+        x: 0,
+        y: 0,
+      };
+
+      dispatch(addShape(groupShape));
+      return;
+    }
+
+
+    const sprayShapes = [];
+    const points = [];
+    for (let i = 0; i < sprayAmount; i++) {
+      const angle = (2 * Math.PI * i) / sprayAmount;
+      const radius = sprayWidth / 2;
+      const scatterX = (Math.random() - 0.5) * 2 * sprayScatter;
+      const scatterY = (Math.random() - 0.5) * 2 * sprayScatter;
+      const px0 = Math.cos(angle) * radius + scatterX;
+      const py0 = Math.sin(angle) * radius + scatterY;
+
+      const px = x + (px0 * Math.cos(rotationRad) - py0 * Math.sin(rotationRad));
+      const py = y + (px0 * Math.sin(rotationRad) + py0 * Math.cos(rotationRad));
+
+      const randomScale = sprayScale * (0.7 + Math.random() * 0.6);
+
+      let shapeData = {
+        ...sprayBaseShape,
+        id: `spray-clone-${Date.now()}-${i}`,
+        x: px,
+        y: py,
+        rotation: sprayRotation,
+      };
+
+      if (baseShape.type === "Rectangle") {
+        shapeData.width = baseShape.width * randomScale;
+        shapeData.height = baseShape.height * randomScale;
+      } else if (baseShape.type === "Circle") {
+        shapeData.radius = baseShape.radius * randomScale;
+      } else if (baseShape.type === "Star") {
+        shapeData.innerRadius = baseShape.innerRadius * randomScale;
+        shapeData.outerRadius = baseShape.outerRadius * randomScale;
+      } else if (baseShape.type === "Polygon") {
+        shapeData.radius = baseShape.radius * randomScale;
+
+        const corners = baseShape.corners || (baseShape.points ? baseShape.points.length : 6);
+        const angleStep = (2 * Math.PI) / corners;
+        shapeData.points = Array.from({ length: corners }).map((_, i) => {
+          const angle = i * angleStep;
+          return {
+            x: shapeData.radius * Math.cos(angle),
+            y: shapeData.radius * Math.sin(angle),
+          };
+        });
+      }
+
+
+      sprayShapes.push(shapeData);
+    }
+
+
+    dispatch(addShapes(sprayShapes));
   };
   const getAdjustedPointerPosition = (stage, position, scale) => {
     const pointerPosition = stage.getPointerPosition();
@@ -2232,20 +2341,27 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
         dispatch(redo());
       }
 
-      if (e.key === "Delete" && selectedShapeId) {
-        console.log("Deleting shape with ID:", selectedShapeId);
-        dispatch(deleteShape());
-      }
-      if (e.key === "Backspace" && selectedShapeId) {
-        console.log("Deleting shape with ID:", selectedShapeId);
-        dispatch(deleteShape());
-      }
-      if (e.key === "Backspace" && selectedShapeId) {
-        console.log("Deleting shape with ID:", selectedShapeId);
-        dispatch(deleteShape());
-      }
+
+
+
+
+
+
+
+
+
+
+
+
       if (e.ctrlKey && e.key === "a") {
+        e.preventDefault();
         dispatch(selecteAllShapes());
+      }
+      if (
+        (e.key === "Delete" || e.key === "Backspace") &&
+        selectedShapeIds.length > 0
+      ) {
+        dispatch(removeShapes(selectedShapeIds));
       }
       if (e.ctrlKey && e.key === "x") {
         dispatch(cut());
@@ -2254,11 +2370,7 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
         dispatch(paste());
       }
     };
-
-
     window.addEventListener("keydown", handleKeyDown);
-
-
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
     };
@@ -2448,44 +2560,6 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
       setSnappingLines([]);
     }
   }, [isSnappingEnabled]);
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
   const snapToObjects = (node, objects, threshold = 10) => {
     console.log("snapToObjects called with:", { node, objects, threshold });
     const newSnappingLines = [];
@@ -2690,7 +2764,7 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
         style={{
 
 
-          marginRight: isSidebarOpen ? "10em" : "5em",
+          marginRight: isSidebarOpen ? "0" : "0",
           position: "relative"
         }}
       >
@@ -2813,6 +2887,20 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
                         points={points.flatMap((point) => [point.x, point.y])}
                         stroke={shape.strokeColor || "black"}
                         strokeWidth={shape.strokeWidth || 2}
+                        lineJoin="round"
+                        lineCap="round"
+                      />
+                    );
+                  }
+                  if (shape.type === "polyline") {
+                    return (
+                      <Line
+                        key={shape.id}
+                        points={shape.points.flatMap((p) => [p.x, p.y])}
+                        stroke={shape.stroke || "black"}
+                        strokeWidth={shape.strokeWidth || 2}
+                        fill={shape.fill || "transparent"}
+                        closed={false}
                         lineJoin="round"
                         lineCap="round"
                       />
@@ -2960,6 +3048,8 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
                                   y: point.y,
                                 })
                               );
+                            } else if (sprayEraserMode) {
+                              dispatch(deleteShape());
                             } else {
 
                               dispatch(selectShape(shape.id));
@@ -3228,6 +3318,8 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
                                   y: point.y,
                                 })
                               );
+                            } else if (sprayEraserMode) {
+                              dispatch(deleteShape());
                             } else {
 
                               dispatch(selectShape(shape.id));
@@ -3310,6 +3402,8 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
                                   y: point.y,
                                 })
                               );
+                            } else if (sprayEraserMode) {
+                              dispatch(deleteShape());
                             } else {
                               dispatch(selectShape(shape.id));
                             }
@@ -3365,6 +3459,8 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
                                   y: point.y,
                                 })
                               );
+                            } else if (sprayEraserMode) {
+                              dispatch(deleteShape());
                             } else {
 
                               dispatch(selectShape(shape.id));

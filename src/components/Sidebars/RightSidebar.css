@@ -5,7 +5,7 @@
   max-height: 80vh;
   background-color: black;
   z-index: 10;
-  padding-bottom: 20px;
+  padding-bottom: 100px;
 }
 
 .right-sidebar .right-icons::-webkit-scrollbar {
@@ -30,7 +30,7 @@
   font-size: 20px;
   color: white;
   position: absolute;
-  bottom: 7%;
+  bottom: 20%;
   right: 102%;
   border-radius: 9px;
 

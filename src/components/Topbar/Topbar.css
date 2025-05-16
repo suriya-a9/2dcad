@@ -47,7 +47,11 @@
 
 .top-bar .value label {
   color: white;
-  font-size: 16px;
+  font-size: 12px;
+}
+
+.top-bar .value input {
+  width: 51px !important;
 }
 
 .top-bar .value label {

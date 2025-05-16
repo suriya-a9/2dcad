@@ -153,6 +153,7 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
   const sprayRotation = useSelector((state) => state.tool.sprayRotation);
   const sprayScatter = useSelector((state) => state.tool.sprayScatter);
   const sprayEraserMode = useSelector((state) => state.tool.sprayEraserMode);
+  const eraserMode = useSelector((state) => state.tool.eraserMode);
   const selectedLayerIndex = useSelector(
     (state) => state.tool.selectedLayerIndex
   );
@@ -583,10 +584,31 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
 
     const { x, y } = adjustedPointerPosition;
     if (selectedTool === "Eraser") {
-      isDrawingRef.current = true;
-      setEraserLines([...eraserLines, { points: [x, y] }]);
-      return;
+      const stage = e.target.getStage();
+      const pointerPosition = stage.getPointerPosition();
+      if (!pointerPosition) return;
+
+
+      const clickedShape = e.target;
+      const shapeId = clickedShape?.attrs?.id;
+
+      if (eraserMode === "delete" && shapeId) {
+        dispatch(deleteShape(shapeId));
+        return;
+      } else if (eraserMode === "cut") {
+
+        isDrawingRef.current = true;
+        setEraserLines([...eraserLines, { points: [pointerPosition.x, pointerPosition.y] }]);
+
+        return;
+      } else if (eraserMode === "clip") {
+
+        isDrawingRef.current = true;
+        setEraserLines([...eraserLines, { points: [pointerPosition.x, pointerPosition.y] }]);
+        return;
+      }
     }
+    console.log("clicked eraser mode", eraserMode)
 
     if (e.target === stage) {
       dispatch(clearSelection());
@@ -1437,11 +1459,12 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
           const adjustedWidth = calligraphyWidth * (1 + calligraphyThinning * speed);
 
 
-          const smoothedX = lastPoint.x + dx / (1 + calligraphyMass);
-          const smoothedY = lastPoint.y + dy / (1 + calligraphyMass);
 
-          point.x = smoothedX;
-          point.y = smoothedY;
+          const inertia = Math.max(0, Math.min(calligraphyMass, 10)) / 10;
+          const follow = 1 - inertia;
+
+          point.x = lastPoint.x + (x - lastPoint.x) * follow;
+          point.y = lastPoint.y + (y - lastPoint.y) * follow;
           point.strokeWidth = Math.max(1, adjustedWidth);
           point.timestamp = Date.now();
         } else {
@@ -1458,9 +1481,9 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
           point.x += Math.sin(time * frequency) * amplitude + (Math.random() - 0.5) * amplitude;
           point.y += Math.cos(time * frequency) * amplitude + (Math.random() - 0.5) * amplitude;
 
-
-          const minWidth = 2;
-          const maxWidth = calligraphyWidth;
+          const minWidth = 0.5;
+          const thinningFactor = 2 - calligraphyThinning * 2;
+          const maxWidth = Math.max(minWidth, calligraphyWidth * thinningFactor);
           point.strokeWidth = Math.random() * (maxWidth - minWidth) + minWidth;
 
           console.log("Wiggly Point:", point);
@@ -1468,9 +1491,12 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
           console.log("Marker logic triggered");
 
 
-          point.x = x;
-          point.y = y;
-          point.strokeWidth = calligraphyWidth;
+
+
+          const minWidth = 1;
+          const thinningFactor = 1 - calligraphyThinning;
+          const maxWidth = Math.max(minWidth, calligraphyWidth * thinningFactor);
+          point.strokeWidth = maxWidth;
 
           console.log("Marker Point:", point);
         } else if (calligraphyOption === "Brush") {
@@ -1485,10 +1511,9 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
             const movementAngle = Math.atan2(dy, dx);
 
 
-            const minWidth = 2;
-            const maxWidth = calligraphyWidth;
-            const speedFactor = Math.max(1, 10 - distance);
-            const baseWidth = Math.min(maxWidth, Math.max(minWidth, maxWidth / speedFactor));
+            const minWidth = 1;
+            const thinningFactor = 2 - calligraphyThinning * 2;
+            const baseWidth = Math.max(0.5, calligraphyWidth * thinningFactor);
 
 
             const randomFactor = 0.2;
@@ -1501,8 +1526,8 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
             const smoothedY = (lastPoint.y + y) / 2 + (Math.random() - 0.5) * positionOffset;
 
 
-            point.x = smoothedX;
-            point.y = smoothedY;
+
+
             point.ellipseWidth = ellipseWidth;
             point.ellipseHeight = ellipseHeight;
             point.angle = movementAngle;
@@ -1522,9 +1547,11 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
 
 
             const minWidth = 1;
-            const maxWidth = calligraphyWidth;
+            const thinningFactor = 1 - calligraphyThinning;
+            const adjustedWidth = Math.max(minWidth, calligraphyWidth * thinningFactor);
+
             const speedFactor = Math.max(1, 10 - distance);
-            const baseWidth = Math.min(maxWidth, Math.max(minWidth, maxWidth / speedFactor));
+            const baseWidth = Math.min(adjustedWidth, Math.max(minWidth, adjustedWidth / speedFactor));
 
 
             const nibAngle = Math.PI / 4;
@@ -1539,8 +1566,8 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
             const smoothedY = (lastPoint.y + y) / 2;
 
 
-            point.x = smoothedX;
-            point.y = smoothedY;
+
+
             point.strokeWidth = squeezedWidth;
             point.angle = movementAngle;
 
@@ -1586,9 +1613,9 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
 
             const movementAngle = Math.atan2(dy, dx);
 
-
             const minWidth = 1;
-            const maxWidth = calligraphyWidth * 3;
+            const thinningFactor = 1 - calligraphyThinning;
+            const maxWidth = calligraphyWidth * 3 * thinningFactor;
             const randomWidth = minWidth + Math.random() * (maxWidth - minWidth);
 
 
@@ -3050,6 +3077,8 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
                               );
                             } else if (sprayEraserMode) {
                               dispatch(deleteShape());
+                            } else if (selectedTool === "Eraser" && eraserMode === "delete") {
+                              dispatch(deleteShape(shape.id));
                             } else {
 
                               dispatch(selectShape(shape.id));
@@ -3304,6 +3333,7 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
                           draggable={selectedTool !== "Node"}
                           onDragMove={handleDragMove}
                           skewX={shape.skewX || 0}
+                          closed={false}
                           skewY={shape.skewY || 0}
                           onClick={(e) => {
                             e.cancelBubble = true;
@@ -3320,6 +3350,8 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
                               );
                             } else if (sprayEraserMode) {
                               dispatch(deleteShape());
+                            } else if (selectedTool === "Eraser" && eraserMode === "delete") {
+                              dispatch(deleteShape(shape.id));
                             } else {
 
                               dispatch(selectShape(shape.id));
@@ -3404,6 +3436,8 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
                               );
                             } else if (sprayEraserMode) {
                               dispatch(deleteShape());
+                            } else if (selectedTool === "Eraser" && eraserMode === "delete") {
+                              dispatch(deleteShape(shape.id));
                             } else {
                               dispatch(selectShape(shape.id));
                             }
@@ -3461,6 +3495,8 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
                               );
                             } else if (sprayEraserMode) {
                               dispatch(deleteShape());
+                            } else if (selectedTool === "Eraser" && eraserMode === "delete") {
+                              dispatch(deleteShape(shape.id));
                             } else {
 
                               dispatch(selectShape(shape.id));
@@ -3577,6 +3613,8 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
                                   y: point.y,
                                 })
                               );
+                            } else if (selectedTool === "Eraser" && eraserMode === "delete") {
+                              dispatch(deleteShape(shape.id));
                             } else {
 
                               dispatch(selectShape(shape.id));
@@ -3637,6 +3675,8 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
                                   y: point.y,
                                 })
                               );
+                            } else if (selectedTool === "Eraser" && eraserMode === "delete") {
+                              dispatch(deleteShape(shape.id));
                             } else {
 
                               dispatch(selectShape(shape.id));
@@ -4216,14 +4256,22 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
                   </Group>
                 )}
                 {newShape && calligraphyOption === "Marker" && Array.isArray(newShape.points) && (
-                  <Line
-                    points={newShape.points.flatMap((p) => [p.x, p.y])}
-                    stroke={newShape.stroke}
-                    strokeWidth={newShape.strokeWidth}
-                    lineJoin="round"
-                    lineCap="round"
-                    closed={false}
-                  />
+                  <Group>
+                    {newShape.points.map((point, index) => {
+                      if (index === 0) return null;
+                      const prev = newShape.points[index - 1];
+                      return (
+                        <Line
+                          key={index}
+                          points={[prev.x, prev.y, point.x, point.y]}
+                          stroke={newShape.stroke}
+                          strokeWidth={point.strokeWidth}
+                          lineJoin="round"
+                          lineCap="round"
+                        />
+                      );
+                    })}
+                  </Group>
                 )}
                 {newShape && calligraphyOption === "Tracing" && Array.isArray(newShape.points) && (
                   <Group>

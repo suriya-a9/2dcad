@@ -66,6 +66,12 @@ import {
   setShapeBuilderMode,
   setSprayMode,
   setSprayEraserMode,
+  setCalligraphyThinning,
+  setCalligraphyMass,
+  setCalligraphyAngle,
+  setCalligraphyFixation,
+  setCalligraphyCaps,
+  setEraserMode,
 } from "../../Redux/Slice/toolSlice";
 import {
   TbDeselect,
@@ -1374,6 +1380,8 @@ const Topbar = ({
             <PencilTopbar />
           ) : selectedTool === "Node" ? (
             <NodeTopbar />
+          ) : selectedTool === "Eraser" ? (
+            <EraserTopbar />
           ) : (
             <DefaultTopbar />
           )}
@@ -2032,6 +2040,9 @@ function CalligraphyTopbar() {
   const calligraphyWidth = useSelector((state) => state.tool.calligraphyWidth);
   const calligraphyThinning = useSelector((state) => state.tool.calligraphyThinning);
   const calligraphyMass = useSelector((state) => state.tool.calligraphyMass);
+  const calligraphyAngle = useSelector((state) => state.tool.calligraphyAngle);
+  const calligraphyFixation = useSelector((state) => state.tool.calligraphyFixation);
+  const calligraphyCaps = useSelector((state) => state.tool.calligraphyCaps);
 
   const handleOptionSelect = (option) => {
     dispatch(setCalligraphyOption(option));
@@ -2054,8 +2065,23 @@ function CalligraphyTopbar() {
     dispatch(setCalligraphyMass(newMass));
   };
 
+  const handleAngleChange = (e) => {
+    const newAngle = parseFloat(e.target.value);
+    dispatch(setCalligraphyAngle(newAngle));
+  };
+
+  const handleFixationChange = (e) => {
+    const newFixation = parseFloat(e.target.value);
+    dispatch(setCalligraphyFixation(newFixation));
+  };
+
+  const handleCapsChange = (e) => {
+    const newCaps = parseFloat(e.target.value);
+    dispatch(setCalligraphyCaps(newCaps));
+  };
+
   return (
-    <div className="d-flex flex-row mb-3 top-icons" style={{ alignItems: "center", color: "white" }}>
+    <div className="d-flex flex-row mb-3 top-icons" style={{ alignItems: "center", color: "white", overflow: 'scroll' }}>
       {/* Dropdown for Calligraphy Options */}
       <div className="p-2 value" style={{ display: "flex", alignItems: "center" }}>
         <label>Calligraphy Options: &nbsp;</label>
@@ -2111,6 +2137,78 @@ function CalligraphyTopbar() {
           style={{ width: "150px", margin: "0 10px" }}
         />
         <span>{calligraphyMass.toFixed(1)}</span>
+      </div>
+
+      <div className="p-2 value" style={{ display: "flex", alignItems: "center" }}>
+        <label>Angle: </label>
+        <input
+          type="number"
+          min="0"
+          max="360"
+          step="1"
+          value={calligraphyAngle}
+          onChange={handleAngleChange}
+          style={{ width: "80px", margin: "0 10px" }}
+        />
+        <span>°</span>
+      </div>
+      <div className="p-2 value" style={{ display: "flex", alignItems: "center" }}>
+        <label>Fixation: </label>
+        <input
+          type="range"
+          min="0"
+          max="1"
+          step="0.01"
+          value={calligraphyFixation}
+          onChange={handleFixationChange}
+          style={{ width: "150px", margin: "0 10px" }}
+        />
+        <span>{calligraphyFixation.toFixed(2)}</span>
+      </div>
+      <div className="p-2 value" style={{ display: "flex", alignItems: "center" }}>
+        <label>Caps: </label>
+        <input
+          type="range"
+          min="0"
+          max="1"
+          step="0.01"
+          value={calligraphyCaps}
+          onChange={handleCapsChange}
+          style={{ width: "150px", margin: "0 10px" }}
+        />
+        <span>{calligraphyCaps.toFixed(2)}</span>
+      </div>
+    </div>
+  );
+}
+function EraserTopbar() {
+  const dispatch = useDispatch();
+  const eraserMode = useSelector((state) => state.tool.eraserMode || "delete");
+
+  const handleModeChange = (e) => {
+    dispatch(setEraserMode(e.target.value));
+  };
+
+  return (
+    <div className="d-flex flex-row mb-3 top-icons" style={{ alignItems: "center", color: "white" }}>
+      <div className="p-2 value" style={{ display: "flex", alignItems: "center" }}>
+        <label>Eraser Mode:&nbsp;</label>
+        <select
+          value={eraserMode}
+          onChange={handleModeChange}
+          style={{ padding: "5px", borderRadius: "4px", height: "40px" }}
+        >
+          <option value="delete">Delete Objects</option>
+          <option value="cut">Cut Out from Paths/Objects</option>
+          <option value="clip">Clip from Objects</option>
+        </select>
+      </div>
+      <div className="p-2 value" style={{ display: "flex", alignItems: "center" }}>
+        <span>
+          {eraserMode === "delete" && "Click shapes to delete them."}
+          {eraserMode === "cut" && "Draw over shapes to erase them completely."}
+          {eraserMode === "clip" && "Draw to clip from objects (default eraser behavior)."}
+        </span>
       </div>
     </div>
   );
@@ -2678,7 +2776,7 @@ function SprayTopbar() {
     sprayFocus,
   } = useSelector((state) => state.tool);
   const [selectedTool, setSelectedTool] = useState(null);
-  // const [sprayEraserMode, setSprayEraserMode] = useState(false);
+
   const selectedShapeId = useSelector((state) => state.tool.selectedShapeId);
   const sprayEraserMode = useSelector((state) => state.tool.sprayEraserMode);
   console.log("spray eraser mode", sprayEraserMode);

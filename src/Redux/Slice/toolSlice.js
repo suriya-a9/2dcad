@@ -63,6 +63,10 @@ const toolSlice = createSlice({
     showInitialScreen: JSON.parse(localStorage.getItem("showEveryTime")) ?? true,
     shapeBuilderMode: "combine",
     sprayEraserMode: false,
+    calligraphyAngle: 0,
+    calligraphyFixation: 0,
+    calligraphyCaps: 0,
+    eraserMode: "delete",
   },
 
   reducers: {
@@ -2136,6 +2140,18 @@ const toolSlice = createSlice({
         (shape) => !action.payload.includes(shape.id)
       );
     },
+    setCalligraphyAngle: (state, action) => {
+      state.calligraphyAngle = action.payload;
+    },
+    setCalligraphyFixation: (state, action) => {
+      state.calligraphyFixation = action.payload;
+    },
+    setCalligraphyCaps: (state, action) => {
+      state.calligraphyCaps = action.payload;
+    },
+    setEraserMode: (state, action) => {
+      state.eraserMode = action.payload;
+    },
   },
 
 });
@@ -2260,6 +2276,10 @@ export const {
   setSprayEraserMode,
   addShapes,
   removeShapes,
+  setCalligraphyAngle,
+  setCalligraphyFixation,
+  setCalligraphyCaps,
+  setEraserMode,
 } = toolSlice.actions;
 
 export default toolSlice.reducer;

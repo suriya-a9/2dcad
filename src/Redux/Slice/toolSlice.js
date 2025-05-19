@@ -67,6 +67,9 @@ const toolSlice = createSlice({
     calligraphyFixation: 0,
     calligraphyCaps: 0,
     eraserMode: "delete",
+    eraserWidth: 10,
+    eraserThinning: 0,
+    eraserCaps: 0,
   },
 
   reducers: {
@@ -799,14 +802,18 @@ const toolSlice = createSlice({
         state.selectedShapeIds = [];
       }
     },
-    deleteShape: (state) => {
+    deleteShape: (state, action) => {
       const selectedLayer = state.layers[state.selectedLayerIndex];
+      const shapeId = action.payload;
       const shapeIndex = selectedLayer.shapes.findIndex(
-        (shape) => shape.id === state.selectedShapeId
+        (shape) => shape.id === shapeId
       );
       if (shapeIndex !== -1) {
         selectedLayer.shapes.splice(shapeIndex, 1);
-        state.selectedShapeId = null;
+        if (state.selectedShapeId === shapeId) {
+          state.selectedShapeId = null;
+        }
+        state.selectedShapeIds = state.selectedShapeIds.filter(id => id !== shapeId);
 
         state.history.push(JSON.parse(JSON.stringify(state)));
         state.future = [];
@@ -2152,6 +2159,31 @@ const toolSlice = createSlice({
     setEraserMode: (state, action) => {
       state.eraserMode = action.payload;
     },
+    updateShapeVisibility: (state, action) => {
+      const { id, visible } = action.payload;
+      const selectedLayer = state.layers[state.selectedLayerIndex];
+      const shape = selectedLayer.shapes.find((shape) => shape.id === id);
+      if (shape) {
+        shape.visible = visible;
+      }
+    },
+    updateShapeOpacity: (state, action) => {
+      const { id, opacity } = action.payload;
+      const selectedLayer = state.layers[state.selectedLayerIndex];
+      const shape = selectedLayer.shapes.find((shape) => shape.id === id);
+      if (shape) {
+        shape.opacity = opacity;
+      }
+    },
+    setEraserWidth: (state, action) => {
+      state.eraserWidth = action.payload;
+    },
+    setEraserThinning: (state, action) => {
+      state.eraserThinning = action.payload;
+    },
+    setEraserCaps: (state, action) => {
+      state.eraserCaps = action.payload;
+    }
   },
 
 });
@@ -2280,6 +2312,11 @@ export const {
   setCalligraphyFixation,
   setCalligraphyCaps,
   setEraserMode,
+  updateShapeVisibility,
+  updateShapeOpacity,
+  setEraserWidth,
+  setEraserThinning,
+  setEraserCaps,
 } = toolSlice.actions;
 
 export default toolSlice.reducer;

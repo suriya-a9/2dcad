@@ -1951,8 +1951,54 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
     dispatch(setStrokeToPathMode(false));
   };
   const handleMouseUp = () => {
-    if (isDrawingRef.current && selectedTool === "Eraser") {
+    if (isDrawingRef.current && selectedTool === "Eraser" && eraserMode === "cut") {
       isDrawingRef.current = false;
+      if (eraserLines.length > 0) {
+        const lastEraserLine = eraserLines[eraserLines.length - 1];
+        shapes.forEach((shape) => {
+          if (!shape.points) return;
+          const shapePoints = Array.isArray(shape.points[0])
+            ? shape.points
+            : shape.points.map((p) => [p.x, p.y]);
+          const isErased = shapePoints.some(([sx, sy]) =>
+            lastEraserLine.points.some((_, i, arr) =>
+              i % 2 === 0 &&
+              Math.hypot(arr[i] - sx, arr[i + 1] - sy) < 10
+            )
+          );
+          if (isErased) {
+            dispatch(deleteShape(shape.id));
+          }
+        });
+        setEraserLines([]);
+      }
+    } if (isDrawingRef.current && selectedTool === "Eraser" && eraserMode === "clip") {
+      isDrawingRef.current = false;
+      if (eraserLines.length > 0) {
+        const lastEraserLine = eraserLines[eraserLines.length - 1];
+        shapes.forEach((shape) => {
+          if (!shape.points) return;
+          const shapePoints = Array.isArray(shape.points[0])
+            ? shape.points
+            : shape.points.map((p) => [p.x, p.y]);
+          const isErased = shapePoints.some(([sx, sy]) =>
+            lastEraserLine.points.some((_, i, arr) =>
+              i % 2 === 0 &&
+              Math.hypot(arr[i] - sx, arr[i + 1] - sy) < 10
+            )
+          );
+          if (isErased) {
+
+            dispatch(updateShapeVisibility({ id: shape.id, visible: false }));
+
+
+          }
+        });
+        setEraserLines([]);
+      }
+    } else if (isDrawingRef.current && selectedTool === "Eraser") {
+      isDrawingRef.current = false;
+
     } else if (isMouseMoved && newShape) {
       const currentStrokeColor = strokeColor;
 
@@ -2785,6 +2831,11 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
       );
     }
   };
+  const eraserWidth = useSelector((state) => state.tool.eraserWidth || 10);
+  const eraserThinning = useSelector((state) => state.tool.eraserThinning || 0);
+
+  const eraserCaps = useSelector((state) => state.tool.eraserCaps || 0);
+
   return (
     <>
       <div className="my-0"
@@ -2876,7 +2927,17 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
                     closed={isShapeClosed}
                   />
                 )}
-
+                {selectedTool === "Eraser" && eraserLines.map((line, i) => (
+                  <Line
+                    key={i}
+                    points={line.points}
+                    stroke={strokeColor}
+                    strokeWidth={Math.max(1, eraserWidth * (1 - eraserThinning))}
+                    tension={0.5}
+                    lineCap={eraserCaps}
+                    globalCompositeOperation="source-over"
+                  />
+                ))}
                 {renderSpiroPath()}
 
                 {renderBSplinePath()}
@@ -2884,6 +2945,8 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
                 {renderParaxialSegments()}
 
                 {shapes.map((shape) => {
+
+                  if (shape.visible === false) return null;
                   const isSelected = selectedShapeIds.includes(shape.id);
                   console.log("Rendering shape:", shape);
                   if (shape.type === "Line") {
@@ -3076,7 +3139,7 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
                                 })
                               );
                             } else if (sprayEraserMode) {
-                              dispatch(deleteShape());
+                              dispatch(deleteShape(shape.id));
                             } else if (selectedTool === "Eraser" && eraserMode === "delete") {
                               dispatch(deleteShape(shape.id));
                             } else {
@@ -3349,7 +3412,7 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
                                 })
                               );
                             } else if (sprayEraserMode) {
-                              dispatch(deleteShape());
+                              dispatch(deleteShape(shape.id));
                             } else if (selectedTool === "Eraser" && eraserMode === "delete") {
                               dispatch(deleteShape(shape.id));
                             } else {
@@ -3424,19 +3487,7 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
                           onTransformEnd={(e) => handleBezierTransformEnd(e, shape)}
                           onClick={(e) => {
                             e.cancelBubble = true;
-
-                            if (e.evt.ctrlKey && selectedShape) {
-                              dispatch(
-                                selectNodePoint({
-                                  shapeId: selectedShape.id,
-                                  index,
-                                  x: point.x,
-                                  y: point.y,
-                                })
-                              );
-                            } else if (sprayEraserMode) {
-                              dispatch(deleteShape());
-                            } else if (selectedTool === "Eraser" && eraserMode === "delete") {
+                            if (selectedTool === "Eraser" && eraserMode === "delete") {
                               dispatch(deleteShape(shape.id));
                             } else {
                               dispatch(selectShape(shape.id));
@@ -3999,11 +4050,11 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
                   <Line
                     key={i}
                     points={line.points}
-                    stroke="black"
-                    strokeWidth={10}
+                    stroke={strokeColor}
+                    strokeWidth={Math.max(1, eraserWidth * (1 - eraserThinning))}
                     tension={0.5}
-                    lineCap="round"
-                    globalCompositeOperation="destination-out"
+                    lineCap={eraserCaps}
+                    globalCompositeOperation="source-over"
                   />
                 ))}
 

@@ -72,6 +72,9 @@ import {
   setCalligraphyFixation,
   setCalligraphyCaps,
   setEraserMode,
+  setEraserWidth,
+  setEraserThinning,
+  setEraserCaps,
 } from "../../Redux/Slice/toolSlice";
 import {
   TbDeselect,
@@ -2184,10 +2187,25 @@ function CalligraphyTopbar() {
 function EraserTopbar() {
   const dispatch = useDispatch();
   const eraserMode = useSelector((state) => state.tool.eraserMode || "delete");
+  const eraserWidth = useSelector((state) => state.tool.eraserWidth || 10);
+  const eraserThinning = useSelector((state) => state.tool.eraserThinning || 0);
+  const eraserCaps = useSelector((state) => state.tool.eraserCaps || 0);
 
   const handleModeChange = (e) => {
     dispatch(setEraserMode(e.target.value));
   };
+
+  const handleWidthChange = (e) => {
+    dispatch(setEraserWidth(Number(e.target.value)));
+  };
+
+  const handleThinningChange = (e) => {
+    dispatch(setEraserThinning(Number(e.target.value)));
+  };
+
+  const handleEraserCaps = (e) => {
+    dispatch(setEraserCaps(Number(e.target.value)));
+  }
 
   return (
     <div className="d-flex flex-row mb-3 top-icons" style={{ alignItems: "center", color: "white" }}>
@@ -2204,12 +2222,50 @@ function EraserTopbar() {
         </select>
       </div>
       <div className="p-2 value" style={{ display: "flex", alignItems: "center" }}>
+        <label>Eraser Width:&nbsp;</label>
+        <input
+          type="range"
+          min={1}
+          max={100}
+          value={eraserWidth}
+          onChange={handleWidthChange}
+          style={{ width: "120px" }}
+        />
+        <span style={{ marginLeft: 8 }}>{eraserWidth}px</span>
+      </div>
+      <div className="p-2 value" style={{ display: "flex", alignItems: "center" }}>
+        <label>Eraser Thinning:&nbsp;</label>
+        <input
+          type="range"
+          min={0}
+          max={1}
+          step={0.01}
+          value={eraserThinning}
+          onChange={handleThinningChange}
+          style={{ width: "120px" }}
+        />
+        <span style={{ marginLeft: 8 }}>{eraserThinning}</span>
+      </div>
+      <div className="p-2 value" style={{ display: 'flex', alignItems: 'center' }}>
+        <label>Eraser Caps:&nbsp;</label>
+        <input
+          type="range"
+          min={0}
+          max={1}
+          step={0.01}
+          value={eraserCaps}
+          onChange={handleEraserCaps}
+          style={{ width: "120px" }}
+        />
+        <span style={{ marginLeft: 8 }}>{eraserCaps}</span>
+      </div>
+      {/* <div className="p-2 value" style={{ display: "flex", alignItems: "center" }}>
         <span>
           {eraserMode === "delete" && "Click shapes to delete them."}
           {eraserMode === "cut" && "Draw over shapes to erase them completely."}
           {eraserMode === "clip" && "Draw to clip from objects (default eraser behavior)."}
         </span>
-      </div>
+      </div> */}
     </div>
   );
 }

@@ -19,8 +19,6 @@ canvas#drawingCanvas {
   border: none !important;
 }
 
-/* Media queries */
-
 @media (min-width: 1300px) and (max-width: 1367px) {
   .horizontal-ruler {
     top: 16% !important;

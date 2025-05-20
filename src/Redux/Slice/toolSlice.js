@@ -70,6 +70,13 @@ const toolSlice = createSlice({
     eraserWidth: 10,
     eraserThinning: 0,
     eraserCaps: 0,
+    eraserTremor: 0,
+    eraserMass: 0,
+    pickedColor: null,
+    dropperMode: "pick",
+    dropperTarget: "fill",
+    assignAverage: false,
+    altInverse: false,
   },
 
   reducers: {
@@ -2183,6 +2190,27 @@ const toolSlice = createSlice({
     },
     setEraserCaps: (state, action) => {
       state.eraserCaps = action.payload;
+    },
+    setEraserTremor: (state, action) => {
+      state.eraserTremor = action.payload;
+    },
+    setEraserMass: (state, action) => {
+      state.eraserMass = action.payload;
+    },
+    setPickedColor: (state, action) => {
+      state.pickedColor = action.payload;
+    },
+    setDropperMode: (state, action) => {
+      state.dropperMode = action.payload;
+    },
+    setDropperTarget: (state, action) => {
+      state.dropperTarget = action.payload;
+    },
+    setAssignAverage: (state, action) => {
+      state.assignAverage = action.payload;
+    },
+    setAltInverse: (state, action) => {
+      state.altInverse = action.payload;
     }
   },
 
@@ -2317,6 +2345,13 @@ export const {
   setEraserWidth,
   setEraserThinning,
   setEraserCaps,
+  setEraserTremor,
+  setEraserMass,
+  setPickedColor,
+  setDropperMode,
+  setDropperTarget,
+  setAssignAverage,
+  setAltInverse
 } = toolSlice.actions;
 
 export default toolSlice.reducer;

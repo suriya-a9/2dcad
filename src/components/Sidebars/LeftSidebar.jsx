@@ -150,7 +150,7 @@ const LeftSidebar = () => {
               data-tooltip-id="tool-left"
             />
           </div>
-          {/* <div
+          <div
             className="p-2 left-icon"
             onClick={() => handleToolSelect("Dropper")}
           >
@@ -158,7 +158,7 @@ const LeftSidebar = () => {
               data-tooltip-content="Dropper"
               data-tooltip-id="tool-left"
             />
-          </div> */}
+          </div>
           <div
             className="p-2 left-icon"
             onClick={() => handleToolSelect("PaintBucket")}

@@ -237,47 +237,94 @@ const Main = () => {
 
 
 
-  const handleSave = (format = "png") => {
-    if (stageRef.current) {
-      let uri;
-      switch (format) {
-        case "svg":
-          exportToSVG(stageRef.current);
-          break;
-        case "jpg":
-        case "png":
-        case "webp":
-          const canvas = stageRef.current.toCanvas({ pixelRatio: 3 });
-          uri = canvas.toDataURL(`image/${format}`);
-          downloadURI(uri, `stage.${format}`);
-          break;
-        case "avif":
-          console.warn("AVIF format is not natively supported by Konva. Falling back to PNG.");
-          const fallbackCanvas = stageRef.current.toCanvas({ pixelRatio: 3 });
-          uri = fallbackCanvas.toDataURL("image/png");
-          downloadURI(uri, "stage.png");
-          break;
-        case "pdf":
-          exportToPDF(stageRef.current);
-          break;
-        case "eps":
-          exportToEPS(stageRef.current);
-          break;
-        default:
-          uri = stageRef.current.toDataURL({
-            mimeType: "image/png",
-            quality: 1,
-            pixelRatio: 3,
-          });
-          downloadURI(uri, `stage.${format}`);
-      }
-    } else {
+  const handleSave = async (format = "png") => {
+    if (!stageRef.current) {
       console.error("stageRef.current is not a valid Konva Stage instance");
+      return;
     }
+
+    let blob, suggestedName, mimeType;
+
+    switch (format) {
+      case "svg":
+        const svgString = (() => {
+          const stage = stageRef.current;
+          const stageWidth = stage.width();
+          const stageHeight = stage.height();
+          let svgContent = `<svg xmlns="http://www.w3.org/2000/svg" width="${stageWidth}" height="${stageHeight}" viewBox="0 0 ${stageWidth} ${stageHeight}">`;
+          svgContent += `<rect width="${stageWidth}" height="${stageHeight}" fill="white"/>`;
+          svgContent += `</svg>`;
+          return svgContent;
+        })();
+        blob = new Blob([svgString], { type: "image/svg+xml" });
+        suggestedName = "2DCAD.svg";
+        mimeType = "image/svg+xml";
+        break;
+      case "jpg":
+      case "png":
+      case "webp":
+        const stage = stageRef.current;
+        const layer = stage.getLayers()[0];
+        const bgRect = layer.findOne('Rect');
+        const originalFill = bgRect ? bgRect.fill() : null;
+        if (bgRect) bgRect.fill('white');
+        stage.draw();
+
+        const canvas = stage.toCanvas({ pixelRatio: 3 });
+        const dataUrl = canvas.toDataURL(`image/${format}`);
+
+        if (bgRect && originalFill !== null) {
+          bgRect.fill(originalFill);
+          stage.draw();
+        }
+
+        blob = await (await fetch(dataUrl)).blob();
+        suggestedName = `2DCAD.${format}`;
+        mimeType = `image/${format}`;
+        break;
+      case "pdf":
+        exportToPDF(stageRef.current);
+        return;
+      case "eps":
+        exportToEPS(stageRef.current);
+        return;
+      default:
+        const fallbackCanvas = stageRef.current.toCanvas({ pixelRatio: 3 });
+        const fallbackDataUrl = fallbackCanvas.toDataURL("image/png");
+        blob = await (await fetch(fallbackDataUrl)).blob();
+        suggestedName = "2DCAD.png";
+        mimeType = "image/png";
+    }
+
+    if ('showSaveFilePicker' in window) {
+      try {
+        const handle = await window.showSaveFilePicker({
+          suggestedName,
+          types: [
+            {
+              description: `${format.toUpperCase()} File`,
+              accept: { [mimeType]: [`.${format}`] },
+            },
+          ],
+        });
+        const writable = await handle.createWritable();
+        await writable.write(blob);
+        await writable.close();
+        return;
+      } catch (err) { }
+    }
+
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = suggestedName;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => {
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }, 0);
   };
-
-
-
   const exportToPDF = (stage) => {
     const canvas = stage.toCanvas({ pixelRatio: 3 });
     const imgData = canvas.toDataURL("image/png");

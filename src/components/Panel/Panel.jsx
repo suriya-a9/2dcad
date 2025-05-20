@@ -9,6 +9,7 @@ import { GrSelect } from "react-icons/gr";
 import * as React from "react";
 import html2canvas from "html2canvas";
 import { jsPDF } from "jspdf";
+import { DropperTopbar } from "../Topbar/Topbar";
 import './Panel.css'
 import {
   Stage,
@@ -77,6 +78,7 @@ import {
   setStrokeToPathMode,
   addShapes,
   removeShapes,
+  setPickedColor,
 } from "../../Redux/Slice/toolSlice";
 
 export const generateSpiralPath = (x, y, turns = 5, radius = 50, divergence = 1) => {
@@ -154,6 +156,9 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
   const sprayScatter = useSelector((state) => state.tool.sprayScatter);
   const sprayEraserMode = useSelector((state) => state.tool.sprayEraserMode);
   const eraserMode = useSelector((state) => state.tool.eraserMode);
+  const dropperMode = useSelector(state => state.tool.dropperMode);
+  const pickedColor = useSelector(state => state.tool.pickedColor);
+  const dropperTarget = useSelector(state => state.tool.dropperTarget || "stroke");
   const selectedLayerIndex = useSelector(
     (state) => state.tool.selectedLayerIndex
   );
@@ -787,7 +792,6 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
       const clickedShape = e.target;
       if (clickedShape && clickedShape.attrs.fill) {
         const pickedColor = clickedShape.attrs.fill;
-
         dispatch(setFillColor(pickedColor));
         dispatch(setStrokeColor(pickedColor));
       } else {
@@ -1356,6 +1360,9 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
   const calligraphyMass = useSelector((state) => state.tool.calligraphyMass);
   const calligraphyWidth = useSelector((state) => state.tool.calligraphyWidth);
   const pencilSmoothing = useSelector((state) => state.tool.pencilSmoothing);
+  const eraserMass = useSelector((state) => state.tool.eraserMass || 0);
+
+  const lerp = (a, b, t) => a + (b - a) * t;
   const handleMouseMove = (e) => {
     const stage = e.target.getStage();
     const pointerPosition = stage.getPointerPosition();
@@ -1375,7 +1382,17 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
 
     if (isDrawingRef.current && selectedTool === "Eraser") {
       const lastLine = eraserLines[eraserLines.length - 1];
-      lastLine.points = lastLine.points.concat([x, y]);
+      let lastX = x, lastY = y;
+      if (lastLine.points.length >= 2) {
+        lastX = lastLine.points[lastLine.points.length - 2];
+        lastY = lastLine.points[lastLine.points.length - 1];
+      }
+
+      const massFactor = 1 - eraserMass;
+      const newX = lerp(lastX, x, massFactor);
+      const newY = lerp(lastY, y, massFactor);
+
+      lastLine.points = lastLine.points.concat([newX, newY]);
       setEraserLines([...eraserLines.slice(0, -1), lastLine]);
     }
 
@@ -2835,9 +2852,90 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
   const eraserThinning = useSelector((state) => state.tool.eraserThinning || 0);
 
   const eraserCaps = useSelector((state) => state.tool.eraserCaps || 0);
+  const eraserCapOptions = ["butt", "square", "round"];
+  const eraserCapString = eraserCapOptions[Math.round(eraserCaps * 2)] || "round";
+  const eraserTremor = useSelector((state) => state.tool.eraserTremor || 0);
+  function applyTremorToPoints(points, tremor = 0.5, frequency = 0.3, amplitude = 5) {
+    if (!tremor || tremor <= 0) return points;
 
+    const jittered = [];
+    for (let i = 0; i < points.length; i += 2) {
+      const x = points[i];
+      const y = points[i + 1];
+
+
+      const jitterX = (Math.random() - 0.5 + Math.sin(i * frequency)) * amplitude * tremor;
+      const jitterY = (Math.random() - 0.5 + Math.cos(i * frequency)) * amplitude * tremor;
+
+      jittered.push(x + jitterX, y + jitterY);
+    }
+    return jittered;
+  }
+
+  function blendWithWhite(hex, factor = 0.5) {
+    hex = hex.replace(/^#/, "");
+    if (hex.length === 3) {
+      hex = hex.split("").map(x => x + x).join("");
+    }
+    const num = parseInt(hex, 16);
+    let r = (num >> 16) & 255;
+    let g = (num >> 8) & 255;
+    let b = num & 255;
+
+    r = Math.round(r + (255 - r) * factor);
+    g = Math.round(g + (255 - g) * factor);
+    b = Math.round(b + (255 - b) * factor);
+
+    return `#${((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1)}`;
+  }
+
+  function averageColor(color) {
+    return blendWithWhite(color, 0.5);
+  }
+  const assignAverage = useSelector(state => state.tool.assignAverage);
+
+  function invertColor(hex) {
+    hex = hex.replace(/^#/, "");
+    if (hex.length === 3) {
+      hex = hex.split("").map(x => x + x).join("");
+    }
+    const num = parseInt(hex, 16);
+    let r = 255 - ((num >> 16) & 255);
+    let g = 255 - ((num >> 8) & 255);
+    let b = 255 - (num & 255);
+    return `#${((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1)}`;
+  }
+  const altInverse = useSelector(state => state.tool.altInverse);
+
+  const handleShapeClick = (shape) => {
+    if (selectedTool === "Dropper") {
+      if (dropperMode === "pick") {
+        let color = shape.fill || shape.stroke || "#000";
+        if (altInverse) {
+          color = invertColor(color);
+        }
+        dispatch(setPickedColor(color));
+        dispatch(setFillColor(color));
+        dispatch(setStrokeColor(color));
+      } else if (dropperMode === "assign" && pickedColor) {
+        let colorToAssign = pickedColor;
+        if (assignAverage) {
+          colorToAssign = blendWithWhite(pickedColor, 0.5);
+        }
+        if (dropperTarget === "fill") {
+          dispatch(updateShapePosition({ id: shape.id, fill: colorToAssign }));
+        } else if (dropperTarget === "stroke") {
+          dispatch(updateShapePosition({ id: shape.id, stroke: colorToAssign }));
+        }
+      }
+    }
+  };
   return (
     <>
+
+      {/* {selectedTool === "Dropper" && (
+        <DropperTopbar onAssignAverageChange={setAssignAverage} />
+      )} */}
       <div className="my-0"
         style={{
 
@@ -2907,7 +3005,6 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
                     closed={isShapeClosed}
                   />
                 )}
-
                 {selectedTool === "Bezier" && bezierOption !== "Spiro Path" && (
                   <Path
                     data={getBezierPath()}
@@ -2930,11 +3027,11 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
                 {selectedTool === "Eraser" && eraserLines.map((line, i) => (
                   <Line
                     key={i}
-                    points={line.points}
+                    points={applyTremorToPoints(line.points, eraserTremor)}
                     stroke={strokeColor}
                     strokeWidth={Math.max(1, eraserWidth * (1 - eraserThinning))}
                     tension={0.5}
-                    lineCap={eraserCaps}
+                    lineCap={eraserCapString}
                     globalCompositeOperation="source-over"
                   />
                 ))}
@@ -3127,24 +3224,26 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
                           skewY={shape.skewY || 0}
                           onClick={(e) => {
                             e.cancelBubble = true;
+                            handleShapeClick(shape);
+                            if (selectedTool !== "Dropper") {
+                              if (e.evt.ctrlKey && selectedShape) {
 
-                            if (e.evt.ctrlKey && selectedShape) {
+                                dispatch(
+                                  selectNodePoint({
+                                    shapeId: selectedShape.id,
+                                    index,
+                                    x: point.x,
+                                    y: point.y,
+                                  })
+                                );
+                              } else if (sprayEraserMode) {
+                                dispatch(deleteShape(shape.id));
+                              } else if (selectedTool === "Eraser" && eraserMode === "delete") {
+                                dispatch(deleteShape(shape.id));
+                              } else {
 
-                              dispatch(
-                                selectNodePoint({
-                                  shapeId: selectedShape.id,
-                                  index,
-                                  x: point.x,
-                                  y: point.y,
-                                })
-                              );
-                            } else if (sprayEraserMode) {
-                              dispatch(deleteShape(shape.id));
-                            } else if (selectedTool === "Eraser" && eraserMode === "delete") {
-                              dispatch(deleteShape(shape.id));
-                            } else {
-
-                              dispatch(selectShape(shape.id));
+                                dispatch(selectShape(shape.id));
+                              }
                             }
                           }}
                         />
@@ -3400,24 +3499,26 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
                           skewY={shape.skewY || 0}
                           onClick={(e) => {
                             e.cancelBubble = true;
+                            handleShapeClick(shape);
+                            if (selectedTool !== "Dropper") {
+                              if (e.evt.ctrlKey && selectedShape) {
 
-                            if (e.evt.ctrlKey && selectedShape) {
+                                dispatch(
+                                  selectNodePoint({
+                                    shapeId: selectedShape.id,
+                                    index,
+                                    x: point.x,
+                                    y: point.y,
+                                  })
+                                );
+                              } else if (sprayEraserMode) {
+                                dispatch(deleteShape(shape.id));
+                              } else if (selectedTool === "Eraser" && eraserMode === "delete") {
+                                dispatch(deleteShape(shape.id));
+                              } else {
 
-                              dispatch(
-                                selectNodePoint({
-                                  shapeId: selectedShape.id,
-                                  index,
-                                  x: point.x,
-                                  y: point.y,
-                                })
-                              );
-                            } else if (sprayEraserMode) {
-                              dispatch(deleteShape(shape.id));
-                            } else if (selectedTool === "Eraser" && eraserMode === "delete") {
-                              dispatch(deleteShape(shape.id));
-                            } else {
-
-                              dispatch(selectShape(shape.id));
+                                dispatch(selectShape(shape.id));
+                              }
                             }
                           }}
                           onTransformEnd={(e) => handleResizeEnd(e, shape.id)}
@@ -3487,10 +3588,26 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
                           onTransformEnd={(e) => handleBezierTransformEnd(e, shape)}
                           onClick={(e) => {
                             e.cancelBubble = true;
-                            if (selectedTool === "Eraser" && eraserMode === "delete") {
-                              dispatch(deleteShape(shape.id));
-                            } else {
-                              dispatch(selectShape(shape.id));
+                            handleShapeClick(shape);
+                            if (selectedTool !== "Dropper") {
+                              if (e.evt.ctrlKey && selectedShape) {
+
+                                dispatch(
+                                  selectNodePoint({
+                                    shapeId: selectedShape.id,
+                                    index,
+                                    x: point.x,
+                                    y: point.y,
+                                  })
+                                );
+                              } else if (sprayEraserMode) {
+                                dispatch(deleteShape(shape.id));
+                              } else if (selectedTool === "Eraser" && eraserMode === "delete") {
+                                dispatch(deleteShape(shape.id));
+                              } else {
+
+                                dispatch(selectShape(shape.id));
+                              }
                             }
                           }}
                           onDragEnd={(e) => {
@@ -3533,24 +3650,26 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
                           skewY={shape.skewY || 0}
                           onClick={(e) => {
                             e.cancelBubble = true;
+                            handleShapeClick(shape);
+                            if (selectedTool !== "Dropper") {
+                              if (e.evt.ctrlKey && selectedShape) {
 
-                            if (e.evt.ctrlKey && selectedShape) {
+                                dispatch(
+                                  selectNodePoint({
+                                    shapeId: selectedShape.id,
+                                    index,
+                                    x: point.x,
+                                    y: point.y,
+                                  })
+                                );
+                              } else if (sprayEraserMode) {
+                                dispatch(deleteShape(shape.id));
+                              } else if (selectedTool === "Eraser" && eraserMode === "delete") {
+                                dispatch(deleteShape(shape.id));
+                              } else {
 
-                              dispatch(
-                                selectNodePoint({
-                                  shapeId: selectedShape.id,
-                                  index,
-                                  x: point.x,
-                                  y: point.y,
-                                })
-                              );
-                            } else if (sprayEraserMode) {
-                              dispatch(deleteShape());
-                            } else if (selectedTool === "Eraser" && eraserMode === "delete") {
-                              dispatch(deleteShape(shape.id));
-                            } else {
-
-                              dispatch(selectShape(shape.id));
+                                dispatch(selectShape(shape.id));
+                              }
                             }
                           }}
                           onDragEnd={(e) => {
@@ -3600,7 +3719,27 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
                         draggable
                         onClick={(e) => {
                           e.cancelBubble = true;
-                          dispatch(selectShape(shape.id));
+                          handleShapeClick(shape);
+                          if (selectedTool !== "Dropper") {
+                            if (e.evt.ctrlKey && selectedShape) {
+
+                              dispatch(
+                                selectNodePoint({
+                                  shapeId: selectedShape.id,
+                                  index,
+                                  x: point.x,
+                                  y: point.y,
+                                })
+                              );
+                            } else if (sprayEraserMode) {
+                              dispatch(deleteShape(shape.id));
+                            } else if (selectedTool === "Eraser" && eraserMode === "delete") {
+                              dispatch(deleteShape(shape.id));
+                            } else {
+
+                              dispatch(selectShape(shape.id));
+                            }
+                          }
                         }}
                         onMouseDown={(e) => {
                           e.cancelBubble = true;
@@ -3653,22 +3792,26 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
                           skewY={shape.skewY || 0}
                           onClick={(e) => {
                             e.cancelBubble = true;
+                            handleShapeClick(shape);
+                            if (selectedTool !== "Dropper") {
+                              if (e.evt.ctrlKey && selectedShape) {
 
-                            if (e.evt.ctrlKey && selectedShape) {
+                                dispatch(
+                                  selectNodePoint({
+                                    shapeId: selectedShape.id,
+                                    index,
+                                    x: point.x,
+                                    y: point.y,
+                                  })
+                                );
+                              } else if (sprayEraserMode) {
+                                dispatch(deleteShape(shape.id));
+                              } else if (selectedTool === "Eraser" && eraserMode === "delete") {
+                                dispatch(deleteShape(shape.id));
+                              } else {
 
-                              dispatch(
-                                selectNodePoint({
-                                  shapeId: selectedShape.id,
-                                  index,
-                                  x: point.x,
-                                  y: point.y,
-                                })
-                              );
-                            } else if (selectedTool === "Eraser" && eraserMode === "delete") {
-                              dispatch(deleteShape(shape.id));
-                            } else {
-
-                              dispatch(selectShape(shape.id));
+                                dispatch(selectShape(shape.id));
+                              }
                             }
                           }}
                           onDragEnd={(e) => {
@@ -3715,22 +3858,26 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
                           skewY={shape.skewY || 0}
                           onClick={(e) => {
                             e.cancelBubble = true;
+                            handleShapeClick(shape);
+                            if (selectedTool !== "Dropper") {
+                              if (e.evt.ctrlKey && selectedShape) {
 
-                            if (e.evt.ctrlKey && selectedShape) {
+                                dispatch(
+                                  selectNodePoint({
+                                    shapeId: selectedShape.id,
+                                    index,
+                                    x: point.x,
+                                    y: point.y,
+                                  })
+                                );
+                              } else if (sprayEraserMode) {
+                                dispatch(deleteShape(shape.id));
+                              } else if (selectedTool === "Eraser" && eraserMode === "delete") {
+                                dispatch(deleteShape(shape.id));
+                              } else {
 
-                              dispatch(
-                                selectNodePoint({
-                                  shapeId: selectedShape.id,
-                                  index,
-                                  x: point.x,
-                                  y: point.y,
-                                })
-                              );
-                            } else if (selectedTool === "Eraser" && eraserMode === "delete") {
-                              dispatch(deleteShape(shape.id));
-                            } else {
-
-                              dispatch(selectShape(shape.id));
+                                dispatch(selectShape(shape.id));
+                              }
                             }
                           }}
                           onDragEnd={(e) => {
@@ -4053,7 +4200,7 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
                     stroke={strokeColor}
                     strokeWidth={Math.max(1, eraserWidth * (1 - eraserThinning))}
                     tension={0.5}
-                    lineCap={eraserCaps}
+                    lineCap={eraserCapString}
                     globalCompositeOperation="source-over"
                   />
                 ))}

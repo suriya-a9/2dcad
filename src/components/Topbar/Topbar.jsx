@@ -75,6 +75,15 @@ import {
   setEraserWidth,
   setEraserThinning,
   setEraserCaps,
+  setEraserTremor,
+  setEraserMass,
+  setDropperMode,
+  setPickedColor,
+  setStrokeColor,
+  setFillColor,
+  setDropperTarget,
+  setAssignAverage,
+  setAltInverse,
 } from "../../Redux/Slice/toolSlice";
 import {
   TbDeselect,
@@ -1385,6 +1394,8 @@ const Topbar = ({
             <NodeTopbar />
           ) : selectedTool === "Eraser" ? (
             <EraserTopbar />
+          ) : selectedTool === "Dropper" ? (
+            <DropperTopbar />
           ) : (
             <DefaultTopbar />
           )}
@@ -2091,7 +2102,7 @@ function CalligraphyTopbar() {
         <select
           value={calligraphyOption}
           onChange={(e) => handleOptionSelect(e.target.value)}
-          style={{ padding: "5px", borderRadius: "4px", height: '40px' }}
+          style={{ padding: "0px", borderRadius: "4px", height: '30px' }}
         >
           <option value="Marker">Marker</option>
           <option value="DipPen">Dip Pen</option>
@@ -2190,6 +2201,8 @@ function EraserTopbar() {
   const eraserWidth = useSelector((state) => state.tool.eraserWidth || 10);
   const eraserThinning = useSelector((state) => state.tool.eraserThinning || 0);
   const eraserCaps = useSelector((state) => state.tool.eraserCaps || 0);
+  const eraserTremor = useSelector((state) => state.tool.eraserTremor || 0);
+  const eraserMass = useSelector((state) => state.tool.eraserMass || 0);
 
   const handleModeChange = (e) => {
     dispatch(setEraserMode(e.target.value));
@@ -2207,6 +2220,14 @@ function EraserTopbar() {
     dispatch(setEraserCaps(Number(e.target.value)));
   }
 
+  const handleEraserTremor = (e) => {
+    dispatch(setEraserTremor(Number(e.target.value)));
+  }
+
+  const handleEraserMass = (e) => {
+    dispatch(setEraserMass(Number(e.target.value)));
+  }
+
   return (
     <div className="d-flex flex-row mb-3 top-icons" style={{ alignItems: "center", color: "white" }}>
       <div className="p-2 value" style={{ display: "flex", alignItems: "center" }}>
@@ -2214,7 +2235,7 @@ function EraserTopbar() {
         <select
           value={eraserMode}
           onChange={handleModeChange}
-          style={{ padding: "5px", borderRadius: "4px", height: "40px" }}
+          style={{ padding: "0px", borderRadius: "4px", height: "30px" }}
         >
           <option value="delete">Delete Objects</option>
           <option value="cut">Cut Out from Paths/Objects</option>
@@ -2259,6 +2280,32 @@ function EraserTopbar() {
         />
         <span style={{ marginLeft: 8 }}>{eraserCaps}</span>
       </div>
+      <div className="p-2 value" style={{ display: 'flex', alignItems: 'center' }}>
+        <label>Eraser Tremor:&nbsp;</label>
+        <input
+          type="range"
+          min={0}
+          max={1}
+          step={0.01}
+          value={eraserTremor}
+          onChange={handleEraserTremor}
+          style={{ width: "120px" }}
+        />
+        <span style={{ marginLeft: 8 }}>{eraserTremor}</span>
+      </div>
+      <div className="p-2 value" style={{ display: 'flex', alignItems: 'center' }}>
+        <label>Eraser Mass:&nbsp;</label>
+        <input
+          type="range"
+          min={0}
+          max={1}
+          step={0.01}
+          value={eraserMass}
+          onChange={handleEraserMass}
+          style={{ width: "120px" }}
+        />
+        <span style={{ marginLeft: 8 }}>{eraserMass}</span>
+      </div>
       {/* <div className="p-2 value" style={{ display: "flex", alignItems: "center" }}>
         <span>
           {eraserMode === "delete" && "Click shapes to delete them."}
@@ -2266,6 +2313,74 @@ function EraserTopbar() {
           {eraserMode === "clip" && "Draw to clip from objects (default eraser behavior)."}
         </span>
       </div> */}
+    </div>
+  );
+}
+export function DropperTopbar() {
+  const dispatch = useDispatch();
+  const dropperMode = useSelector((state) => state.tool.dropperMode || "pick");
+  const pickedColor = useSelector((state) => state.tool.pickedColor);
+  const dropperTarget = useSelector(state => state.tool.dropperTarget || "stroke");
+  // const [assignAverage, setAssignAverage] = useState(false);
+  const assignAverage = useSelector(state => state.tool.assignAverage);
+  const altInverse = useSelector(state => state.tool.altInverse);
+  const handleModeChange = (e) => {
+    dispatch(setDropperMode(e.target.value));
+  };
+  const handleAssignAverageChange = (e) => {
+    dispatch(setAssignAverage(e.target.checked));
+  };
+  const handleAltInverse = (e) => {
+    dispatch(setAltInverse(e.target.value));
+  }
+  return (
+    <div className="d-flex flex-row mb-3 top-icons" style={{ alignItems: "center", color: "white" }}>
+      <div className="p-2 value" style={{ display: "flex", alignItems: "center" }}>
+        <label>Dropper Mode:&nbsp;</label>
+        <select value={dropperMode} onChange={handleModeChange} style={{ padding: "0px", borderRadius: "4px", height: "30px" }}>
+          <option value="pick">Pick Color</option>
+          <option value="assign">Assign Color</option>
+        </select>
+      </div>
+      <div className="p-2 value" style={{ display: "flex", alignItems: "center" }}>
+        <label>Picked Color:&nbsp;</label>
+        <span style={{
+          display: "inline-block",
+          width: 24,
+          height: 24,
+          background: pickedColor || "#fff",
+          border: "1px solid #ccc",
+          verticalAlign: "middle"
+        }} />
+        <span style={{ marginLeft: 8 }}>{pickedColor || "None"}</span>
+      </div>
+      <div className="p-2 value" style={{ display: "flex", alignItems: "center" }}>
+        <label>Assign to:&nbsp;</label>
+        <select value={dropperTarget} onChange={e => dispatch(setDropperTarget(e.target.value))}>
+          <option value="fill">Fill</option>
+          <option value="stroke">Stroke</option>
+        </select>
+      </div>
+      <div className="p-2 value" style={{ display: "flex", alignItems: "center" }}>
+        <label>
+          <input
+            type="checkbox"
+            checked={assignAverage}
+            onChange={handleAssignAverageChange}
+          />
+          Assign Average Color (tint)
+        </label>
+      </div>
+      <div className="p-2 value" style={{ display: "flex", alignItems: "center" }}>
+        <label>
+          <input
+            type="checkbox"
+            checked={altInverse}
+            onChange={handleAltInverse}
+          />
+          Alt Inverse
+        </label>
+      </div>
     </div>
   );
 }

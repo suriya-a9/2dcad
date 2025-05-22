@@ -84,6 +84,7 @@ import {
   setDropperTarget,
   setAssignAverage,
   setAltInverse,
+  setGradientType,
 } from "../../Redux/Slice/toolSlice";
 import {
   TbDeselect,
@@ -1394,6 +1395,8 @@ const Topbar = ({
             <NodeTopbar />
           ) : selectedTool === "Eraser" ? (
             <EraserTopbar />
+          ) : selectedTool === "Gradient" ? (
+            <GradientTopbar />
           ) : selectedTool === "Dropper" ? (
             <DropperTopbar />
           ) : (
@@ -2321,7 +2324,7 @@ export function DropperTopbar() {
   const dropperMode = useSelector((state) => state.tool.dropperMode || "pick");
   const pickedColor = useSelector((state) => state.tool.pickedColor);
   const dropperTarget = useSelector(state => state.tool.dropperTarget || "stroke");
-  // const [assignAverage, setAssignAverage] = useState(false);
+
   const assignAverage = useSelector(state => state.tool.assignAverage);
   const altInverse = useSelector(state => state.tool.altInverse);
   const handleModeChange = (e) => {
@@ -2381,6 +2384,308 @@ export function DropperTopbar() {
           Alt Inverse
         </label>
       </div>
+    </div>
+  );
+}
+function GradientTopbar() {
+  const dispatch = useDispatch();
+  const gradientType = useSelector(state => state.tool.gradientType || "linear");
+  const selectedShapeId = useSelector(state => state.tool.selectedShapeId);
+  const [repeat, setRepeat] = useState("none");
+  const [applyTo, setApplyTo] = useState("fill");
+  console.log("apply to", applyTo);
+  gradientTarget: applyTo
+  const shapes = useSelector(
+    state => state.tool.layers[state.tool.selectedLayerIndex].shapes || []
+  );
+  const selectedShape = shapes.find(s => s.id === selectedShapeId);
+
+  const handleGradientTypeChange = (e) => {
+    dispatch(setGradientType(e.target.value));
+  };
+
+  const handleStartChange = (axis, value) => {
+    if (!selectedShape) return;
+    dispatch(updateShapePosition({
+      id: selectedShapeId,
+      [applyTo]: {
+        ...selectedShape[applyTo],
+        start: {
+          ...selectedShape[applyTo]?.start,
+          [axis]: parseFloat(value)
+        }
+      },
+      gradientTarget: applyTo,
+    }));
+  };
+
+  const handleEndChange = (axis, value) => {
+    if (!selectedShape) return;
+    dispatch(updateShapePosition({
+      id: selectedShapeId,
+      [applyTo]: {
+        ...selectedShape[applyTo],
+        end: {
+          ...selectedShape[applyTo].end,
+          [axis]: parseFloat(value)
+        }
+      },
+      gradientTarget: applyTo,
+    }));
+  };
+
+  const handleColorChange = (idx, color) => {
+    if (!selectedShape) return;
+    const newColors = selectedShape[applyTo].colors.map((stop, i) =>
+      i === idx ? { ...stop, color } : stop
+    );
+    dispatch(updateShapePosition({
+      id: selectedShapeId,
+      [applyTo]: {
+        ...selectedShape[applyTo],
+        colors: newColors
+      },
+      gradientTarget: applyTo,
+    }));
+  };
+
+  const handlePosChange = (idx, pos) => {
+    if (!selectedShape) return;
+    const newColors = selectedShape[applyTo].colors.map((stop, i) =>
+      i === idx ? { ...stop, pos: parseFloat(pos) } : stop
+    );
+    dispatch(updateShapePosition({
+      id: selectedShapeId,
+      [applyTo]: {
+        ...selectedShape[applyTo],
+        colors: newColors
+      },
+      gradientTarget: applyTo,
+    }));
+  };
+
+  const handleAddStop = () => {
+    if (!selectedShape) return;
+    const newColors = [
+      ...selectedShape[applyTo].colors,
+      { color: "#000000", pos: 0.5 }
+    ];
+    dispatch(updateShapePosition({
+      id: selectedShapeId,
+      [applyTo]: {
+        ...selectedShape[applyTo],
+        colors: newColors
+      },
+      gradientTarget: applyTo,
+    }));
+  };
+
+  const handleRemoveStop = (idx) => {
+    if (!selectedShape) return;
+    if (selectedShape[applyTo].colors.length <= 2) return;
+    const newColors = selectedShape[applyTo].colors.filter((_, i) => i !== idx);
+    dispatch(updateShapePosition({
+      id: selectedShapeId,
+      [applyTo]: {
+        ...selectedShape[applyTo],
+        colors: newColors
+      },
+      gradientTarget: applyTo,
+    }));
+  };
+  return (
+    <div className="d-flex flex-row mb-3 top-icons" style={{ alignItems: "center", color: "white", overflow: 'scroll' }}>
+      <div className="p-2 value" style={{ display: "flex", alignItems: "center" }}>
+        <label>Gradient Type:&nbsp;</label>
+        <select value={gradientType} onChange={handleGradientTypeChange} style={{ height: "30px" }}>
+          <option value="linear">Linear Gradient</option>
+          <option value="radial">Radial Gradient</option>
+        </select>
+      </div>
+      <div className="p-2 value" style={{ display: "flex", alignItems: "center" }}>
+        <label>Apply To:&nbsp;</label>
+        <select value={applyTo} onChange={e => setApplyTo(e.target.value)} style={{ height: "30px" }}>
+          <option value="fill">Fill</option>
+          <option value="stroke">Stroke</option>
+        </select>
+      </div>
+      {selectedShape && selectedShape[applyTo]?.type === "linear-gradient" && selectedShape[applyTo].start && selectedShape[applyTo].end && (
+        <>
+          <div className="p-2 value" style={{ display: "flex", alignItems: "center" }}>
+            <label>Start X:</label>
+            <input
+              type="number"
+              step={10}
+              value={selectedShape[applyTo].start.x}
+              onChange={e => handleStartChange("x", e.target.value)}
+              style={{ width: 60, marginLeft: 4, marginRight: 8 }}
+            />
+            <label>Y:</label>
+            <input
+              type="number"
+              step={10}
+              value={selectedShape[applyTo].start.y}
+              onChange={e => handleStartChange("y", e.target.value)}
+              style={{ width: 60, marginLeft: 4 }}
+            />
+          </div>
+          <div className="p-2 value" style={{ display: "flex", alignItems: "center" }}>
+            <label>End X:</label>
+            <input
+              type="number"
+              step={10}
+              value={selectedShape[applyTo].end.x}
+              onChange={e => handleEndChange("x", e.target.value)}
+              style={{ width: 60, marginLeft: 4, marginRight: 8 }}
+            />
+            <label>Y:</label>
+            <input
+              type="number"
+              step={10}
+              value={selectedShape[applyTo].end.y}
+              onChange={e => handleEndChange("y", e.target.value)}
+              style={{ width: 60, marginLeft: 4 }}
+            />
+          </div>
+          <div className="p-2 value" style={{ display: "flex", alignItems: "center" }}>
+            <label>Color Stops:</label>
+            {selectedShape[applyTo].colors.map((stop, idx) => (
+              <span key={idx} style={{ marginLeft: 8, display: "flex", alignItems: "center" }}>
+                <input
+                  type="color"
+                  value={stop.color}
+                  onChange={e => handleColorChange(idx, e.target.value)}
+                  style={{ marginRight: 4 }}
+                />
+                <input
+                  type="number"
+                  min={0}
+                  max={1}
+                  step={0.01}
+                  value={stop.pos}
+                  onChange={e => handlePosChange(idx, e.target.value)}
+                  style={{ width: 50, marginRight: 4 }}
+                />
+                {selectedShape[applyTo].colors.length > 2 && (
+                  <button onClick={() => handleRemoveStop(idx)} style={{ marginRight: 4 }}>✕</button>
+                )}
+              </span>
+            ))}
+            <button onClick={handleAddStop} style={{ marginLeft: 8, width: '150px' }}>+ Add Stop</button>
+          </div>
+          <div className="p-2 value" style={{ display: "flex", alignItems: "center" }}>
+            <label>Repeat:&nbsp;</label>
+            <select value={repeat} onChange={e => {
+              setRepeat(e.target.value);
+              if (selectedShape) {
+                dispatch(updateShapePosition({
+                  id: selectedShapeId,
+                  [applyTo]: {
+                    ...selectedShape[applyTo],
+                    repeat: e.target.value,
+                  },
+                  gradientTarget: applyTo,
+                }));
+              }
+            }} style={{ height: "30px" }}>
+              <option value="none">None</option>
+              <option value="reflected">Reflected</option>
+              <option value="direct">Direct</option>
+            </select>
+          </div>
+        </>
+      )}
+      {selectedShape && selectedShape[applyTo]?.type === "radial-gradient" && selectedShape[applyTo].center && typeof selectedShape[applyTo].radius === "number" && (
+        <>
+          <div className="p-2 value" style={{ display: "flex", alignItems: "center" }}>
+            <label>Center X:</label>
+            <input
+              type="number"
+              step={10}
+              value={selectedShape[applyTo].center.x}
+              onChange={e => {
+                dispatch(updateShapePosition({
+                  id: selectedShapeId,
+                  [applyTo]: {
+                    ...selectedShape[applyTo],
+                    center: {
+                      ...selectedShape[applyTo].center,
+                      x: parseFloat(e.target.value)
+                    }
+                  },
+                  gradientTarget: applyTo,
+                }));
+              }}
+              style={{ width: 60, marginLeft: 4, marginRight: 8 }}
+            />
+            <label>Y:</label>
+            <input
+              type="number"
+              step={10}
+              value={selectedShape[applyTo].center.y}
+              onChange={e => {
+                dispatch(updateShapePosition({
+                  id: selectedShapeId,
+                  [applyTo]: {
+                    ...selectedShape[applyTo],
+                    center: {
+                      ...selectedShape[applyTo].center,
+                      y: parseFloat(e.target.value)
+                    }
+                  },
+                  gradientTarget: applyTo,
+                }));
+              }}
+              style={{ width: 60, marginLeft: 4 }}
+            />
+          </div>
+          <div className="p-2 value" style={{ display: "flex", alignItems: "center" }}>
+            <label>Radius:</label>
+            <input
+              type="number"
+              step={10}
+              value={selectedShape[applyTo].radius}
+              onChange={e => {
+                dispatch(updateShapePosition({
+                  id: selectedShapeId,
+                  [applyTo]: {
+                    ...selectedShape[applyTo],
+                    radius: parseFloat(e.target.value)
+                  },
+                  gradientTarget: applyTo,
+                }));
+              }}
+              style={{ width: 60, marginLeft: 4 }}
+            />
+          </div>
+          <div className="p-2 value" style={{ display: "flex", alignItems: "center" }}>
+            <label>Color Stops:</label>
+            {selectedShape[applyTo].colors.map((stop, idx) => (
+              <span key={idx} style={{ marginLeft: 8, display: "flex", alignItems: "center" }}>
+                <input
+                  type="color"
+                  value={stop.color}
+                  onChange={e => handleColorChange(idx, e.target.value)}
+                  style={{ marginRight: 4 }}
+                />
+                <input
+                  type="number"
+                  min={0}
+                  max={1}
+                  step={0.01}
+                  value={stop.pos}
+                  onChange={e => handlePosChange(idx, e.target.value)}
+                  style={{ width: 50, marginRight: 4 }}
+                />
+                {selectedShape[applyTo].colors.length > 2 && (
+                  <button onClick={() => handleRemoveStop(idx)} style={{ marginRight: 4 }}>✕</button>
+                )}
+              </span>
+            ))}
+            <button onClick={handleAddStop} style={{ marginLeft: 8, width: '150px' }}>+ Add Stop</button>
+          </div>
+        </>
+      )}
     </div>
   );
 }

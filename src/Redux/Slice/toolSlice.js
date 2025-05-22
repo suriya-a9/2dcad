@@ -77,6 +77,7 @@ const toolSlice = createSlice({
     dropperTarget: "fill",
     assignAverage: false,
     altInverse: false,
+    gradientType: "linear",
   },
 
   reducers: {
@@ -2211,7 +2212,10 @@ const toolSlice = createSlice({
     },
     setAltInverse: (state, action) => {
       state.altInverse = action.payload;
-    }
+    },
+    setGradientType: (state, action) => {
+      state.gradientType = action.payload;
+    },
   },
 
 });
@@ -2351,7 +2355,8 @@ export const {
   setDropperMode,
   setDropperTarget,
   setAssignAverage,
-  setAltInverse
+  setAltInverse,
+  setGradientType,
 } = toolSlice.actions;
 
 export default toolSlice.reducer;

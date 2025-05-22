@@ -134,6 +134,7 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
   const [cursorPosition, setCursorPosition] = useState({ x: 0, y: 0 });
   const [isCustomCursorVisible, setIsCustomCursorVisible] = useState(false);
   const selectedTool = useSelector((state) => state.tool.selectedTool);
+  const gradientType = useSelector(state => state.tool.gradientType);
   const isSnappingEnabled = useSelector((state) => state.tool.isSnappingEnabled);
   const selectedShapeId = useSelector((state) => state.tool.selectedShapeId);
   const strokeColor = useSelector((state) => state.tool.strokeColor);
@@ -418,6 +419,7 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
   };
   const [tempCornerRadius, setTempCornerRadius] = useState(null);
   const [isDraggingBlueCircle, setIsDraggingBlueCircle] = useState(false);
+  const [gradientDrag, setGradientDrag] = useState(null);
   const handleMouseDown = (e) => {
     console.log("Mouse Down Target:", e.target);
     console.log("Stage:", e.target.getStage());
@@ -555,7 +557,15 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
         dispatch(clearSelection());
       }
     }
-
+    if (selectedTool === "Gradient" && selectedShapeId) {
+      const pos = e.target.getStage().getPointerPosition();
+      const shape = shapes.find(s => s.id === selectedShapeId);
+      if (!shape) return;
+      setGradientDrag({
+        start: { x: pos.x - shape.x, y: pos.y - shape.y },
+        end: { x: pos.x - shape.x, y: pos.y - shape.y }
+      });
+    }
     if (selectedTool === "ShapeBuilder") {
       console.log("Shape Builder Tool is active.");
       if (clickedShape && clickedShape.attrs && clickedShape.attrs.id) {
@@ -1380,6 +1390,16 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
       handleSprayTool(e);
     }
 
+    if (selectedTool === "Gradient" && gradientDrag && selectedShapeId) {
+      const pos = e.target.getStage().getPointerPosition();
+      const shape = shapes.find(s => s.id === selectedShapeId);
+      if (!shape) return;
+      setGradientDrag(drag => ({
+        ...drag,
+        end: { x: pos.x - shape.x, y: pos.y - shape.y }
+      }));
+    }
+
     if (isDrawingRef.current && selectedTool === "Eraser") {
       const lastLine = eraserLines[eraserLines.length - 1];
       let lastX = x, lastY = y;
@@ -1989,6 +2009,70 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
         });
         setEraserLines([]);
       }
+    }
+    function clampToRect(x, y, width, height) {
+      return {
+        x: Math.max(0, Math.min(width, x)),
+        y: Math.max(0, Math.min(height, y)),
+      };
+    }
+
+
+    if (selectedTool === "Gradient" && gradientDrag && selectedShapeId) {
+      const shape = shapes.find(s => s.id === selectedShapeId);
+      if (!shape) return;
+
+      const localStart = clampToRect(gradientDrag.start.x, gradientDrag.start.y, shape.width, shape.height);
+      const localEnd = clampToRect(gradientDrag.end.x, gradientDrag.end.y, shape.width, shape.height);
+
+      if (gradientType === "linear") {
+        dispatch(updateShapePosition({
+          id: selectedShapeId,
+          [applyTo]: {
+            ...(shape[applyTo] || {}),
+            type: "linear-gradient",
+            start: localStart,
+            end: localEnd,
+            colors: (shape[applyTo]?.colors && shape[applyTo]?.colors.length > 0)
+              ? shape[applyTo].colors
+              : [
+                { color: (applyTo === "fill" ? (shape.fill || "#000") : (shape.stroke || "#000")), pos: 0 },
+                { color: "#ffffff", pos: 1 }
+              ]
+          },
+          ...(applyTo === "stroke"
+            ? { fill: "transparent" }
+            : { stroke: typeof shape.stroke === "object" ? "#000" : shape.stroke }),
+          gradientTarget: applyTo,
+        }));
+      } else if (gradientType === "radial") {
+
+        const center = localStart;
+        const dx = localEnd.x - localStart.x;
+        const dy = localEnd.y - localStart.y;
+        const radius = Math.sqrt(dx * dx + dy * dy);
+
+        dispatch(updateShapePosition({
+          id: selectedShapeId,
+          [applyTo]: {
+            ...(shape[applyTo] || {}),
+            type: "radial-gradient",
+            center,
+            radius,
+            colors: (shape[applyTo]?.colors && shape[applyTo]?.colors.length > 0)
+              ? shape[applyTo].colors
+              : [
+                { color: (applyTo === "fill" ? (shape.fill || "#000") : (shape.stroke || "#000")), pos: 0 },
+                { color: "#ffffff", pos: 1 }
+              ]
+          },
+          ...(applyTo === "stroke"
+            ? { fill: "transparent" }
+            : { stroke: typeof shape.stroke === "object" ? "#000" : shape.stroke }),
+          gradientTarget: applyTo,
+        }));
+      }
+      setGradientDrag(null);
     } if (isDrawingRef.current && selectedTool === "Eraser" && eraserMode === "clip") {
       isDrawingRef.current = false;
       if (eraserLines.length > 0) {
@@ -2589,6 +2673,8 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
       (shape) => shape.id === state.tool.selectedShapeId
     )
   );
+  const applyTo = selectedShape?.gradientTarget || "fill";
+  const gradientObj = selectedShape ? selectedShape[applyTo] : null;
   const calligraphyOption = useSelector((state) => state.tool.calligraphyOption);
   const calligraphySettings = useSelector((state) => state.tool.calligraphySettings);
   const pencilOption = useSelector((state) => state.tool.pencilOption);
@@ -2930,6 +3016,35 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
       }
     }
   };
+  const shapeX = selectedShape ? selectedShape.x || 0 : 0;
+  const shapeY = selectedShape ? selectedShape.y || 0 : 0;
+  function getLinearGradientColorStops(fill) {
+    if (!fill?.colors) return [];
+
+    const validStops = fill.colors.filter(
+      stop => typeof stop.pos === "number" && isFinite(stop.pos) && stop.pos >= 0 && stop.pos <= 1
+    );
+
+    if (fill.repeat === "reflected" && validStops.length > 1) {
+
+      const forward = validStops.map(stop => [stop.pos * 0.5, stop.color]);
+
+      const backward = validStops.slice(0, -1).reverse().map(stop => [0.5 + stop.pos * 0.5, stop.color]);
+
+      const allStops = [...forward, ...backward].sort((a, b) => a[0] - b[0]);
+      return allStops.flat();
+    }
+
+    if (fill.repeat === "direct" && validStops.length > 1) {
+      const repeated = [
+        ...validStops.map(stop => [stop.pos * 0.5, stop.color]),
+        ...validStops.map(stop => [0.5 + stop.pos * 0.5, stop.color])
+      ];
+      return repeated.flat();
+    }
+
+    return validStops.flatMap(stop => [stop.pos, stop.color]);
+  }
   return (
     <>
 
@@ -3035,6 +3150,7 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
                     globalCompositeOperation="source-over"
                   />
                 ))}
+
                 {renderSpiroPath()}
 
                 {renderBSplinePath()}
@@ -3208,8 +3324,66 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
                           y={shape.y}
                           width={shape.width}
                           height={shape.height}
-                          fill={shape.fill || "black"}
-                          stroke={shape.stroke || "black"}
+                          fill={
+                            shape.gradientTarget === "fill" && shape.fill?.type === "linear-gradient"
+                              ? undefined
+                              : shape.gradientTarget === "fill" && shape.fill?.type === "radial-gradient"
+                                ? undefined
+                                : shape.fill || "transparent"
+                          }
+                          fillLinearGradientStartPoint={
+                            shape.gradientTarget === "fill" && shape.fill?.type === "linear-gradient"
+                              ? shape.fill.start
+                              : undefined
+                          }
+                          fillLinearGradientEndPoint={
+                            shape.gradientTarget === "fill" && shape.fill?.type === "linear-gradient"
+                              ? shape.fill.end
+                              : undefined
+                          }
+                          fillLinearGradientColorStops={
+                            shape.gradientTarget === "fill" && shape.fill?.type === "linear-gradient"
+                              ? getLinearGradientColorStops(shape.fill)
+                              : undefined
+                          }
+                          fillRadialGradientStartPoint={
+                            shape.gradientTarget === "fill" && shape.fill?.type === "radial-gradient"
+                              ? shape.fill.center
+                              : undefined
+                          }
+                          fillRadialGradientEndPoint={
+                            shape.gradientTarget === "fill" && shape.fill?.type === "radial-gradient"
+                              ? { x: shape.fill.center.x, y: shape.fill.center.y + shape.fill.radius }
+                              : undefined
+                          }
+                          fillRadialGradientColorStops={
+                            shape.gradientTarget === "fill" && shape.fill?.type === "radial-gradient"
+                              ? shape.fill.colors
+                                .filter(stop => typeof stop.pos === "number" && isFinite(stop.pos) && stop.pos >= 0 && stop.pos <= 1)
+                                .sort((a, b) => a.pos - b.pos)
+                                .flatMap(stop => [stop.pos, stop.color])
+                              : undefined
+                          }
+                          stroke={
+                            shape.gradientTarget === "stroke" && shape.stroke?.type === "linear-gradient"
+                              ? undefined
+                              : shape.stroke || "black"
+                          }
+                          strokeLinearGradientStartPoint={
+                            shape.gradientTarget === "stroke" && shape.stroke?.type === "linear-gradient"
+                              ? shape.stroke.start
+                              : undefined
+                          }
+                          strokeLinearGradientEndPoint={
+                            shape.gradientTarget === "stroke" && shape.stroke?.type === "linear-gradient"
+                              ? shape.stroke.end
+                              : undefined
+                          }
+                          strokeLinearGradientColorStops={
+                            shape.gradientTarget === "stroke" && shape.stroke?.type === "linear-gradient"
+                              ? shape.stroke.colors.flatMap(stop => [stop.pos, stop.color])
+                              : undefined
+                          }
                           strokeWidth={shape.strokeWidth || 1}
                           cornerRadius={tempCornerRadius !== null ? tempCornerRadius : shape.cornerRadius}
                           dash={getDashArray(shape.strokeStyle)}
@@ -3486,9 +3660,80 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
                           innerRadius={0}
                           outerRadius={shape.radius || 0}
                           angle={shape.arcAngle || 360}
-                          fill={shape.fill || "transparent"}
-                          stroke={shape.stroke || "black"}
+                          fill={
+                            shape.gradientTarget === "fill" && shape.fill?.type === "linear-gradient"
+                              ? undefined
+                              : shape.gradientTarget === "fill" && shape.fill?.type === "radial-gradient"
+                                ? undefined
+                                : shape.fill || "transparent"
+                          }
+                          fillLinearGradientStartPoint={
+                            shape.gradientTarget === "fill" && shape.fill?.type === "linear-gradient"
+                              ? shape.fill.start
+                              : undefined
+                          }
+                          fillLinearGradientEndPoint={
+                            shape.gradientTarget === "fill" && shape.fill?.type === "linear-gradient"
+                              ? shape.fill.end
+                              : undefined
+                          }
+                          fillLinearGradientColorStops={
+                            shape.gradientTarget === "fill" && shape.fill?.type === "linear-gradient"
+                              ? shape.fill.colors.flatMap(stop => [stop.pos, stop.color])
+                              : undefined
+                          }
+                          fillRadialGradientStartPoint={
+                            shape.gradientTarget === "fill" && shape.fill?.type === "radial-gradient"
+                              ? shape.fill.center
+                              : undefined
+                          }
+                          fillRadialGradientEndPoint={
+                            shape.gradientTarget === "fill" && shape.fill?.type === "radial-gradient"
+                              ? { x: shape.fill.center.x, y: shape.fill.center.y + shape.fill.radius }
+                              : undefined
+                          }
+                          fillRadialGradientColorStops={
+                            shape.gradientTarget === "fill" && shape.fill?.type === "radial-gradient"
+                              ? shape.fill.colors.flatMap(stop => [stop.pos, stop.color])
+                              : undefined
+                          }
+                          strokeRadialGradientStartPoint={
+                            shape.gradientTarget === "stroke" && shape.stroke?.type === "radial-gradient"
+                              ? shape.stroke.center
+                              : undefined
+                          }
+                          strokeRadialGradientEndPoint={
+                            shape.gradientTarget === "stroke" && shape.stroke?.type === "radial-gradient"
+                              ? { x: shape.stroke.center.x, y: shape.stroke.center.y + shape.stroke.radius }
+                              : undefined
+                          }
+                          strokeRadialGradientColorStops={
+                            shape.gradientTarget === "stroke" && shape.stroke?.type === "radial-gradient"
+                              ? shape.stroke.colors.flatMap(stop => [stop.pos, stop.color])
+                              : undefined
+                          }
+                          stroke={
+                            shape.gradientTarget === "stroke" && shape.fill?.type === "linear-gradient"
+                              ? undefined
+                              : shape.stroke || "black"
+                          }
+                          strokeLinearGradientStartPoint={
+                            shape.gradientTarget === "stroke" && shape.fill?.type === "linear-gradient"
+                              ? shape.fill.start
+                              : undefined
+                          }
+                          strokeLinearGradientEndPoint={
+                            shape.gradientTarget === "stroke" && shape.fill?.type === "linear-gradient"
+                              ? shape.fill.end
+                              : undefined
+                          }
+                          strokeLinearGradientColorStops={
+                            shape.gradientTarget === "stroke" && shape.fill?.type === "linear-gradient"
+                              ? shape.fill.colors.flatMap(stop => [stop.pos, stop.color])
+                              : undefined
+                          }
                           strokeWidth={shape.strokeWidth || 1}
+
                           rotation={shape.rotation || 0}
                           scaleX={shape.horizontalRadius / shape.radius || 1}
                           scaleY={shape.verticalRadius / shape.radius || 1}
@@ -4529,6 +4774,250 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
                     fill={newShape.fill}
                   />
                 )}
+
+                {selectedTool === "Gradient" &&
+                  selectedShape &&
+                  gradientObj?.type === "linear-gradient" &&
+                  gradientObj.start &&
+                  gradientObj.end &&
+                  gradientObj.colors && (
+                    <>
+                      <Line
+                        points={[
+                          shapeX + gradientObj.start.x, shapeY + gradientObj.start.y,
+                          shapeX + gradientObj.end.x, shapeY + gradientObj.end.y
+                        ]}
+                        stroke="gray"
+                        strokeWidth={2}
+                        dash={[4, 4]}
+                        listening={false}
+                      />
+                      {gradientObj.colors.map((stop, idx) => {
+                        const x = shapeX + gradientObj.start.x + (gradientObj.end.x - gradientObj.start.x) * stop.pos;
+                        const y = shapeY + gradientObj.start.y + (gradientObj.end.y - gradientObj.start.y) * stop.pos;
+                        return (
+                          <Circle
+                            key={idx}
+                            x={x}
+                            y={y}
+                            radius={8}
+                            fill={stop.color}
+                            stroke="#333"
+                            strokeWidth={2}
+                            draggable
+                            onDragMove={e => {
+                              const { x: absX, y: absY } = e.target.getStage().getPointerPosition();
+                              const gradStartAbs = {
+                                x: shapeX + gradientObj.start.x,
+                                y: shapeY + gradientObj.start.y,
+                              };
+                              const gradEndAbs = {
+                                x: shapeX + gradientObj.end.x,
+                                y: shapeY + gradientObj.end.y,
+                              };
+                              const dx = gradEndAbs.x - gradStartAbs.x;
+                              const dy = gradEndAbs.y - gradStartAbs.y;
+                              const lengthSq = dx * dx + dy * dy;
+                              let t = ((absX - gradStartAbs.x) * dx + (absY - gradStartAbs.y) * dy) / lengthSq;
+                              t = Number.isFinite(t) ? Math.max(0, Math.min(1, t)) : 0;
+                              const newColors = [
+                                ...gradientObj.colors,
+                                { color: "#ffffff", pos: t }
+                              ].sort((a, b) => a.pos - b.pos);
+                              newColors[idx] = { ...newColors[idx], pos: t };
+                              dispatch(updateShapePosition({
+                                id: selectedShape.id,
+                                [applyTo]: {
+                                  ...gradientObj,
+                                  colors: newColors,
+                                },
+                                gradientTarget: applyTo,
+                              }));
+                            }}
+                          />
+                        );
+                      })}
+                      <Line
+                        points={[
+                          shapeX + gradientObj.start.x, shapeY + gradientObj.start.y,
+                          shapeX + gradientObj.end.x, shapeY + gradientObj.end.y
+                        ]}
+                        stroke="transparent"
+                        strokeWidth={16}
+                        onClick={e => {
+                          const { x: clickX, y: clickY } = e.target.getStage().getPointerPosition();
+                          const dx = gradientObj.end.x - gradientObj.start.x;
+                          const dy = gradientObj.end.y - gradientObj.start.y;
+                          const length = Math.sqrt(dx * dx + dy * dy);
+                          let t = ((clickX - (shapeX + gradientObj.start.x)) * dx + (clickY - (shapeY + gradientObj.start.y)) * dy) / (length * length);
+                          t = Number.isFinite(t) ? Math.max(0, Math.min(1, t)) : 0;
+
+                          const newColors = [
+                            ...gradientObj.colors,
+                            { color: "#ffffff", pos: t }
+                          ].sort((a, b) => a.pos - b.pos);
+                          dispatch(updateShapePosition({
+                            id: gradientObj.id,
+                            fill: { ...gradientObj, colors: newColors },
+                            gradientTarget: applyTo,
+                          }));
+                        }}
+                        listening={true}
+                      />
+                      <Circle
+                        x={shapeX + gradientObj.start.x}
+                        y={shapeY + gradientObj.start.y}
+                        radius={10}
+                        fill="#fff"
+                        stroke="#333"
+                        strokeWidth={2}
+                        draggable
+                        onDragMove={e => {
+                          const { x, y } = e.target.position();
+
+                          const localX = x - shapeX;
+                          const localY = y - shapeY;
+                          dispatch(updateShapePosition({
+                            id: selectedShape.id,
+                            [applyTo]: {
+                              ...gradientObj,
+                              colors: newColors,
+                            },
+                            gradientTarget: applyTo,
+                          }));
+                        }}
+                      />
+                      <Circle
+                        x={shapeX + gradientObj.end.x}
+                        y={shapeY + gradientObj.end.y}
+                        radius={10}
+                        fill="#000"
+                        stroke="#333"
+                        strokeWidth={2}
+                        draggable
+                        onDragMove={e => {
+                          const { x, y } = e.target.position();
+                          const localX = x - shapeX;
+                          const localY = y - shapeY;
+                          dispatch(updateShapePosition({
+                            id: selectedShape.id,
+                            [applyTo]: {
+                              ...gradientObj,
+                              colors: newColors,
+                            },
+                            gradientTarget: applyTo,
+                          }));
+                        }}
+                      />
+                    </>
+                  )}
+                {selectedTool === "Gradient" &&
+                  selectedShape &&
+                  gradientObj?.type === "radial-gradient" &&
+                  gradientObj.center &&
+                  typeof gradientObj.radius === "number" &&
+                  gradientObj.colors && (
+                    <>
+                      <Circle
+                        x={shapeX + gradientObj.center.x}
+                        y={shapeY + gradientObj.center.y}
+                        radius={gradientObj.radius}
+                        fillRadialGradientStartPoint={gradientObj.center}
+                        fillRadialGradientEndPoint={{
+                          x: gradientObj.center.x,
+                          y: gradientObj.center.y + gradientObj.radius
+                        }}
+                        // fillRadialGradientColorStops={gradientObj.colors.flatMap(stop => [stop.pos, stop.color])}
+                        opacity={0.5}
+                        stroke="gray"
+                        strokeWidth={2}
+                        dash={[4, 4]}
+                        listening={false}
+                      />
+                      <Circle
+                        x={shapeX + gradientObj.center.x}
+                        y={shapeY + gradientObj.center.y}
+                        radius={10}
+                        fill="#fff"
+                        stroke="#333"
+                        strokeWidth={2}
+                        draggable
+                        onDragMove={e => {
+                          const { x, y } = e.target.position();
+                          const localX = x - shapeX;
+                          const localY = y - shapeY;
+                          dispatch(updateShapePosition({
+                            id: selectedShape.id,
+                            [applyTo]: {
+                              ...gradientObj,
+                              center: { x: localX, y: localY }
+                            },
+                            gradientTarget: applyTo,
+                          }));
+                        }}
+                      />
+                      <Circle
+                        x={shapeX + gradientObj.center.x}
+                        y={shapeY + gradientObj.center.y + gradientObj.radius}
+                        radius={10}
+                        fill="#000"
+                        stroke="#333"
+                        strokeWidth={2}
+                        draggable
+                        onDragMove={e => {
+                          const { x, y } = e.target.position();
+                          const dx = x - (shapeX + gradientObj.center.x);
+                          const dy = y - (shapeY + gradientObj.center.y);
+                          const newRadius = Math.max(5, Math.sqrt(dx * dx + dy * dy));
+                          dispatch(updateShapePosition({
+                            id: selectedShape.id,
+                            [applyTo]: {
+                              ...gradientObj,
+                              radius: newRadius
+                            },
+                            gradientTarget: applyTo,
+                          }));
+                        }}
+                      />
+                      {gradientObj.colors.map((stop, idx) => {
+                        const angle = 0;
+                        const r = gradientObj.radius * stop.pos;
+                        const x = shapeX + gradientObj.center.x + r * Math.cos(angle);
+                        const y = shapeY + gradientObj.center.y + r * Math.sin(angle);
+                        return (
+                          <Circle
+                            key={idx}
+                            x={shapeX + gradientObj.center.x + gradientObj.radius * stop.pos}
+                            y={shapeY + gradientObj.center.y}
+                            radius={8}
+                            // fill={stop.color}
+                            stroke="#333"
+                            strokeWidth={2}
+                            draggable
+                            onDragMove={e => {
+
+                              const dx = e.target.x() - (shapeX + gradientObj.center.x);
+                              const dy = e.target.y() - (shapeY + gradientObj.center.y);
+
+                              let t = Math.sqrt(dx * dx + dy * dy) / gradientObj.radius;
+                              t = Math.max(0, Math.min(1, t));
+                              const newColors = gradientObj.colors.map((s, i) =>
+                                i === idx ? { ...s, pos: t } : s
+                              );
+                              dispatch(updateShapePosition({
+                                id: selectedShape.id,
+                                [applyTo]: {
+                                  ...gradientObj,
+                                  colors: newColors
+                                },
+                                gradientTarget: applyTo,
+                              }));
+                            }}
+                          />
+                        );
+                      })}
+                    </>
+                  )}
               </Layer>
 
             </Stage>

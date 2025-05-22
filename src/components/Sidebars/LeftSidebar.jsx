@@ -192,6 +192,12 @@ const LeftSidebar = () => {
           >
             <IoText data-tooltip-content="Text" data-tooltip-id="tool-left" />
           </div>
+          <div
+            className="p-2 left-icon"
+            onClick={() => handleToolSelect("Gradient")}
+          >
+            <MdGradient data-tooltip-content="Gradient" data-tooltip-id="tool-left" />
+          </div>
           {/* <div
             className="p-2 left-icon"
           >

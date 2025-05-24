@@ -130,6 +130,8 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
     const selectedLayer = layers[state.tool.selectedLayerIndex] || {};
     return selectedLayer.shapes || [];
   });
+  const pressureMin = useSelector(state => state.tool.pressureMin);
+  const pressureMax = useSelector(state => state.tool.pressureMax);
   const penPoints = useSelector((state) => state.tool.penPoints);
   const [cursorPosition, setCursorPosition] = useState({ x: 0, y: 0 });
   const [isCustomCursorVisible, setIsCustomCursorVisible] = useState(false);
@@ -160,6 +162,10 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
   const dropperMode = useSelector(state => state.tool.dropperMode);
   const pickedColor = useSelector(state => state.tool.pickedColor);
   const dropperTarget = useSelector(state => state.tool.dropperTarget || "stroke");
+  const [colorPicker, setColorPicker] = useState({ visible: false, x: 0, y: 0, idx: null });
+  const pressureEnabled = useSelector(state => state.tool.pressureEnabled);
+  const brushCaps = useSelector((state) => state.tool.brushCaps);
+
   const selectedLayerIndex = useSelector(
     (state) => state.tool.selectedLayerIndex
   );
@@ -1478,11 +1484,23 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
           radius,
           points,
         }));
-      } else if (isDrawing && newShape && newShape.type === "Pencil") {
-        setNewShape((prev) => ({
-          ...prev,
-          points: [...prev.points, [x, y]],
-        }));
+      } if (isDrawing && newShape && newShape.type === "Pencil") {
+        if (pressureEnabled) {
+          let pressure = 1;
+          if (e.evt && typeof e.evt.pressure === "number") {
+            pressure = e.evt.pressure;
+          }
+          const width = pressureMin + (pressureMax - pressureMin) * pressure;
+          setNewShape((prev) => ({
+            ...prev,
+            points: [...prev.points, [x, y, width]],
+          }));
+        } else {
+          setNewShape((prev) => ({
+            ...prev,
+            points: [...prev.points, [x, y]],
+          }));
+        }
       } else if (isDrawing && newShape && newShape.type === "Calligraphy") {
         const point = { x, y };
         const lastPoint = newShape.points[newShape.points.length - 1];
@@ -2118,12 +2136,65 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
         const smoothedPoints = smoothShape(newShape.points, pencilSmoothing);
         let finalPoints = smoothedPoints;
 
-        if (pencilOption === "Ellipse") {
-          finalPoints = generateEllipsePath(smoothedPoints);
-        }
+        // if (pencilOption === "Ellipse") {
+        //   finalPoints = generateEllipsePath(smoothedPoints);
+        // }
         console.log("Finalizing Pencil Shape:", smoothedPoints);
         finalPoints = downsamplePoints(finalPoints, 5000);
+        if (!pressureEnabled) {
+          if (pencilOption !== "None") {
+            fillColor = strokeColor;
+            isClosed = true;
+            // if (pencilOption === "Ellipse") {
+            //   finalPoints = generateEllipsePath(finalPoints);
+            // }
 
+          }
+          finalPoints = smoothShape(finalPoints, pencilSmoothing);
+          finalPoints = downsamplePoints(finalPoints, 5000);
+        } else {
+
+          fillColor = "transparent";
+          isClosed = false;
+        }
+        let pencilStrokeWidth = 2;
+        if (pressureEnabled) {
+          const points = newShape.points;
+          const left = [];
+          const right = [];
+          for (let i = 0; i < points.length - 1; i++) {
+            const [x1, y1] = points[i];
+            const [x2, y2] = points[i + 1];
+            const dx = x2 - x1;
+            const dy = y2 - y1;
+            const len = Math.sqrt(dx * dx + dy * dy) || 1;
+            const nx = -dy / len;
+            const ny = dx / len;
+            const width = 40;
+            left.push([x1 + nx * width / 2, y1 + ny * width / 2]);
+            right.push([x1 - nx * width / 2, y1 - ny * width / 2]);
+          }
+
+          const [xLast, yLast] = points[points.length - 1];
+          left.push([xLast, yLast]);
+          right.push([xLast, yLast]);
+          const polygonPoints = [...left, ...right.reverse()];
+          const pathData = polygonPoints.map(
+            ([x, y], i) => (i === 0 ? `M ${x} ${y}` : `L ${x} ${y}`)
+          ).join(" ") + " Z";
+          dispatch(
+            addShape({
+              id: newShape.id,
+              type: "BrushStroke",
+              points: newShape.points,
+              strokeColor: strokeColor,
+            })
+          );
+          setActiveTab("layers");
+          setNewShape(null);
+          setIsDrawing(false);
+          return;
+        }
         dispatch(
           addShape({
             id: newShape.id,
@@ -2132,6 +2203,7 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
             strokeColor: strokeColor,
             fill: fillColor || "black",
             closed: isClosed,
+            strokeWidth: pencilStrokeWidth,
           })
         );
         setActiveTab("layers");
@@ -2251,23 +2323,49 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
         setNewShape(null);
         setIsDrawing(false);
       } else if (isDrawing && newShape && newShape.type === "Pencil") {
-        const fillColor = pencilOption === "None" ? "transparent" : strokeColor;
-        const isClosed = pencilOption !== "None";
+        if (pressureEnabled) {
 
+          dispatch(
+            addShape({
+              id: newShape.id,
+              type: "BrushStroke",
+              points: newShape.points,
+              strokeColor: strokeColor,
+            })
+          );
+          setActiveTab("layers");
+          setNewShape(null);
+          setIsDrawing(false);
+          return;
+        }
+        let fillColor = pencilOption === "None" ? "transparent" : strokeColor;
+        let isClosed = pencilOption !== "None";
+
+        if (pencilOption !== "None") {
+          fillColor = fillColor || strokeColor;
+          isClosed = true;
+        }
 
         const smoothedPoints = smoothShape(newShape.points, pencilSmoothing);
+        let finalPoints = smoothedPoints;
+
+        // if (pencilOption === "Ellipse") {
+        //   finalPoints = generateEllipsePath(smoothedPoints);
+        // }
+        finalPoints = downsamplePoints(finalPoints, 5000);
 
         dispatch(
           addShape({
             id: newShape.id,
             type: "Pencil",
-            points: smoothedPoints,
+            points: finalPoints,
             strokeColor: strokeColor,
             fill: fillColor || "black",
             closed: isClosed,
+            strokeWidth: 2,
           })
         );
-
+        setActiveTab("layers");
         setNewShape(null);
         setIsDrawing(false);
       } else if (isDrawing && selectedTool === "Bezier" && bezierOption === "Spiro Path") {
@@ -2673,6 +2771,14 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
       (shape) => shape.id === state.tool.selectedShapeId
     )
   );
+  const selectedBounds = selectedShape
+    ? {
+      x: selectedShape.x || 0,
+      y: selectedShape.y || 0,
+      width: selectedShape.width || selectedShape.radius * 2 || 0,
+      height: selectedShape.height || selectedShape.radius * 2 || 0,
+    }
+    : null;
   const applyTo = selectedShape?.gradientTarget || "fill";
   const gradientObj = selectedShape ? selectedShape[applyTo] : null;
   const calligraphyOption = useSelector((state) => state.tool.calligraphyOption);
@@ -3101,7 +3207,6 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
                   listening={false}
                   draggable
                 />
-                {/* {isSnappingEnabled && renderGrid()} */}
                 {snappingLines.map((line, index) => (
                   <Line
                     key={index}
@@ -3650,6 +3755,79 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
                     );
                   } else if (shape.type === "Circle") {
                     const isSelected = selectedShapeIds.includes(shape.id);
+                    const arcType = shape.arcType || "slice";
+                    if (arcType === "arc") {
+                      return (
+                        <Arc
+                          id={shape.id}
+                          x={shape.x}
+                          y={shape.y}
+                          innerRadius={shape.radius * 0.7}
+                          outerRadius={shape.radius}
+                          angle={shape.arcAngle || 360}
+                          fill={shape.fill || "transparent"}
+                          stroke={shape.stroke || "black"}
+                          strokeWidth={shape.strokeWidth || 1}
+                          rotation={shape.rotation || 0}
+                          closed={false}
+                          dash={[10, 10]}
+                          draggable={selectedTool !== "Node"}
+                          onDragMove={handleDragMove}
+                          onDragEnd={(e) => {
+                            const { x, y } = e.target.position();
+                            dispatch(updateShapePosition({ id: shape.id, x, y }));
+                          }}
+                        />
+                      );
+                    }
+
+                    if (arcType === "chord") {
+                      return (
+                        <Arc
+                          id={shape.id}
+                          x={shape.x}
+                          y={shape.y}
+                          innerRadius={0}
+                          outerRadius={shape.radius}
+                          angle={shape.arcAngle || 360}
+                          fill="transparent"
+                          stroke={shape.stroke || "black"}
+                          strokeWidth={shape.strokeWidth || 1}
+                          rotation={shape.rotation || 0}
+                          closed={true}
+                          draggable={selectedTool !== "Node"}
+                          onDragMove={handleDragMove}
+                          onDragEnd={(e) => {
+                            const { x, y } = e.target.position();
+                            dispatch(updateShapePosition({ id: shape.id, x, y }));
+                          }}
+                        />
+                      );
+                    }
+
+                    if (arcType === "ellipse") {
+                      return (
+                        <Arc
+                          id={shape.id}
+                          x={shape.x}
+                          y={shape.y}
+                          innerRadius={0}
+                          outerRadius={shape.radius}
+                          angle={360}
+                          fill={shape.fill || "transparent"}
+                          stroke={shape.stroke || "black"}
+                          strokeWidth={shape.strokeWidth || 1}
+                          rotation={shape.rotation || 0}
+                          closed={true}
+                          draggable={selectedTool !== "Node"}
+                          onDragMove={handleDragMove}
+                          onDragEnd={(e) => {
+                            const { x, y } = e.target.position();
+                            dispatch(updateShapePosition({ id: shape.id, x, y }));
+                          }}
+                        />
+                      );
+                    }
                     return (
                       <React.Fragment key={shape.id}>
                         <Arc
@@ -4014,7 +4192,55 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
                     });
                     const scaledPoints = scaleShapePoints(shape.points, 1 + pencilScale, centerX, centerY);
                     const isSelected = selectedShapeIds.includes(shape.id);
-
+                    const pencilOption = shape.pencilOption || "None";
+                    const points = shape.points;
+                    const width = (shape.strokeWidth || 10) * (1 + (shape.pencilScale ?? pencilScale ?? 0));
+                    function getPerp([x1, y1], [x2, y2], w) {
+                      const dx = x2 - x1, dy = y2 - y1;
+                      const len = Math.hypot(dx, dy) || 1;
+                      return [-(dy / len) * w, (dx / len) * w];
+                    }
+                    if (pencilOption === "Ellipse" && points.length > 2) {
+                      const left = [];
+                      const right = [];
+                      for (let i = 1; i < points.length - 1; i++) {
+                        const [x0, y0] = points[i - 1];
+                        const [x1, y1] = points[i];
+                        const [x2, y2] = points[i + 1];
+                        const perp1 = getPerp([x0, y0], [x1, y1], width);
+                        const perp2 = getPerp([x1, y1], [x2, y2], width);
+                        const perp = [(perp1[0] + perp2[0]) / 2, (perp1[1] + perp2[1]) / 2];
+                        left.push([x1 + perp[0] / 2, y1 + perp[1] / 2]);
+                        right.push([x1 - perp[0] / 2, y1 - perp[1] / 2]);
+                      }
+                      const [xStart, yStart] = points[0];
+                      const [xEnd, yEnd] = points[points.length - 1];
+                      const polygon = [
+                        [xStart, yStart],
+                        ...left,
+                        [xEnd, yEnd],
+                        ...right.reverse()
+                      ];
+                      const pathData = polygon.map(
+                        ([x, y], i) => (i === 0 ? `M ${x} ${y}` : `L ${x} ${y}`)
+                      ).join(" ") + " Z";
+                      return (
+                        <Path
+                          key={shape.id}
+                          data={pathData}
+                          fill={shape.fill || shape.strokeColor || "black"}
+                          stroke={shape.strokeColor || "black"}
+                          strokeWidth={1}
+                          closed
+                          draggable={selectedTool !== "Node"}
+                          onDragMove={handleDragMove}
+                          onDragEnd={(e) => {
+                            const { x, y } = e.target.position();
+                            dispatch(updateShapePosition({ id: shape.id, x, y }));
+                          }}
+                        />
+                      );
+                    }
                     return (
                       <React.Fragment key={shape.id}>
                         <Line
@@ -4077,6 +4303,63 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
                         )}
                       </React.Fragment>
                     );
+                  } else if (shape.type === "BrushStroke") {
+                    const segments = [];
+                    const points = shape.points;
+
+                    const maxBrushWidth = 40;
+                    const minBrushWidth = pressureMin * maxBrushWidth;
+
+                    for (let i = 1; i < points.length; i++) {
+                      const [x0, y0, w0 = 1] = points[i - 1];
+                      const [x, y, w = 1] = points[i];
+
+
+                      const p0 = Math.max(pressureMin, Math.min(1, w0));
+                      const p1 = Math.max(pressureMin, Math.min(1, w));
+
+
+                      const width0 = minBrushWidth + ((p0 - pressureMin) / (1 - pressureMin)) * (maxBrushWidth - minBrushWidth);
+                      const width1 = minBrushWidth + ((p1 - pressureMin) / (1 - pressureMin)) * (maxBrushWidth - minBrushWidth);
+
+                      const width = Math.max(minBrushWidth, (width0 + width1) / 2);
+
+                      segments.push(
+                        <Line
+                          key={i}
+                          points={[x0, y0, x, y]}
+                          stroke={shape.strokeColor}
+                          strokeWidth={width}
+                          lineCap={brushCaps}
+                          lineJoin="round"
+                        />
+                      );
+                    }
+
+                    if (brushCaps === "round" && points.length > 1) {
+                      const [xStart, yStart, wStart = 1] = points[0];
+                      const [xEnd, yEnd, wEnd = 1] = points[points.length - 1];
+                      const pStart = Math.max(0, Math.min(1, (wStart - pressureMin) / (pressureMax - pressureMin)));
+                      const pEnd = Math.max(0, Math.min(1, (wEnd - pressureMin) / (pressureMax - pressureMin)));
+                      segments.push(
+                        <Circle
+                          key="start-cap"
+                          x={xStart}
+                          y={yStart}
+                          radius={pStart * maxBrushWidth / 2}
+                          fill={shape.strokeColor}
+                        />,
+                        <Circle
+                          key="end-cap"
+                          x={xEnd}
+                          y={yEnd}
+                          radius={pEnd * maxBrushWidth / 2}
+                          fill={shape.strokeColor}
+                        />
+                      );
+                    }
+
+                    return <React.Fragment key={shape.id}>{segments}</React.Fragment>;
                   } else if (shape.type === "Calligraphy") {
                     const isSelected = selectedShapeIds.includes(shape.id);
                     return (
@@ -4927,7 +5210,7 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
                           x: gradientObj.center.x,
                           y: gradientObj.center.y + gradientObj.radius
                         }}
-                        // fillRadialGradientColorStops={gradientObj.colors.flatMap(stop => [stop.pos, stop.color])}
+
                         opacity={0.5}
                         stroke="gray"
                         strokeWidth={2}
@@ -4987,18 +5270,16 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
                         return (
                           <Circle
                             key={idx}
-                            x={shapeX + gradientObj.center.x + gradientObj.radius * stop.pos}
-                            y={shapeY + gradientObj.center.y}
+                            x={x}
+                            y={y}
                             radius={8}
-                            // fill={stop.color}
+                            fill={stop.color}
                             stroke="#333"
                             strokeWidth={2}
                             draggable
                             onDragMove={e => {
-
                               const dx = e.target.x() - (shapeX + gradientObj.center.x);
                               const dy = e.target.y() - (shapeY + gradientObj.center.y);
-
                               let t = Math.sqrt(dx * dx + dy * dy) / gradientObj.radius;
                               t = Math.max(0, Math.min(1, t));
                               const newColors = gradientObj.colors.map((s, i) =>
@@ -5013,6 +5294,12 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
                                 gradientTarget: applyTo,
                               }));
                             }}
+                            onClick={e => {
+
+                              const stage = e.target.getStage();
+                              const pointer = stage.getPointerPosition();
+                              setColorPicker({ visible: true, x: pointer.x, y: pointer.y, idx });
+                            }}
                           />
                         );
                       })}
@@ -5025,6 +5312,40 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
 
         </div>
       </div>
+      {colorPicker.visible && (
+        <input
+          type="color"
+          style={{
+            position: "absolute",
+            left: colorPicker.x,
+            top: colorPicker.y,
+            zIndex: 2000,
+            width: 32,
+            height: 32,
+            border: "2px solid #333",
+            borderRadius: "50%",
+            padding: 0,
+            cursor: "pointer"
+          }}
+          value={gradientObj.colors[colorPicker.idx]?.color || "#ffffff"}
+          onChange={e => {
+            const newColors = gradientObj.colors.map((s, i) =>
+              i === colorPicker.idx ? { ...s, color: e.target.value } : s
+            );
+            dispatch(updateShapePosition({
+              id: selectedShape.id,
+              [applyTo]: {
+                ...gradientObj,
+                colors: newColors
+              },
+              gradientTarget: applyTo,
+            }));
+            setColorPicker({ ...colorPicker, visible: false });
+          }}
+          onBlur={() => setColorPicker({ ...colorPicker, visible: false })}
+          autoFocus
+        />
+      )}
       {isCustomCursorVisible && toolCursors[selectedTool] && (
         <div
           style={{

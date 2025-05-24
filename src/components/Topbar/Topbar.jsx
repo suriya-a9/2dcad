@@ -85,6 +85,10 @@ import {
   setAssignAverage,
   setAltInverse,
   setGradientType,
+  setPressureEnabled,
+  setPressureMin,
+  setPressureMax,
+  setBrushCaps,
 } from "../../Redux/Slice/toolSlice";
 import {
   TbDeselect,
@@ -1409,10 +1413,25 @@ const Topbar = ({
 };
 
 export default Topbar;
+const unitConversionFactors = {
+  px: 1,
+  mm: 3.779528,
+  cm: 37.79528,
+  in: 96,
+  pt: 1.333333,
+};
 
+function convertFromPx(value, unit) {
+  return value / unitConversionFactors[unit];
+}
+function convertToPx(value, unit) {
+  return value * unitConversionFactors[unit];
+}
 function DefaultTopbar() {
   const selectedTool = useSelector((state) => state.tool.selectedTool);
   const dispatch = useDispatch();
+  const [circleArcMode, setCircleArcMode] = useState(null);
+  const [unit, setUnit] = useState("px");
   const shapeBuilderMode = useSelector((state) => state.tool.shapeBuilderMode);
   const [isSnappingEnabled, setIsSnappingEnabled] = useState(false);
   const handleSelectAll = () => {
@@ -1599,7 +1618,7 @@ function DefaultTopbar() {
   };
   return (
     <>
-      <div className="d-flex flex-row mb-3" style={{ alignItems: "center" }}>
+      <div className="d-flex flex-row mb-3" style={{ alignItems: "center", overflow: 'scroll' }}>
         <div
           className={`p-2 top-icon ${isSnappingEnabled ? "active" : ""}`}
           onClick={toggleSnapping}
@@ -1652,7 +1671,7 @@ function DefaultTopbar() {
           />
         </div>
         <div className="p-2 value">
-          <label htmlFor="X">X: &nbsp;</label>
+          <label htmlFor="X">X:&nbsp;</label>
           <input
             type="number"
             name="x"
@@ -1664,7 +1683,7 @@ function DefaultTopbar() {
           />
         </div>
         <div className="p-2 value">
-          <label htmlFor="Y">Y: &nbsp;</label>
+          <label htmlFor="Y">Y:&nbsp;</label>
           <input
             type="number"
             name="y"
@@ -1676,7 +1695,7 @@ function DefaultTopbar() {
           />
         </div>
         <div className="p-2 value">
-          <label htmlFor="skewX">Skew X: &nbsp;</label>
+          <label htmlFor="skewX">Sx:&nbsp;</label>
           <input
             type="number"
             name="skewX"
@@ -1688,7 +1707,7 @@ function DefaultTopbar() {
           />
         </div>
         <div className="p-2 value">
-          <label htmlFor="skewY">Skew Y: &nbsp;</label>
+          <label htmlFor="skewY">Sy:&nbsp;</label>
           <input
             type="number"
             name="skewY"
@@ -1724,42 +1743,73 @@ function DefaultTopbar() {
           className="p-2 value"
           style={
             selectedTool === "Rectangle"
-              ? { display: "block" }
+              ? { display: "flex", alignItems: "center", gap: "0.5rem" }
               : { display: "none" }
           }
         >
-          <label htmlFor="W">W: &nbsp;</label>
+          <label htmlFor="unit">Unit:&nbsp;</label>
+          <select
+            id="unit"
+            value={unit}
+            onChange={e => setUnit(e.target.value)}
+            style={{ marginRight: 8 }}
+          >
+            <option value="mm">mm</option>
+            <option value="cm">cm</option>
+            <option value="in">in</option>
+            <option value="pt">pt</option>
+            <option value="px">px</option>
+          </select>
+          <label htmlFor="W">W:&nbsp;</label>
           <input
             type="number"
             name="width"
             id="W"
-            step={1}
+            step={0.01}
             placeholder="0.00"
             value={
-              selectedShape.width ?? shapes?.[shapes?.length - 1]?.width ?? 0
+              selectedShape.width
+                ? convertFromPx(selectedShape.width, unit).toFixed(2)
+                : shapes?.[shapes?.length - 1]?.width
+                  ? convertFromPx(shapes[shapes.length - 1].width, unit).toFixed(2)
+                  : 0
             }
-            onChange={handleInputChange}
+            onChange={e => {
+              const pxValue = convertToPx(parseFloat(e.target.value), unit);
+              if (!isNaN(pxValue)) {
+                dispatch(updateShapePosition({ id: selectedShapeId, width: pxValue }));
+              }
+            }}
           />
         </div>
         <div
           className="p-2 value"
           style={
             selectedTool === "Rectangle"
-              ? { display: "block" }
+              ? { display: "flex", alignItems: "center", gap: "0.5rem" }
               : { display: "none" }
           }
         >
-          <label htmlFor="H">H: &nbsp;</label>
+          <label htmlFor="H">H:&nbsp;</label>
           <input
             type="number"
             name="height"
             id="H"
-            step={1}
+            step={0.01}
             placeholder="0.00"
             value={
-              selectedShape.height ?? shapes?.[shapes?.length - 1]?.height ?? 0
+              selectedShape.height
+                ? convertFromPx(selectedShape.height, unit).toFixed(2)
+                : shapes?.[shapes?.length - 1]?.height
+                  ? convertFromPx(shapes[shapes.length - 1].height, unit).toFixed(2)
+                  : 0
             }
-            onChange={handleInputChange}
+            onChange={e => {
+              const pxValue = convertToPx(parseFloat(e.target.value), unit);
+              if (!isNaN(pxValue)) {
+                dispatch(updateShapePosition({ id: selectedShapeId, height: pxValue }));
+              }
+            }}
           />
         </div>
         <div
@@ -1771,10 +1821,10 @@ function DefaultTopbar() {
               selectedTool === "Dropper" ||
               selectedTool === "PaintBucket"
               ? { display: "none" }
-              : { display: "block" }
+              : { display: "flex", alignItems: "center", gap: "0.5rem" }
           }
         >
-          <label htmlFor="Stroke">Stroke: &nbsp;</label>
+          <label htmlFor="Stroke">Stroke:&nbsp;</label>
           <input
             type="number"
             name="stroke"
@@ -1789,11 +1839,11 @@ function DefaultTopbar() {
           className="p-2 value"
           style={
             selectedTool === "Circle"
-              ? { display: "block" }
+              ? { display: "flex", alignItems: "center", gap: "0.5rem" }
               : { display: "none" }
           }
         >
-          <label htmlFor="Radius">Radius: &nbsp;</label>
+          <label htmlFor="Radius">R:&nbsp;</label>
           <input
             type="number"
             name="radius"
@@ -1806,14 +1856,15 @@ function DefaultTopbar() {
             onChange={handleRadiusChange}
           />
         </div>
+
         <div className="p-2 value"
           style={
             selectedTool === "Circle"
-              ? { display: "block" }
+              ? { display: "flex", alignItems: "center", gap: "0.5rem" }
               : { display: "none" }
           }
         >
-          <label htmlFor="horizontalRadius">Horizontal Radius: &nbsp;</label>
+          <label htmlFor="horizontalRadius">Rx:&nbsp;</label>
           <input
             type="number"
             name="horizontalRadius"
@@ -1827,11 +1878,11 @@ function DefaultTopbar() {
         <div className="p-2 value"
           style={
             selectedTool === "Circle"
-              ? { display: "block" }
+              ? { display: "flex", alignItems: "center", gap: "0.5rem" }
               : { display: "none" }
           }
         >
-          <label htmlFor="verticalRadius">Vertical Radius: &nbsp;</label>
+          <label htmlFor="verticalRadius">Ry:&nbsp;</label>
           <input
             type="number"
             name="verticalRadius"
@@ -1850,7 +1901,7 @@ function DefaultTopbar() {
               : { display: "none" }
           }
         >
-          <label htmlFor="shapeBuilderMode">Mode: &nbsp;</label>
+          <label htmlFor="shapeBuilderMode">Mode:&nbsp;</label>
           <select
             id="shapeBuilderMode"
             value={shapeBuilderMode}
@@ -1860,15 +1911,68 @@ function DefaultTopbar() {
             <option value="subtract">Subtract</option>
           </select>
         </div>
+        <div className="p-2 value" style={selectedTool === "Circle" ? { display: "flex", flexDirection: 'row', alignItems: 'center' } : { display: "none" }}>
+          <label>Arc:&nbsp;</label>
+          <label style={{ display: 'flex', alignItems: 'center' }}>
+            <input
+              type="radio"
+              name="arcMode"
+              value="ellipse"
+              checked={circleArcMode === "ellipse"}
+              onChange={() => {
+                setCircleArcMode("ellipse");
+
+                if (selectedShapeId) {
+                  dispatch(updateShapePosition({
+                    id: selectedShapeId,
+                    arcType: "ellipse",
+                    arcAngle: 360
+                  }));
+                }
+              }}
+              style={{ marginRight: 4 }}
+            />
+            Ellipse
+          </label>
+          <label style={{ display: 'flex', alignItems: 'center', marginLeft: 8 }}>
+            <input
+              type="radio"
+              name="arcMode"
+              value="arc"
+              checked={circleArcMode === "arc"}
+              onChange={() => setCircleArcMode("arc")}
+              style={{ marginRight: 4 }}
+            />
+            Arc
+          </label>
+          <label style={{ display: 'flex', alignItems: 'center', marginLeft: 8 }}>
+            <input
+              type="radio"
+              name="arcMode"
+              value="chord"
+              checked={circleArcMode === "chord"}
+              onChange={() => setCircleArcMode("chord")}
+              style={{ marginRight: 4 }}
+            />
+            Chord
+          </label>
+          <label style={{ display: 'flex', alignItems: 'center', marginLeft: 8 }}>
+            <input
+              type="radio"
+              name="arcMode"
+              value="slice"
+              checked={circleArcMode === "slice"}
+              onChange={() => setCircleArcMode("slice")}
+              style={{ marginRight: 4 }}
+            />
+            Slice
+          </label>
+        </div>
         <div
           className="p-2 value"
-          style={
-            selectedTool === "Circle"
-              ? { display: "block" }
-              : { display: "none" }
-          }
+          style={selectedTool === "Circle" ? { display: "flex", alignItems: "center", gap: "0.5rem" } : { display: "none" }}
         >
-          <label htmlFor="arcAngle">Arc Angle: &nbsp;</label>
+          <label htmlFor="arcAngle">Angle:&nbsp;</label>
           <input
             type="number"
             name="arcAngle"
@@ -1878,18 +1982,26 @@ function DefaultTopbar() {
             max={360}
             placeholder="360"
             value={(selectedShape.arcAngle || 360).toFixed(0)}
-            onChange={(e) => handleArcAngleChange(e.target.value)}
+            disabled={!circleArcMode}
+            onChange={e => {
+              if (!circleArcMode) return;
+              dispatch(updateShapePosition({
+                id: selectedShapeId,
+                arcAngle: Math.max(0, Math.min(parseFloat(e.target.value), 360)),
+                arcType: circleArcMode,
+              }));
+            }}
           />
         </div>
         <div
           className="p-2 value"
           style={
             selectedTool === "Star"
-              ? { display: "block" }
+              ? { display: "flex", alignItems: "center", gap: "0.5rem" }
               : { display: "none" }
           }
         >
-          <label htmlFor="Corners">Corners: &nbsp;</label>
+          <label htmlFor="Corners">Corners:&nbsp;</label>
           <input
             type="number"
             name="corners"
@@ -1906,9 +2018,9 @@ function DefaultTopbar() {
         </div>
         <div
           className="p-2 value"
-          style={selectedTool === "Star" ? { display: "block" } : { display: "none" }}
+          style={selectedTool === "Star" ? { display: "flex", alignItems: "center", gap: "0.5rem" } : { display: "none" }}
         >
-          <label htmlFor="spokeRatio">Spoke Ratio: &nbsp;</label>
+          <label htmlFor="spokeRatio">Ratio:&nbsp;</label>
           <input
             type="number"
             name="spokeRatio"
@@ -1923,9 +2035,9 @@ function DefaultTopbar() {
         </div>
         <div
           className="p-2 value"
-          style={selectedTool === "Star" ? { display: "block" } : { display: "none" }}
+          style={selectedTool === "Star" ? { display: "flex", alignItems: "center", gap: "0.5rem" } : { display: "none" }}
         >
-          <label htmlFor="rounded">Rounded: &nbsp;</label>
+          <label htmlFor="rounded">Rounded:&nbsp;</label>
           <input
             type="number"
             name="rounded"
@@ -1940,9 +2052,9 @@ function DefaultTopbar() {
         </div>
         <div
           className="p-2 value"
-          style={selectedTool === "Star" ? { display: "block" } : { display: "none" }}
+          style={selectedTool === "Star" ? { display: "flex", alignItems: "center", gap: "0.5rem" } : { display: "none" }}
         >
-          <label htmlFor="randomized">Randomized: &nbsp;</label>
+          <label htmlFor="randomized">Randomized:&nbsp;</label>
           <input
             type="number"
             name="randomized"
@@ -2097,104 +2209,160 @@ function CalligraphyTopbar() {
     dispatch(setCalligraphyCaps(newCaps));
   };
 
+  const scrollContainerRef = useRef(null);
+  const [showRightArrow, setShowRightArrow] = useState(false);
+
+  // Check for overflow
+  useEffect(() => {
+    const checkOverflow = () => {
+      const el = scrollContainerRef.current;
+      if (el) {
+        setShowRightArrow(el.scrollWidth > el.clientWidth);
+      }
+    };
+
+    checkOverflow();
+    window.addEventListener("resize", checkOverflow);
+    return () => window.removeEventListener("resize", checkOverflow);
+  }, []);
+
+  const scrollRight = () => {
+    scrollContainerRef.current.scrollBy({ left: 200, behavior: "smooth" });
+  };
+
   return (
-    <div className="d-flex flex-row mb-3 top-icons" style={{ alignItems: "center", color: "white", overflow: 'scroll' }}>
-      {/* Dropdown for Calligraphy Options */}
-      <div className="p-2 value" style={{ display: "flex", alignItems: "center" }}>
-        <label>Calligraphy Options: &nbsp;</label>
-        <select
-          value={calligraphyOption}
-          onChange={(e) => handleOptionSelect(e.target.value)}
-          style={{ padding: "0px", borderRadius: "4px", height: '30px' }}
-        >
-          <option value="Marker">Marker</option>
-          <option value="DipPen">Dip Pen</option>
-          <option value="Brush">Brush</option>
-          <option value="Wiggly">Wiggly</option>
-          <option value="Tracing">Tracing</option>
-          <option value="Splotchy">Splotchy</option>
-        </select>
-      </div>
+    <div style={{ position: "relative" }}>
+      <div
+        ref={scrollContainerRef}
+        className="d-flex flex-row mb-3 top-icons"
+        style={{
+          alignItems: "center",
+          color: "white",
+          overflowX: "auto",
+          whiteSpace: "nowrap",
+          scrollbarWidth: "none", // for Firefox
+        }}
+      >
+        {/* Dropdown for Calligraphy Options */}
+        <div className="p-2 value" style={{ display: "flex", alignItems: "center" }}>
+          <label>Options:&nbsp;</label>
+          <select
+            value={calligraphyOption}
+            onChange={(e) => handleOptionSelect(e.target.value)}
+            style={{ padding: "0px", borderRadius: "4px", height: '30px' }}
+          >
+            <option value="Marker">Marker</option>
+            <option value="DipPen">Dip Pen</option>
+            <option value="Brush">Brush</option>
+            <option value="Wiggly">Wiggly</option>
+            <option value="Tracing">Tracing</option>
+            <option value="Splotchy">Splotchy</option>
+          </select>
+        </div>
 
-      <div className="p-2 value" style={{ display: "flex", alignItems: "center" }}>
-        <label>Width: </label>
-        <input
-          type="range"
-          min="1"
-          max="50"
-          value={calligraphyWidth}
-          onChange={handleWidthChange}
-          style={{ width: "150px", margin: "0 10px" }}
-        />
-        <span>{calligraphyWidth}px</span>
-      </div>
-      <div className="p-2 value" style={{ display: "flex", alignItems: "center" }}>
-        <label>Thinning: </label>
-        <input
-          type="range"
-          min="-1"
-          max="1"
-          step="0.1"
-          value={calligraphyThinning}
-          onChange={handleThinningChange}
-          style={{ width: "150px", margin: "0 10px" }}
-        />
-        <span>{calligraphyThinning.toFixed(1)}</span>
-      </div>
+        <div className="p-2 value" style={{ display: "flex", alignItems: "center" }}>
+          <label>Width: </label>
+          <input
+            type="range"
+            min="1"
+            max="50"
+            value={calligraphyWidth}
+            onChange={handleWidthChange}
+            style={{ width: "150px", margin: "0 10px" }}
+          />
+          <span>{calligraphyWidth}px</span>
+        </div>
+        <div className="p-2 value" style={{ display: "flex", alignItems: "center" }}>
+          <label>Thinning: </label>
+          <input
+            type="range"
+            min="-1"
+            max="1"
+            step="0.1"
+            value={calligraphyThinning}
+            onChange={handleThinningChange}
+            style={{ width: "150px", margin: "0 10px" }}
+          />
+          <span>{calligraphyThinning.toFixed(1)}</span>
+        </div>
 
-      <div className="p-2 value" style={{ display: "flex", alignItems: "center" }}>
-        <label>Mass: </label>
-        <input
-          type="range"
-          min="0"
-          max="10"
-          step="0.1"
-          value={calligraphyMass}
-          onChange={handleMassChange}
-          style={{ width: "150px", margin: "0 10px" }}
-        />
-        <span>{calligraphyMass.toFixed(1)}</span>
-      </div>
+        <div className="p-2 value" style={{ display: "flex", alignItems: "center" }}>
+          <label>Mass: </label>
+          <input
+            type="range"
+            min="0"
+            max="10"
+            step="0.1"
+            value={calligraphyMass}
+            onChange={handleMassChange}
+            style={{ width: "150px", margin: "0 10px" }}
+          />
+          <span>{calligraphyMass.toFixed(1)}</span>
+        </div>
 
-      <div className="p-2 value" style={{ display: "flex", alignItems: "center" }}>
-        <label>Angle: </label>
-        <input
-          type="number"
-          min="0"
-          max="360"
-          step="1"
-          value={calligraphyAngle}
-          onChange={handleAngleChange}
-          style={{ width: "80px", margin: "0 10px" }}
-        />
-        <span>°</span>
+        <div className="p-2 value" style={{ display: "flex", alignItems: "center" }}>
+          <label>Angle: </label>
+          <input
+            type="number"
+            min="0"
+            max="360"
+            step="1"
+            value={calligraphyAngle}
+            onChange={handleAngleChange}
+            style={{ width: "80px", margin: "0 10px" }}
+          />
+          <span>°</span>
+        </div>
+        <div className="p-2 value" style={{ display: "flex", alignItems: "center" }}>
+          <label>Fixation: </label>
+          <input
+            type="range"
+            min="0"
+            max="1"
+            step="0.01"
+            value={calligraphyFixation}
+            onChange={handleFixationChange}
+            style={{ width: "150px", margin: "0 10px" }}
+          />
+          <span>{calligraphyFixation.toFixed(2)}</span>
+        </div>
+        <div className="p-2 value" style={{ display: "flex", alignItems: "center" }}>
+          <label>Caps: </label>
+          <input
+            type="range"
+            min="0"
+            max="1"
+            step="0.01"
+            value={calligraphyCaps}
+            onChange={handleCapsChange}
+            style={{ width: "150px", margin: "0 10px" }}
+          />
+          <span>{calligraphyCaps.toFixed(2)}</span>
+        </div>
       </div>
-      <div className="p-2 value" style={{ display: "flex", alignItems: "center" }}>
-        <label>Fixation: </label>
-        <input
-          type="range"
-          min="0"
-          max="1"
-          step="0.01"
-          value={calligraphyFixation}
-          onChange={handleFixationChange}
-          style={{ width: "150px", margin: "0 10px" }}
-        />
-        <span>{calligraphyFixation.toFixed(2)}</span>
-      </div>
-      <div className="p-2 value" style={{ display: "flex", alignItems: "center" }}>
-        <label>Caps: </label>
-        <input
-          type="range"
-          min="0"
-          max="1"
-          step="0.01"
-          value={calligraphyCaps}
-          onChange={handleCapsChange}
-          style={{ width: "150px", margin: "0 10px" }}
-        />
-        <span>{calligraphyCaps.toFixed(2)}</span>
-      </div>
+      {
+        showRightArrow && (
+          <div
+            onClick={scrollRight}
+            style={{
+              position: "absolute",
+              right: 0,
+              top: 0,
+              bottom: 0,
+              width: "30px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              background: "rgba(0,0,0,0.4)",
+              color: 'white',
+              cursor: "pointer",
+              zIndex: 10,
+            }}
+          >
+            ▶
+          </div>
+        )
+      }
     </div>
   );
 }
@@ -2234,7 +2402,7 @@ function EraserTopbar() {
   return (
     <div className="d-flex flex-row mb-3 top-icons" style={{ alignItems: "center", color: "white" }}>
       <div className="p-2 value" style={{ display: "flex", alignItems: "center" }}>
-        <label>Eraser Mode:&nbsp;</label>
+        <label>Mode:&nbsp;</label>
         <select
           value={eraserMode}
           onChange={handleModeChange}
@@ -2246,7 +2414,7 @@ function EraserTopbar() {
         </select>
       </div>
       <div className="p-2 value" style={{ display: "flex", alignItems: "center" }}>
-        <label>Eraser Width:&nbsp;</label>
+        <label>Width:&nbsp;</label>
         <input
           type="range"
           min={1}
@@ -2258,7 +2426,7 @@ function EraserTopbar() {
         <span style={{ marginLeft: 8 }}>{eraserWidth}px</span>
       </div>
       <div className="p-2 value" style={{ display: "flex", alignItems: "center" }}>
-        <label>Eraser Thinning:&nbsp;</label>
+        <label>Thinning:&nbsp;</label>
         <input
           type="range"
           min={0}
@@ -2271,7 +2439,7 @@ function EraserTopbar() {
         <span style={{ marginLeft: 8 }}>{eraserThinning}</span>
       </div>
       <div className="p-2 value" style={{ display: 'flex', alignItems: 'center' }}>
-        <label>Eraser Caps:&nbsp;</label>
+        <label>Caps:&nbsp;</label>
         <input
           type="range"
           min={0}
@@ -2284,7 +2452,7 @@ function EraserTopbar() {
         <span style={{ marginLeft: 8 }}>{eraserCaps}</span>
       </div>
       <div className="p-2 value" style={{ display: 'flex', alignItems: 'center' }}>
-        <label>Eraser Tremor:&nbsp;</label>
+        <label>Tremor:&nbsp;</label>
         <input
           type="range"
           min={0}
@@ -2297,7 +2465,7 @@ function EraserTopbar() {
         <span style={{ marginLeft: 8 }}>{eraserTremor}</span>
       </div>
       <div className="p-2 value" style={{ display: 'flex', alignItems: 'center' }}>
-        <label>Eraser Mass:&nbsp;</label>
+        <label>Mass:&nbsp;</label>
         <input
           type="range"
           min={0}
@@ -2366,23 +2534,23 @@ export function DropperTopbar() {
       </div>
       <div className="p-2 value" style={{ display: "flex", alignItems: "center" }}>
         <label>
-          <input
-            type="checkbox"
-            checked={assignAverage}
-            onChange={handleAssignAverageChange}
-          />
           Assign Average Color (tint)
         </label>
+        <input
+          type="checkbox"
+          checked={assignAverage}
+          onChange={handleAssignAverageChange}
+        />
       </div>
       <div className="p-2 value" style={{ display: "flex", alignItems: "center" }}>
         <label>
-          <input
-            type="checkbox"
-            checked={altInverse}
-            onChange={handleAltInverse}
-          />
           Alt Inverse
         </label>
+        <input
+          type="checkbox"
+          checked={altInverse}
+          onChange={handleAltInverse}
+        />
       </div>
     </div>
   );
@@ -2484,6 +2652,78 @@ function GradientTopbar() {
     if (!selectedShape) return;
     if (selectedShape[applyTo].colors.length <= 2) return;
     const newColors = selectedShape[applyTo].colors.filter((_, i) => i !== idx);
+    dispatch(updateShapePosition({
+      id: selectedShapeId,
+      [applyTo]: {
+        ...selectedShape[applyTo],
+        colors: newColors
+      },
+      gradientTarget: applyTo,
+    }));
+  };
+
+  const handleRadialCenterXChange = (value) => {
+    if (!selectedShape) return;
+    dispatch(updateShapePosition({
+      id: selectedShapeId,
+      [applyTo]: {
+        ...selectedShape[applyTo],
+        center: {
+          ...selectedShape[applyTo].center,
+          x: parseFloat(value)
+        }
+      },
+      gradientTarget: applyTo,
+    }));
+  };
+
+  const handleRadialCenterYChange = (value) => {
+    if (!selectedShape) return;
+    dispatch(updateShapePosition({
+      id: selectedShapeId,
+      [applyTo]: {
+        ...selectedShape[applyTo],
+        center: {
+          ...selectedShape[applyTo].center,
+          y: parseFloat(value)
+        }
+      },
+      gradientTarget: applyTo,
+    }));
+  };
+
+  const handleRadialRadiusChange = (value) => {
+    if (!selectedShape) return;
+    dispatch(updateShapePosition({
+      id: selectedShapeId,
+      [applyTo]: {
+        ...selectedShape[applyTo],
+        radius: parseFloat(value)
+      },
+      gradientTarget: applyTo,
+    }));
+  };
+
+  const handleRadialColorStopChange = (idx, color) => {
+    if (!selectedShape) return;
+    const newColors = selectedShape[applyTo].colors.map((stop, i) =>
+      i === idx ? { ...stop, color } : stop
+    );
+    dispatch(updateShapePosition({
+      id: selectedShapeId,
+      [applyTo]: {
+        ...selectedShape[applyTo],
+        colors: newColors
+      },
+      gradientTarget: applyTo,
+    }));
+  };
+
+  const handleRadialColorStopPosChange = (idx, pos) => {
+    if (!selectedShape) return;
+    const newColors = selectedShape[applyTo].colors.map((stop, i) =>
+      i === idx ? { ...stop, pos: parseFloat(pos) } : stop
+    );
     dispatch(updateShapePosition({
       id: selectedShapeId,
       [applyTo]: {
@@ -2601,61 +2841,22 @@ function GradientTopbar() {
             <label>Center X:</label>
             <input
               type="number"
-              step={10}
               value={selectedShape[applyTo].center.x}
-              onChange={e => {
-                dispatch(updateShapePosition({
-                  id: selectedShapeId,
-                  [applyTo]: {
-                    ...selectedShape[applyTo],
-                    center: {
-                      ...selectedShape[applyTo].center,
-                      x: parseFloat(e.target.value)
-                    }
-                  },
-                  gradientTarget: applyTo,
-                }));
-              }}
-              style={{ width: 60, marginLeft: 4, marginRight: 8 }}
+              onChange={e => handleRadialCenterXChange(e.target.value)}
             />
             <label>Y:</label>
             <input
               type="number"
-              step={10}
               value={selectedShape[applyTo].center.y}
-              onChange={e => {
-                dispatch(updateShapePosition({
-                  id: selectedShapeId,
-                  [applyTo]: {
-                    ...selectedShape[applyTo],
-                    center: {
-                      ...selectedShape[applyTo].center,
-                      y: parseFloat(e.target.value)
-                    }
-                  },
-                  gradientTarget: applyTo,
-                }));
-              }}
-              style={{ width: 60, marginLeft: 4 }}
+              onChange={e => handleRadialCenterYChange(e.target.value)}
             />
           </div>
           <div className="p-2 value" style={{ display: "flex", alignItems: "center" }}>
             <label>Radius:</label>
             <input
               type="number"
-              step={10}
               value={selectedShape[applyTo].radius}
-              onChange={e => {
-                dispatch(updateShapePosition({
-                  id: selectedShapeId,
-                  [applyTo]: {
-                    ...selectedShape[applyTo],
-                    radius: parseFloat(e.target.value)
-                  },
-                  gradientTarget: applyTo,
-                }));
-              }}
-              style={{ width: 60, marginLeft: 4 }}
+              onChange={e => handleRadialRadiusChange(e.target.value)}
             />
           </div>
           <div className="p-2 value" style={{ display: "flex", alignItems: "center" }}>
@@ -2665,17 +2866,12 @@ function GradientTopbar() {
                 <input
                   type="color"
                   value={stop.color}
-                  onChange={e => handleColorChange(idx, e.target.value)}
-                  style={{ marginRight: 4 }}
+                  onChange={e => handleRadialColorStopChange(idx, e.target.value)}
                 />
                 <input
                   type="number"
-                  min={0}
-                  max={1}
-                  step={0.01}
                   value={stop.pos}
-                  onChange={e => handlePosChange(idx, e.target.value)}
-                  style={{ width: 50, marginRight: 4 }}
+                  onChange={e => handleRadialColorStopPosChange(idx, e.target.value)}
                 />
                 {selectedShape[applyTo].colors.length > 2 && (
                   <button onClick={() => handleRemoveStop(idx)} style={{ marginRight: 4 }}>✕</button>
@@ -2751,51 +2947,41 @@ function NodeTopbar() {
 
   return (
     <div className="d-flex flex-row mb-3 top-icons" style={{ alignItems: "center", color: "white" }}>
-      {/* Insert Node */}
       <div className="p-2 top-icon" onClick={handleInsertNode}>
         <FaPlus size={20} title="Insert Node" />
       </div>
 
-      {/* Join Selected Nodes */}
       <div className="p-2 top-icon" onClick={handleJoinSelectedNodes}>
         <FaLink size={20} title="Join Selected Nodes" />
       </div>
 
-      {/* Join Selected Endnodes with a New Segment */}
       <div className="p-2 top-icon" onClick={handleJoinEndNodesWithSegment}>
         <FaBezierCurve size={20} title="Join Selected Endnodes with a New Segment" />
       </div>
 
-      {/* Separate Selected Paths */}
       <div className="p-2 top-icon" onClick={handleSeparatePaths}>
         <FaUnlink size={20} title="Separate Selected Paths" />
       </div>
 
-      {/* Make Selected Nodes Corner */}
       <div className="p-2 top-icon" onClick={handleMakeNodesCorner}>
         <FaDrawPolygon size={20} title="Make Selected Nodes Corner" />
       </div>
 
-      {/* Make Selected Nodes Smooth */}
       <div className="p-2 top-icon" onClick={handleMakeNodesSmooth}>
         <FaBezierCurve size={20} title="Make Selected Nodes Smooth" />
       </div>
 
-      {/* Make Selected Nodes Curve */}
       <div className="p-2 top-icon" onClick={handleCurveLine}>
         <FaBezierCurve size={20} title="Make Selected Nodes Curve line" />
       </div>
 
-      {/* Make Selected Nodes Straight */}
       <div className="p-2 top-icon" onClick={handleStraightLine}>
         <GiStraightPipe size={20} title="Make Selected Nodes Straight line" />
       </div>
 
-      {/* Make Shape Rounded Corner */}
       <div className="p-2 top-icon" onClick={handleShapeCorner}>
         <MdRoundedCorner size={20} title="Make Selected Shapes Rounded Corner" />
       </div>
-      {/* Make Stroke to Path */}
       <div className="p-2 top-icon" onClick={handleStrokePath}>
         <PiPath size={20} title="Make Strokr to Path" />
       </div>
@@ -2808,6 +2994,12 @@ function PencilTopbar() {
   const pencilSmoothing = useSelector((state) => state.tool.pencilSmoothing);
   const pencilMode = useSelector((state) => state.tool.pencilMode);
   const pencilScale = useSelector((state) => state.tool.pencilScale);
+  const brushCaps = useSelector((state) => state.tool.brushCaps);
+
+  const pressureEnabled = useSelector((state) => state.tool.pressureEnabled);
+  const pressureMin = useSelector((state) => state.tool.pressureMin);
+  const pressureMax = useSelector((state) => state.tool.pressureMax);
+  const [caps, setCaps] = useState("round");
 
   const handleOptionSelect = (option) => {
     dispatch(setPencilOption(option));
@@ -2826,15 +3018,30 @@ function PencilTopbar() {
     dispatch(setPencilScale(parseFloat(newScale)));
   };
 
+  const handlePressureChange = (checked) => {
+    dispatch(setPressureEnabled(checked));
+  };
+  const handlePressureMinChange = (e) => {
+    dispatch(setPressureMin(parseFloat(e.target.value)));
+  };
+  const handlePressureMaxChange = (e) => {
+    dispatch(setPressureMax(parseFloat(e.target.value)));
+  };
+
+  const handleCapsChange = (e) => {
+    setCaps(e.target.value);
+
+  };
+
   return (
     <div className="d-flex flex-row mb-3" style={{ alignItems: "center", color: "white" }}>
-      {/* Dropdown for Pencil Options */}
       <div className="p-2 value" style={{ display: "flex", alignItems: "center", padding: "0.3rem" }}>
-        <label>Pencil Options: &nbsp;</label>
+        <label>Options:&nbsp;</label>
         <select
           value={pencilOption}
           onChange={(e) => handleOptionSelect(e.target.value)}
           style={{ padding: "0px", borderRadius: "4px", height: '30px' }}
+          disabled={pressureEnabled}
         >
           <option value="None">None</option>
           <option value="TriangleIn">Triangle In</option>
@@ -2842,7 +3049,53 @@ function PencilTopbar() {
           <option value="Ellipse">Ellipse</option>
         </select>
       </div>
-
+      <div className="p-2 value" style={{ display: "flex", alignItems: "center" }}>
+        <label>
+          Pinput
+        </label>
+        <input
+          type="checkbox"
+          checked={pressureEnabled}
+          onChange={e => handlePressureChange(e.target.checked)}
+        />
+      </div>
+      {pressureEnabled && (
+        <>
+          <div className="p-2 value" style={{ display: "flex", alignItems: "center" }}>
+            <label>Min:</label>
+            <input
+              type="number"
+              min={0}
+              max={1}
+              step={0.1}
+              value={pressureMin}
+              onChange={handlePressureMinChange}
+              style={{ width: 60, marginLeft: 4, marginRight: 8 }}
+            />
+            <label>Max:</label>
+            <input
+              type="number"
+              min={0}
+              max={1}
+              step={0.1}
+              value={pressureMax}
+              onChange={handlePressureMaxChange}
+              style={{ width: 60, marginLeft: 4 }}
+            />
+          </div>
+          <div className="p-2 value" style={{ display: "flex", alignItems: "center" }}>
+            <label>Caps:</label>
+            <select
+              value={brushCaps}
+              onChange={e => dispatch(setBrushCaps(e.target.value))}
+            >
+              <option value="butt">Butt</option>
+              <option value="round">Round</option>
+              <option value="square">Square</option>
+            </select>
+          </div>
+        </>
+      )}
       <div className="p-2 value" style={{ display: "flex", alignItems: "center" }}>
         <label>Smoothing: </label>
         <input
@@ -3157,7 +3410,7 @@ function TextEditorTopbar({ onStyleChange, selectedShapeId }) {
       direction: textDirection,
       textAlign: textDirection === "rtl" ? "right" : "left",
     }}>
-      <label>Font Family</label>
+      <label>Font</label>
       <select value={selectedFontFamily} onChange={handleFontFamilyChange}>
         <option value="Arial">Arial</option>
         <option value="Times New Roman">Times New Roman</option>
@@ -3179,7 +3432,7 @@ function TextEditorTopbar({ onStyleChange, selectedShapeId }) {
         <option value="Franklin Gothic Medium">Franklin Gothic Medium</option>
       </select>
 
-      <label>Font Size</label>
+      <label>Size</label>
       <select value={selectedFontSize} onChange={handleFontSizeChange}>
         <option value={1}>1</option>
         <option value={2}>2</option>
@@ -3198,14 +3451,14 @@ function TextEditorTopbar({ onStyleChange, selectedShapeId }) {
         <option value={36}>36</option>
       </select>
 
-      <label>Font Alignment</label>
+      <label>Align</label>
       <select value={selectedAlignment} onChange={handleAlignmentChange}>
         <option value="left">Left</option>
         <option value="center">Center</option>
         <option value="right">Right</option>
       </select>
 
-      <label>Font Style</label>
+      <label>Style</label>
       <select value={selectedFontStyle} onChange={handleFontStyleChange}>
         <option value="normal">Normal</option>
         <option value="bold">Bold</option>
@@ -3213,14 +3466,14 @@ function TextEditorTopbar({ onStyleChange, selectedShapeId }) {
         <option value="bold italic">Bold Italic</option>
       </select>
 
-      <label>Text Transform</label>
+      <label>Transform</label>
       <select onChange={handleTextTransformChange}>
         <option value="none">None</option>
         <option value="uppercase">Uppercase</option>
         <option value="lowercase">Lowercase</option>
         <option value="capitalize">Capitalize</option>
       </select>
-      <label>Text Direction</label>
+      <label>Direction</label>
       <select
         onChange={(e) => handleTextDirectionChange(e.target.value)}
         defaultValue="ltr"
@@ -3228,7 +3481,7 @@ function TextEditorTopbar({ onStyleChange, selectedShapeId }) {
         <option value="ltr">Left to Right</option>
         <option value="rtl">Right to Left</option>
       </select>
-      <label>Block Progression</label>
+      <label>Progression</label>
       <select
         onChange={(e) => handleBlockProgressionChange(e.target.value)}
         defaultValue="normal"

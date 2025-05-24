@@ -565,7 +565,19 @@ const Main = () => {
       setCanvasRotation(newRotation);
     }
   };
-
+  const selectedShape = useSelector((state) =>
+    state.tool.layers[state.tool.selectedLayerIndex]?.shapes.find(
+      (shape) => shape.id === state.tool.selectedShapeId
+    )
+  );
+  const selectedBounds = selectedShape
+    ? {
+      x: selectedShape.x || 0,
+      y: selectedShape.y || 0,
+      width: selectedShape.width || selectedShape.radius * 2 || 0,
+      height: selectedShape.height || selectedShape.radius * 2 || 0,
+    }
+    : null;
   // const canvasRef = useRef(null);
 
   // useEffect(() => {
@@ -647,6 +659,14 @@ const Main = () => {
             unit={unit}
             onClick={handleRulerClick}
             onRightClick={handleRulerRightClick}
+            highlightRange={
+              selectedBounds
+                ? {
+                  start: selectedBounds.x * panelScale + canvasPosition.x,
+                  end: (selectedBounds.x + selectedBounds.width) * panelScale + canvasPosition.x
+                }
+                : null
+            }
             onDragGuide={(orientation, position) => handleDragGuide(orientation, position)}
             style={{ zIndex: '20' }}
           />
@@ -660,6 +680,14 @@ const Main = () => {
             canvasPosition={canvasPosition}
             unit={unit}
             onClick={handleRulerClick}
+            highlightRange={
+              selectedBounds
+                ? {
+                  start: selectedBounds.y * panelScale + canvasPosition.y,
+                  end: (selectedBounds.y + selectedBounds.height) * panelScale + canvasPosition.y
+                }
+                : null
+            }
             onDragGuide={(orientation, position) => handleDragGuide(orientation, position)}
             onRightClick={handleRulerRightClick}
             style={{ zIndex: '20' }}

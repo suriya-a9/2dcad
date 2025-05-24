@@ -56,7 +56,7 @@ const toolSlice = createSlice({
     selectedFontStyle: "normal",
     calligraphyThinning: 0,
     calligraphyMass: 0,
-    pencilSmoothing: 20,
+    pencilSmoothing: 0,
     pencilOption: "None",
     pencilMode: "Bezier Path",
     pencilScale: 0,
@@ -78,6 +78,10 @@ const toolSlice = createSlice({
     assignAverage: false,
     altInverse: false,
     gradientType: "linear",
+    pressureEnabled: false,
+    pressureMin: 0,
+    pressureMax: 1,
+    brushCaps: "round",
   },
 
   reducers: {
@@ -2216,6 +2220,10 @@ const toolSlice = createSlice({
     setGradientType: (state, action) => {
       state.gradientType = action.payload;
     },
+    setPressureEnabled: (state, action) => { state.pressureEnabled = action.payload; },
+    setPressureMin: (state, action) => { state.pressureMin = action.payload; },
+    setPressureMax: (state, action) => { state.pressureMax = action.payload; },
+    setBrushCaps: (state, action) => { state.brushCaps = action.payload; },
   },
 
 });
@@ -2357,6 +2365,10 @@ export const {
   setAssignAverage,
   setAltInverse,
   setGradientType,
+  setPressureEnabled,
+  setPressureMin,
+  setPressureMax,
+  setBrushCaps
 } = toolSlice.actions;
 
 export default toolSlice.reducer;

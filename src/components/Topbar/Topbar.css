@@ -43,16 +43,18 @@
 
 .top-bar .value {
   margin-top: 4px;
+  display: flex;
+  align-items: center;  
 }
 
 .top-bar .value label {
   color: white;
-  font-size: 12px;
+  /* font-size: 12px; */
 }
 
-.top-bar .value input {
+/* .top-bar .value input {
   width: 51px !important;
-}
+} */
 
 .top-bar .value label {
   color: white;
@@ -108,7 +110,9 @@ textarea.form-control {
   font-size: 14px;
 }
 
-
+.top-bar input[type="radio"] {
+  width: 20px !important;
+}
 
 .rdw-editor-toolbar {
   display: flex;

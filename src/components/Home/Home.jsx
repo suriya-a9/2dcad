@@ -29,9 +29,9 @@ const Home = () => {
             <div onClick={handleNew2DDesign} className="box two-box" style={{ cursor: "pointer" }}>
               <h4>New 2D Design</h4>
             </div>
-            <div className="box three-box">
+            {/* <div className="box three-box">
               <h4>New 3D Design</h4>
-            </div>
+            </div> */}
           </div>
         </div>
       </div>

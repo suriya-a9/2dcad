@@ -14,7 +14,7 @@ const convertToUnit = (value, unit) => {
     return value / unitConversionFactors[unit];
 };
 
-const Ruler = ({ orientation, length, scale, position, canvasSize, canvasPosition, unit, onClick, onDragGuide, onRightClick }) => {
+const Ruler = ({ orientation, length, scale, position, canvasSize, canvasPosition, unit, onClick, onDragGuide, onRightClick, highlightRange }) => {
     const isHorizontal = orientation === "horizontal";
     const tickSpacing = 50;
     const totalTicks = Math.ceil(length / (tickSpacing * scale));
@@ -111,6 +111,28 @@ const Ruler = ({ orientation, length, scale, position, canvasSize, canvasPositio
                     </div>
                 );
             })}
+            {highlightRange && (
+                <div
+                    style={{
+                        position: 'absolute',
+                        left: isHorizontal
+                            ? `${highlightRange.start - canvasStart}px`
+                            : 0,
+                        top: !isHorizontal
+                            ? `${highlightRange.start - canvasStart}px`
+                            : 0,
+                        width: isHorizontal
+                            ? `${highlightRange.end - highlightRange.start}px`
+                            : '100%',
+                        height: !isHorizontal
+                            ? `${highlightRange.end - highlightRange.start}px`
+                            : '100%',
+                        background: 'rgba(255, 200, 0, 0.3)',
+                        pointerEvents: 'none',
+                        zIndex: 100,
+                    }}
+                />
+            )}
         </div>
     );
 };

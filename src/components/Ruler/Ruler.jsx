@@ -111,7 +111,7 @@ const Ruler = ({ orientation, length, scale, position, canvasSize, canvasPositio
                     </div>
                 );
             })}
-            {highlightRange && (
+            {/* {highlightRange && (
                 <div
                     style={{
                         position: 'absolute',
@@ -132,7 +132,7 @@ const Ruler = ({ orientation, length, scale, position, canvasSize, canvasPositio
                         zIndex: 100,
                     }}
                 />
-            )}
+            )} */}
         </div>
     );
 };

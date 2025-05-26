@@ -2212,7 +2212,7 @@ function CalligraphyTopbar() {
   const scrollContainerRef = useRef(null);
   const [showRightArrow, setShowRightArrow] = useState(false);
 
-  // Check for overflow
+
   useEffect(() => {
     const checkOverflow = () => {
       const el = scrollContainerRef.current;
@@ -2240,7 +2240,7 @@ function CalligraphyTopbar() {
           color: "white",
           overflowX: "auto",
           whiteSpace: "nowrap",
-          scrollbarWidth: "none", // for Firefox
+          scrollbarWidth: "none",
         }}
       >
         {/* Dropdown for Calligraphy Options */}
@@ -2736,15 +2736,63 @@ function GradientTopbar() {
   return (
     <div className="d-flex flex-row mb-3 top-icons" style={{ alignItems: "center", color: "white", overflow: 'scroll' }}>
       <div className="p-2 value" style={{ display: "flex", alignItems: "center" }}>
-        <label>Gradient Type:&nbsp;</label>
+        <label>Type:&nbsp;</label>
         <select value={gradientType} onChange={handleGradientTypeChange} style={{ height: "30px" }}>
           <option value="linear">Linear Gradient</option>
           <option value="radial">Radial Gradient</option>
         </select>
       </div>
       <div className="p-2 value" style={{ display: "flex", alignItems: "center" }}>
-        <label>Apply To:&nbsp;</label>
-        <select value={applyTo} onChange={e => setApplyTo(e.target.value)} style={{ height: "30px" }}>
+        <label>Apply:&nbsp;</label>
+        <select
+          value={applyTo}
+          onChange={e => {
+            const value = e.target.value;
+            setApplyTo(value);
+
+            // If switching to stroke and it's not a gradient, initialize it
+            if (
+              value === "stroke" &&
+              selectedShape &&
+              (!selectedShape.stroke || !selectedShape.stroke.type)
+            ) {
+              dispatch(updateShapePosition({
+                id: selectedShapeId,
+                stroke: {
+                  type: "linear-gradient",
+                  start: { x: 0, y: 0 },
+                  end: { x: 100, y: 0 },
+                  colors: [
+                    { color: "#000000", pos: 0 },
+                    { color: "#ffffff", pos: 1 }
+                  ]
+                },
+                gradientTarget: "stroke"
+              }));
+            }
+            // If switching to fill and it's not a gradient, initialize it
+            if (
+              value === "fill" &&
+              selectedShape &&
+              (!selectedShape.fill || !selectedShape.fill.type)
+            ) {
+              dispatch(updateShapePosition({
+                id: selectedShapeId,
+                fill: {
+                  type: "linear-gradient",
+                  start: { x: 0, y: 0 },
+                  end: { x: 100, y: 0 },
+                  colors: [
+                    { color: "#000000", pos: 0 },
+                    { color: "#ffffff", pos: 1 }
+                  ]
+                },
+                gradientTarget: "fill"
+              }));
+            }
+          }}
+          style={{ height: "30px" }}
+        >
           <option value="fill">Fill</option>
           <option value="stroke">Stroke</option>
         </select>
@@ -2752,7 +2800,7 @@ function GradientTopbar() {
       {selectedShape && selectedShape[applyTo]?.type === "linear-gradient" && selectedShape[applyTo].start && selectedShape[applyTo].end && (
         <>
           <div className="p-2 value" style={{ display: "flex", alignItems: "center" }}>
-            <label>Start X:</label>
+            <label>StartX:</label>
             <input
               type="number"
               step={10}
@@ -2770,7 +2818,7 @@ function GradientTopbar() {
             />
           </div>
           <div className="p-2 value" style={{ display: "flex", alignItems: "center" }}>
-            <label>End X:</label>
+            <label>EndX:</label>
             <input
               type="number"
               step={10}
@@ -2788,7 +2836,7 @@ function GradientTopbar() {
             />
           </div>
           <div className="p-2 value" style={{ display: "flex", alignItems: "center" }}>
-            <label>Color Stops:</label>
+            <label>Color:</label>
             {selectedShape[applyTo].colors.map((stop, idx) => (
               <span key={idx} style={{ marginLeft: 8, display: "flex", alignItems: "center" }}>
                 <input
@@ -2838,15 +2886,17 @@ function GradientTopbar() {
       {selectedShape && selectedShape[applyTo]?.type === "radial-gradient" && selectedShape[applyTo].center && typeof selectedShape[applyTo].radius === "number" && (
         <>
           <div className="p-2 value" style={{ display: "flex", alignItems: "center" }}>
-            <label>Center X:</label>
+            <label>CenterX:</label>
             <input
               type="number"
+              step={10}
               value={selectedShape[applyTo].center.x}
               onChange={e => handleRadialCenterXChange(e.target.value)}
             />
             <label>Y:</label>
             <input
               type="number"
+              step={10}
               value={selectedShape[applyTo].center.y}
               onChange={e => handleRadialCenterYChange(e.target.value)}
             />
@@ -2855,12 +2905,13 @@ function GradientTopbar() {
             <label>Radius:</label>
             <input
               type="number"
+              step={5}
               value={selectedShape[applyTo].radius}
               onChange={e => handleRadialRadiusChange(e.target.value)}
             />
           </div>
           <div className="p-2 value" style={{ display: "flex", alignItems: "center" }}>
-            <label>Color Stops:</label>
+            <label>Color:</label>
             {selectedShape[applyTo].colors.map((stop, idx) => (
               <span key={idx} style={{ marginLeft: 8, display: "flex", alignItems: "center" }}>
                 <input
@@ -3000,7 +3051,17 @@ function PencilTopbar() {
   const pressureMin = useSelector((state) => state.tool.pressureMin);
   const pressureMax = useSelector((state) => state.tool.pressureMax);
   const [caps, setCaps] = useState("round");
-
+  useEffect(() => {
+    if (pencilMode === "Spiro Path" && pencilSmoothing !== 50) {
+      dispatch(setPencilSmoothing(50));
+    }
+    if (pencilMode === "Bezier Path" && pencilSmoothing !== 0) {
+      dispatch(setPencilSmoothing(0));
+    }
+    if (pencilMode === "BSpline Path" && pencilSmoothing !== 0) {
+      dispatch(setPencilSmoothing(0));
+    }
+  }, [pencilMode, dispatch, pencilSmoothing]);
   const handleOptionSelect = (option) => {
     dispatch(setPencilOption(option));
   };
@@ -3127,8 +3188,8 @@ function PencilTopbar() {
         <input
           type="range"
           min="0"
-          max="5"
-          step="0.1"
+          max="10"
+          step="1"
           value={pencilScale}
           onChange={(e) => dispatch(setPencilScale(parseFloat(e.target.value)))}
           style={{ width: "150px", margin: "0 10px" }}
@@ -3347,10 +3408,7 @@ function TextEditorTopbar({ onStyleChange, selectedShapeId }) {
   const handleTextTransformChange = (e) => {
     const transformType = e.target.value;
 
-
-
     let transformedText = currentText;
-
 
     if (transformType === "uppercase") {
       transformedText = currentText.toUpperCase();
@@ -3362,8 +3420,6 @@ function TextEditorTopbar({ onStyleChange, selectedShapeId }) {
         .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
         .join(" ");
     }
-
-
     dispatch(
       updateShapePosition({
         id: selectedShapeId,
@@ -3404,6 +3460,17 @@ function TextEditorTopbar({ onStyleChange, selectedShapeId }) {
     } else {
       console.error("No shape is selected. Cannot update block progression.");
     }
+  };
+  const selectedLetterSpacing = useSelector(
+    (state) =>
+      state.tool.layers[state.tool.selectedLayerIndex].shapes.find(
+        (shape) => shape.id === selectedShapeId
+      )?.letterSpacing || 0
+  );
+
+  const handleLetterSpacingChange = (e) => {
+    const newSpacing = parseFloat(e.target.value);
+    onStyleChange({ letterSpacing: newSpacing, id: selectedShapeId });
   };
   return (
     <div className="text-editor-topbar" style={{
@@ -3487,8 +3554,20 @@ function TextEditorTopbar({ onStyleChange, selectedShapeId }) {
         defaultValue="normal"
       >
         <option value="normal">Normal</option>
+        <option value="vertical">Vertical</option>
         <option value="topToBottom">Top to Bottom</option>
       </select>
+      <label>Spacing</label>
+      <input
+        type="range"
+        min={0}
+        max={100}
+        step={1}
+        value={selectedLetterSpacing}
+        onChange={handleLetterSpacingChange}
+        style={{ width: "150px", margin: "0 10px" }}
+      />
+      <span>{selectedLetterSpacing}px</span>
     </div>
   );
 }

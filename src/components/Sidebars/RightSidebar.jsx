@@ -320,12 +320,12 @@ const RightSidebar = ({
           <div className="p-2 right-icon" onClick={() => dispatch(cut())}>
             <TbCut data-tooltip-content="Cut" data-tooltip-id="tool-right" />
           </div>
-          {/* <div className="p-2 right-icon" onClick={() => dispatch(paste())}>
+          <div className="p-2 right-icon" onClick={() => dispatch(paste())}>
             <FaRegPaste
               data-tooltip-content="Paste"
               data-tooltip-id="tool-right"
             />
-          </div> */}
+          </div>
           <div className="p-2 right-icon" onClick={() => dispatch(zoomIn())}>
             <LuZoomIn
               data-tooltip-content="Zoom In"

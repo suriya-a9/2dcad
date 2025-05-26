@@ -563,14 +563,19 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
         dispatch(clearSelection());
       }
     }
-    if (selectedTool === "Gradient" && selectedShapeId) {
-      const pos = e.target.getStage().getPointerPosition();
-      const shape = shapes.find(s => s.id === selectedShapeId);
-      if (!shape) return;
-      setGradientDrag({
-        start: { x: pos.x - shape.x, y: pos.y - shape.y },
-        end: { x: pos.x - shape.x, y: pos.y - shape.y }
-      });
+    if (selectedTool === "Gradient") {
+      if (clickedShape && clickedShape.attrs && clickedShape.attrs.id) {
+        dispatch(selectShape(clickedShape.attrs.id));
+      }
+      if (selectedShapeId) {
+        const pos = e.target.getStage().getPointerPosition();
+        const shape = shapes.find(s => s.id === selectedShapeId);
+        if (!shape) return;
+        setGradientDrag({
+          start: { x: pos.x - shape.x, y: pos.y - shape.y },
+          end: { x: pos.x - shape.x, y: pos.y - shape.y }
+        });
+      }
     }
     if (selectedTool === "ShapeBuilder") {
       console.log("Shape Builder Tool is active.");
@@ -2079,10 +2084,17 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
             radius,
             colors: (shape[applyTo]?.colors && shape[applyTo]?.colors.length > 0)
               ? shape[applyTo].colors
-              : [
-                { color: (applyTo === "fill" ? (shape.fill || "#000") : (shape.stroke || "#000")), pos: 0 },
-                { color: "#ffffff", pos: 1 }
-              ]
+              : (
+                applyTo === "stroke"
+                  ? [
+                    { color: typeof shape.stroke === "string" ? shape.stroke : "#000", pos: 0 },
+                    { color: typeof shape.stroke === "string" ? shape.stroke : "#000", pos: 1 }
+                  ]
+                  : [
+                    { color: typeof shape.fill === "string" ? shape.fill : "#000", pos: 0 },
+                    { color: "#ffffff", pos: 1 }
+                  ]
+              )
           },
           ...(applyTo === "stroke"
             ? { fill: "transparent" }
@@ -2136,18 +2148,18 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
         const smoothedPoints = smoothShape(newShape.points, pencilSmoothing);
         let finalPoints = smoothedPoints;
 
-        // if (pencilOption === "Ellipse") {
-        //   finalPoints = generateEllipsePath(smoothedPoints);
-        // }
+
+
+
         console.log("Finalizing Pencil Shape:", smoothedPoints);
         finalPoints = downsamplePoints(finalPoints, 5000);
         if (!pressureEnabled) {
           if (pencilOption !== "None") {
             fillColor = strokeColor;
             isClosed = true;
-            // if (pencilOption === "Ellipse") {
-            //   finalPoints = generateEllipsePath(finalPoints);
-            // }
+
+
+
 
           }
           finalPoints = smoothShape(finalPoints, pencilSmoothing);
@@ -2349,9 +2361,9 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
         const smoothedPoints = smoothShape(newShape.points, pencilSmoothing);
         let finalPoints = smoothedPoints;
 
-        // if (pencilOption === "Ellipse") {
-        //   finalPoints = generateEllipsePath(smoothedPoints);
-        // }
+
+
+
         finalPoints = downsamplePoints(finalPoints, 5000);
 
         dispatch(
@@ -2602,29 +2614,14 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
   useEffect(() => {
     const handleKeyDown = (e) => {
       console.log("Key pressed:", e.key, "Ctrl:", e.ctrlKey);
-
       if (e.ctrlKey && e.key === "z") {
         console.log("Undo triggered");
         dispatch(undo());
       }
-
       if (e.ctrlKey && e.key === "y") {
         console.log("Redo triggered");
         dispatch(redo());
       }
-
-
-
-
-
-
-
-
-
-
-
-
-
       if (e.ctrlKey && e.key === "a") {
         e.preventDefault();
         dispatch(selecteAllShapes());
@@ -2656,7 +2653,7 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
         .map((id) => shapeRefs.current[id])
         .filter(Boolean);
 
-      if (selectedNodes.length > 0) {
+      if (selectedNodes.length === selectedShapeIds.length && selectedNodes.length > 0) {
         try {
           transformerRef.current.nodes(selectedNodes);
           transformerRef.current.getLayer().batchDraw();
@@ -3430,11 +3427,13 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
                           width={shape.width}
                           height={shape.height}
                           fill={
-                            shape.gradientTarget === "fill" && shape.fill?.type === "linear-gradient"
-                              ? undefined
-                              : shape.gradientTarget === "fill" && shape.fill?.type === "radial-gradient"
+                            shape.gradientTarget === "stroke"
+                              ? "transparent"
+                              : shape.gradientTarget === "fill" && shape.fill?.type === "linear-gradient"
                                 ? undefined
-                                : shape.fill || "transparent"
+                                : shape.fill?.type === "linear-gradient" || shape.fill?.type === "radial-gradient"
+                                  ? undefined
+                                  : shape.fill || "transparent"
                           }
                           fillLinearGradientStartPoint={
                             shape.gradientTarget === "fill" && shape.fill?.type === "linear-gradient"
@@ -3451,24 +3450,13 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
                               ? getLinearGradientColorStops(shape.fill)
                               : undefined
                           }
-                          fillRadialGradientStartPoint={
-                            shape.gradientTarget === "fill" && shape.fill?.type === "radial-gradient"
-                              ? shape.fill.center
-                              : undefined
-                          }
-                          fillRadialGradientEndPoint={
-                            shape.gradientTarget === "fill" && shape.fill?.type === "radial-gradient"
-                              ? { x: shape.fill.center.x, y: shape.fill.center.y + shape.fill.radius }
-                              : undefined
-                          }
-                          fillRadialGradientColorStops={
-                            shape.gradientTarget === "fill" && shape.fill?.type === "radial-gradient"
-                              ? shape.fill.colors
-                                .filter(stop => typeof stop.pos === "number" && isFinite(stop.pos) && stop.pos >= 0 && stop.pos <= 1)
-                                .sort((a, b) => a.pos - b.pos)
-                                .flatMap(stop => [stop.pos, stop.color])
-                              : undefined
-                          }
+                          fillRadialGradientStartPoint={shape.fill?.type === "radial-gradient" ? shape.fill.center : undefined}
+                          fillRadialGradientEndPoint={shape.fill?.type === "radial-gradient" && shape.fill.radius !== undefined
+                            ? { x: shape.fill.center.x + shape.fill.radius, y: shape.fill.center.y }
+                            : undefined}
+                          fillRadialGradientColorStops={shape.fill?.type === "radial-gradient"
+                            ? shape.fill.colors.flatMap(stop => [stop.pos, stop.color])
+                            : undefined}
                           stroke={
                             shape.gradientTarget === "stroke" && shape.stroke?.type === "linear-gradient"
                               ? undefined
@@ -3489,6 +3477,16 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
                               ? shape.stroke.colors.flatMap(stop => [stop.pos, stop.color])
                               : undefined
                           }
+                          strokeRadialGradientStartPoint={shape.stroke?.type === "radial-gradient" ? shape.stroke.center : undefined}
+                          strokeRadialGradientEndPoint={shape.stroke?.type === "radial-gradient" && shape.stroke.radius !== undefined
+                            ? {
+                              x: shape.stroke.center.x + shape.stroke.radius,
+                              y: shape.stroke.center.y
+                            }
+                            : undefined}
+                          strokeRadialGradientColorStops={shape.stroke?.type === "radial-gradient"
+                            ? shape.stroke.colors.flatMap(stop => [stop.pos, stop.color])
+                            : undefined}
                           strokeWidth={shape.strokeWidth || 1}
                           cornerRadius={tempCornerRadius !== null ? tempCornerRadius : shape.cornerRadius}
                           dash={getDashArray(shape.strokeStyle)}
@@ -3526,9 +3524,9 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
                             }
                           }}
                         />
-                        {isSelected && selectedTool !== "Node" && (
+                        {isSelected && shapeRefs.current[shape.id] && selectedTool !== "Node" && (
                           <Transformer
-                            nodes={[layerRef.current.findOne(`#${shape.id}`)]}
+                            nodes={[shapeRefs.current[shape.id]]}
                             boundBoxFunc={(oldBox, newBox) => {
                               if (newBox.width < 5 || newBox.height < 5) {
                                 return oldBox;
@@ -3621,6 +3619,10 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
                     return (
                       <React.Fragment key={shape.id}>
                         <Path
+                          ref={(node) => {
+                            if (node) shapeRefs.current[shape.id] = node;
+                            else delete shapeRefs.current[shape.id];
+                          }}
                           id={shape.id}
                           data={getBezierPathFromPoints(shape.points, shape.closed)}
                           stroke={isSelected ? "blue" : shape.stroke || shape.strokeColor || "black"}
@@ -3665,6 +3667,10 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
                     return (
                       <React.Fragment key={shape.id}>
                         <Path
+                          ref={(node) => {
+                            if (node) shapeRefs.current[shape.id] = node;
+                            else delete shapeRefs.current[shape.id];
+                          }}
                           id={shape.id}
                           data={shape.path}
                           stroke={shape.stroke || "black"}
@@ -3720,6 +3726,10 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
                     img.src = shape.url;
                     return (
                       <Image
+                        ref={(node) => {
+                          if (node) shapeRefs.current[shape.id] = node;
+                          else delete shapeRefs.current[shape.id];
+                        }}
                         key={shape.id}
                         id={shape.id}
                         x={shape.x}
@@ -3759,6 +3769,10 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
                     if (arcType === "arc") {
                       return (
                         <Arc
+                          ref={(node) => {
+                            if (node) shapeRefs.current[shape.id] = node;
+                            else delete shapeRefs.current[shape.id];
+                          }}
                           id={shape.id}
                           x={shape.x}
                           y={shape.y}
@@ -3784,6 +3798,10 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
                     if (arcType === "chord") {
                       return (
                         <Arc
+                          ref={(node) => {
+                            if (node) shapeRefs.current[shape.id] = node;
+                            else delete shapeRefs.current[shape.id];
+                          }}
                           id={shape.id}
                           x={shape.x}
                           y={shape.y}
@@ -3808,6 +3826,10 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
                     if (arcType === "ellipse") {
                       return (
                         <Arc
+                          ref={(node) => {
+                            if (node) shapeRefs.current[shape.id] = node;
+                            else delete shapeRefs.current[shape.id];
+                          }}
                           id={shape.id}
                           x={shape.x}
                           y={shape.y}
@@ -3831,6 +3853,10 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
                     return (
                       <React.Fragment key={shape.id}>
                         <Arc
+                          ref={(node) => {
+                            if (node) shapeRefs.current[shape.id] = node;
+                            else delete shapeRefs.current[shape.id];
+                          }}
                           id={shape.id}
                           x={shape.x}
                           y={shape.y}
@@ -3839,77 +3865,27 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
                           outerRadius={shape.radius || 0}
                           angle={shape.arcAngle || 360}
                           fill={
-                            shape.gradientTarget === "fill" && shape.fill?.type === "linear-gradient"
+                            shape.fill?.type === "linear-gradient" || shape.fill?.type === "radial-gradient"
                               ? undefined
-                              : shape.gradientTarget === "fill" && shape.fill?.type === "radial-gradient"
-                                ? undefined
-                                : shape.fill || "transparent"
+                              : shape.fill || "transparent"
                           }
-                          fillLinearGradientStartPoint={
-                            shape.gradientTarget === "fill" && shape.fill?.type === "linear-gradient"
-                              ? shape.fill.start
-                              : undefined
-                          }
-                          fillLinearGradientEndPoint={
-                            shape.gradientTarget === "fill" && shape.fill?.type === "linear-gradient"
-                              ? shape.fill.end
-                              : undefined
-                          }
-                          fillLinearGradientColorStops={
-                            shape.gradientTarget === "fill" && shape.fill?.type === "linear-gradient"
-                              ? shape.fill.colors.flatMap(stop => [stop.pos, stop.color])
-                              : undefined
-                          }
-                          fillRadialGradientStartPoint={
-                            shape.gradientTarget === "fill" && shape.fill?.type === "radial-gradient"
-                              ? shape.fill.center
-                              : undefined
-                          }
-                          fillRadialGradientEndPoint={
-                            shape.gradientTarget === "fill" && shape.fill?.type === "radial-gradient"
-                              ? { x: shape.fill.center.x, y: shape.fill.center.y + shape.fill.radius }
-                              : undefined
-                          }
-                          fillRadialGradientColorStops={
-                            shape.gradientTarget === "fill" && shape.fill?.type === "radial-gradient"
-                              ? shape.fill.colors.flatMap(stop => [stop.pos, stop.color])
-                              : undefined
-                          }
-                          strokeRadialGradientStartPoint={
-                            shape.gradientTarget === "stroke" && shape.stroke?.type === "radial-gradient"
-                              ? shape.stroke.center
-                              : undefined
-                          }
-                          strokeRadialGradientEndPoint={
-                            shape.gradientTarget === "stroke" && shape.stroke?.type === "radial-gradient"
-                              ? { x: shape.stroke.center.x, y: shape.stroke.center.y + shape.stroke.radius }
-                              : undefined
-                          }
-                          strokeRadialGradientColorStops={
-                            shape.gradientTarget === "stroke" && shape.stroke?.type === "radial-gradient"
-                              ? shape.stroke.colors.flatMap(stop => [stop.pos, stop.color])
-                              : undefined
-                          }
+                          fillLinearGradientStartPoint={shape.fill?.type === "linear-gradient" ? shape.fill.start : undefined}
+                          fillLinearGradientEndPoint={shape.fill?.type === "linear-gradient" ? shape.fill.end : undefined}
+                          fillLinearGradientColorStops={shape.fill?.type === "linear-gradient" ? shape.fill.colors.flatMap(stop => [stop.pos, stop.color]) : undefined}
+                          fillRadialGradientStartPoint={shape.fill?.type === "radial-gradient" ? shape.fill.center : undefined}
+                          fillRadialGradientEndPoint={shape.fill?.type === "radial-gradient" ? { x: shape.fill.center.x, y: shape.fill.center.y + shape.fill.radius } : undefined}
+                          fillRadialGradientColorStops={shape.fill?.type === "radial-gradient" ? shape.fill.colors.flatMap(stop => [stop.pos, stop.color]) : undefined}
                           stroke={
-                            shape.gradientTarget === "stroke" && shape.fill?.type === "linear-gradient"
+                            shape.stroke?.type === "linear-gradient" || shape.stroke?.type === "radial-gradient"
                               ? undefined
                               : shape.stroke || "black"
                           }
-                          strokeLinearGradientStartPoint={
-                            shape.gradientTarget === "stroke" && shape.fill?.type === "linear-gradient"
-                              ? shape.fill.start
-                              : undefined
-                          }
-                          strokeLinearGradientEndPoint={
-                            shape.gradientTarget === "stroke" && shape.fill?.type === "linear-gradient"
-                              ? shape.fill.end
-                              : undefined
-                          }
-                          strokeLinearGradientColorStops={
-                            shape.gradientTarget === "stroke" && shape.fill?.type === "linear-gradient"
-                              ? shape.fill.colors.flatMap(stop => [stop.pos, stop.color])
-                              : undefined
-                          }
+                          strokeLinearGradientStartPoint={shape.stroke?.type === "linear-gradient" ? shape.stroke.start : undefined}
+                          strokeLinearGradientEndPoint={shape.stroke?.type === "linear-gradient" ? shape.stroke.end : undefined}
+                          strokeLinearGradientColorStops={shape.stroke?.type === "linear-gradient" ? shape.stroke.colors.flatMap(stop => [stop.pos, stop.color]) : undefined}
+                          strokeRadialGradientStartPoint={shape.stroke?.type === "radial-gradient" ? shape.stroke.center : undefined}
+                          strokeRadialGradientEndPoint={shape.stroke?.type === "radial-gradient" ? { x: shape.stroke.center.x, y: shape.stroke.center.y + shape.stroke.radius } : undefined}
+                          strokeRadialGradientColorStops={shape.stroke?.type === "radial-gradient" ? shape.stroke.colors.flatMap(stop => [stop.pos, stop.color]) : undefined}
                           strokeWidth={shape.strokeWidth || 1}
 
                           rotation={shape.rotation || 0}
@@ -3983,6 +3959,10 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
                     return (
                       <React.Fragment key={shape.id}>
                         <Star
+                          ref={(node) => {
+                            if (node) shapeRefs.current[shape.id] = node;
+                            else delete shapeRefs.current[shape.id];
+                          }}
                           id={shape.id}
                           x={shape.x}
                           y={shape.y}
@@ -4001,8 +3981,28 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
                           rotation={shape.rotation || 0}
                           scaleX={shape.scaleX || 1}
                           scaleY={shape.scaleY || 1}
-                          fill={shape.fill || "transparent"}
-                          stroke={shape.stroke || "black"}
+                          fill={
+                            shape.fill?.type === "linear-gradient" || shape.fill?.type === "radial-gradient"
+                              ? undefined
+                              : shape.fill || "transparent"
+                          }
+                          fillLinearGradientStartPoint={shape.fill?.type === "linear-gradient" ? shape.fill.start : undefined}
+                          fillLinearGradientEndPoint={shape.fill?.type === "linear-gradient" ? shape.fill.end : undefined}
+                          fillLinearGradientColorStops={shape.fill?.type === "linear-gradient" ? shape.fill.colors.flatMap(stop => [stop.pos, stop.color]) : undefined}
+                          fillRadialGradientStartPoint={shape.fill?.type === "radial-gradient" ? shape.fill.center : undefined}
+                          fillRadialGradientEndPoint={shape.fill?.type === "radial-gradient" ? { x: shape.fill.center.x, y: shape.fill.center.y + shape.fill.radius } : undefined}
+                          fillRadialGradientColorStops={shape.fill?.type === "radial-gradient" ? shape.fill.colors.flatMap(stop => [stop.pos, stop.color]) : undefined}
+                          stroke={
+                            shape.stroke?.type === "linear-gradient" || shape.stroke?.type === "radial-gradient"
+                              ? undefined
+                              : shape.stroke || "black"
+                          }
+                          strokeLinearGradientStartPoint={shape.stroke?.type === "linear-gradient" ? shape.stroke.start : undefined}
+                          strokeLinearGradientEndPoint={shape.stroke?.type === "linear-gradient" ? shape.stroke.end : undefined}
+                          strokeLinearGradientColorStops={shape.stroke?.type === "linear-gradient" ? shape.stroke.colors.flatMap(stop => [stop.pos, stop.color]) : undefined}
+                          strokeRadialGradientStartPoint={shape.stroke?.type === "radial-gradient" ? shape.stroke.center : undefined}
+                          strokeRadialGradientEndPoint={shape.stroke?.type === "radial-gradient" ? { x: shape.stroke.center.x, y: shape.stroke.center.y + shape.stroke.radius } : undefined}
+                          strokeRadialGradientColorStops={shape.stroke?.type === "radial-gradient" ? shape.stroke.colors.flatMap(stop => [stop.pos, stop.color]) : undefined}
                           strokeWidth={shape.strokeWidth || 1}
                           draggable={selectedTool !== "Node"}
                           onDragMove={handleDragMove}
@@ -4056,16 +4056,40 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
                     return (
                       <React.Fragment key={shape.id}>
                         <Path
+                          ref={(node) => {
+                            if (node) shapeRefs.current[shape.id] = node;
+                            else delete shapeRefs.current[shape.id];
+                          }}
                           id={shape.id}
                           x={shape.x}
                           y={shape.y}
                           data={generatePolygonPath(shape.points)}
-                          stroke={shape.stroke || "black"}
+                          stroke={
+                            shape.stroke?.type === "linear-gradient" || shape.stroke?.type === "radial-gradient"
+                              ? undefined
+                              : shape.stroke || "black"
+                          }
                           strokeWidth={shape.strokeWidth || 1}
+                          strokeLinearGradientStartPoint={shape.stroke?.type === "linear-gradient" ? shape.stroke.start : undefined}
+                          strokeLinearGradientEndPoint={shape.stroke?.type === "linear-gradient" ? shape.stroke.end : undefined}
+                          strokeLinearGradientColorStops={shape.stroke?.type === "linear-gradient" ? shape.stroke.colors.flatMap(stop => [stop.pos, stop.color]) : undefined}
+                          strokeRadialGradientStartPoint={shape.stroke?.type === "radial-gradient" ? shape.stroke.center : undefined}
+                          strokeRadialGradientEndPoint={shape.stroke?.type === "radial-gradient" ? { x: shape.stroke.center.x, y: shape.stroke.center.y + shape.stroke.radius } : undefined}
+                          strokeRadialGradientColorStops={shape.stroke?.type === "radial-gradient" ? shape.stroke.colors.flatMap(stop => [stop.pos, stop.color]) : undefined}
+                          fill={
+                            shape.fill?.type === "linear-gradient" || shape.fill?.type === "radial-gradient"
+                              ? undefined
+                              : shape.fill || "transparent"
+                          }
+                          fillLinearGradientStartPoint={shape.fill?.type === "linear-gradient" ? shape.fill.start : undefined}
+                          fillLinearGradientEndPoint={shape.fill?.type === "linear-gradient" ? shape.fill.end : undefined}
+                          fillLinearGradientColorStops={shape.fill?.type === "linear-gradient" ? shape.fill.colors.flatMap(stop => [stop.pos, stop.color]) : undefined}
+                          fillRadialGradientStartPoint={shape.fill?.type === "radial-gradient" ? shape.fill.center : undefined}
+                          fillRadialGradientEndPoint={shape.fill?.type === "radial-gradient" ? { x: shape.fill.center.x, y: shape.fill.center.y + shape.fill.radius } : undefined}
+                          fillRadialGradientColorStops={shape.fill?.type === "radial-gradient" ? shape.fill.colors.flatMap(stop => [stop.pos, stop.color]) : undefined}
                           rotation={shape.rotation || 0}
                           scaleX={shape.scaleX || 1}
                           scaleY={shape.scaleY || 1}
-                          fill={shape.fill || "transparent"}
                           closed
                           draggable={selectedTool !== "Node"}
                           onDragMove={handleDragMove}
@@ -4128,6 +4152,10 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
                     });
                     return (
                       <Line
+                        ref={(node) => {
+                          if (node) shapeRefs.current[shape.id] = node;
+                          else delete shapeRefs.current[shape.id];
+                        }}
                         key={shape.id}
                         id={shape.id}
                         points={rotatedPoints.flat()}
@@ -4201,20 +4229,22 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
                       return [-(dy / len) * w, (dx / len) * w];
                     }
                     if (pencilOption === "Ellipse" && points.length > 2) {
+                      const smoothing = 90;
+                      const smoothPoints = smoothShape(points, smoothing);
                       const left = [];
                       const right = [];
-                      for (let i = 1; i < points.length - 1; i++) {
-                        const [x0, y0] = points[i - 1];
-                        const [x1, y1] = points[i];
-                        const [x2, y2] = points[i + 1];
+                      for (let i = 1; i < smoothPoints.length - 1; i++) {
+                        const [x0, y0] = smoothPoints[i - 1];
+                        const [x1, y1] = smoothPoints[i];
+                        const [x2, y2] = smoothPoints[i + 1];
                         const perp1 = getPerp([x0, y0], [x1, y1], width);
                         const perp2 = getPerp([x1, y1], [x2, y2], width);
                         const perp = [(perp1[0] + perp2[0]) / 2, (perp1[1] + perp2[1]) / 2];
                         left.push([x1 + perp[0] / 2, y1 + perp[1] / 2]);
                         right.push([x1 - perp[0] / 2, y1 - perp[1] / 2]);
                       }
-                      const [xStart, yStart] = points[0];
-                      const [xEnd, yEnd] = points[points.length - 1];
+                      const [xStart, yStart] = smoothPoints[0];
+                      const [xEnd, yEnd] = smoothPoints[smoothPoints.length - 1];
                       const polygon = [
                         [xStart, yStart],
                         ...left,
@@ -4226,6 +4256,10 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
                       ).join(" ") + " Z";
                       return (
                         <Path
+                          ref={(node) => {
+                            if (node) shapeRefs.current[shape.id] = node;
+                            else delete shapeRefs.current[shape.id];
+                          }}
                           key={shape.id}
                           data={pathData}
                           fill={shape.fill || shape.strokeColor || "black"}
@@ -4244,12 +4278,16 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
                     return (
                       <React.Fragment key={shape.id}>
                         <Line
+                          ref={(node) => {
+                            if (node) shapeRefs.current[shape.id] = node;
+                            else delete shapeRefs.current[shape.id];
+                          }}
                           key={shape.id}
                           id={shape.id}
                           points={shape.points.flatMap((p) => [p[0], p[1]])}
                           stroke={shape.strokeColor}
                           fill={shape.fill || "transparent"}
-                          strokeWidth={shape.strokeWidth || 1}
+                          strokeWidth={(shape.strokeWidth || 1) * (shape.pencilScale ?? pencilScale ?? 1)}
                           lineJoin="round"
                           lineCap="round"
                           closed={shape.closed || false}
@@ -4326,6 +4364,10 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
 
                       segments.push(
                         <Line
+                          ref={(node) => {
+                            if (node) shapeRefs.current[shape.id] = node;
+                            else delete shapeRefs.current[shape.id];
+                          }}
                           key={i}
                           points={[x0, y0, x, y]}
                           stroke={shape.strokeColor}
@@ -4343,6 +4385,10 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
                       const pEnd = Math.max(0, Math.min(1, (wEnd - pressureMin) / (pressureMax - pressureMin)));
                       segments.push(
                         <Circle
+                          ref={(node) => {
+                            if (node) shapeRefs.current[shape.id] = node;
+                            else delete shapeRefs.current[shape.id];
+                          }}
                           key="start-cap"
                           x={xStart}
                           y={yStart}
@@ -4350,6 +4396,10 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
                           fill={shape.strokeColor}
                         />,
                         <Circle
+                          ref={(node) => {
+                            if (node) shapeRefs.current[shape.id] = node;
+                            else delete shapeRefs.current[shape.id];
+                          }}
                           key="end-cap"
                           x={xEnd}
                           y={yEnd}
@@ -4365,6 +4415,10 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
                     return (
                       <React.Fragment key={shape.id}>
                         <Line
+                          ref={(node) => {
+                            if (node) shapeRefs.current[shape.id] = node;
+                            else delete shapeRefs.current[shape.id];
+                          }}
                           key={shape.id}
                           id={shape.id}
                           points={shape.points.flatMap((p) => [p.x, p.y])}
@@ -4458,6 +4512,10 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
 
                           return (
                             <Shape
+                              ref={(node) => {
+                                if (node) shapeRefs.current[shape.id] = node;
+                                else delete shapeRefs.current[shape.id];
+                              }}
                               key={index}
                               id={`${shape.id}`}
                               sceneFunc={(context, shape) => {
@@ -4487,6 +4545,10 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
 
                             return point.shapes.map((subShape, shapeIndex) => (
                               <Circle
+                                ref={(node) => {
+                                  if (node) shapeRefs.current[shape.id] = node;
+                                  else delete shapeRefs.current[shape.id];
+                                }}
                                 key={`${index}-${shapeIndex}`}
                                 id={`${shape.id}`}
                                 x={subShape.x}
@@ -4509,6 +4571,10 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
 
                           return (
                             <Line
+                              ref={(node) => {
+                                if (node) shapeRefs.current[shape.id] = node;
+                                else delete shapeRefs.current[shape.id];
+                              }}
                               key={index}
                               id={`${shape.id}`}
                               points={[prevPoint.x, prevPoint.y, point.x, point.y]}
@@ -4524,6 +4590,10 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
 
                         {shape.points.map((point, index) => (
                           <Circle
+                            ref={(node) => {
+                              if (node) shapeRefs.current[shape.id] = node;
+                              else delete shapeRefs.current[shape.id];
+                            }}
                             key={`blotch-${index}`}
                             x={point.x}
                             y={point.y}
@@ -4539,6 +4609,10 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
                     return (
                       <React.Fragment key={shape.id}>
                         <Path
+                          ref={(node) => {
+                            if (node) shapeRefs.current[shape.id] = node;
+                            else delete shapeRefs.current[shape.id];
+                          }}
                           id={shape.id}
                           data={shape.path}
                           stroke={shape.stroke || "black"}
@@ -4591,15 +4665,73 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
                     const isSelected = selectedShapeIds.includes(shape.id);
                     const textDirection = shape.textDirection || "ltr";
                     const blockProgression = shape.blockProgression || "normal";
+                    if (blockProgression === "vertical") {
 
+                      const chars = (shape.text || "").split("");
+                      const fontSize = shape.fontSize || 16;
+                      return (
+                        <Group
+                          ref={(node) => {
+                            if (node) shapeRefs.current[shape.id] = node;
+                            else delete shapeRefs.current[shape.id];
+                          }}
+                          key={shape.id}
+                          id={shape.id}
+                          x={textDirection === "rtl" ? shape.x + shape.width : shape.x}
+                          y={shape.y}
+                          draggable
+                          onDragMove={handleDragMove}
+                          onClick={(e) => {
+                            e.cancelBubble = true;
+                            setTextAreaPosition({
+                              x: shape.x * scale + position.x,
+                              y: shape.y * scale + position.y,
+                            });
+                            setTextContent(shape.text);
+                            setEditingTextId(shape.id);
+                            setTextAreaVisible(true);
+                          }}
+                        >
+                          {chars.map((char, i) => (
+                            <KonvaText
+                              key={i}
+                              text={char}
+                              x={0}
+                              y={i * fontSize}
+                              fontSize={fontSize}
+                              fontFamily={shape.fontFamily || "Arial"}
+                              fontStyle={shape.fontStyle || "normal"}
+                              fill={shape.fill || "black"}
+                              rotation={90}
+                              align="center"
+                              width={fontSize}
+                            />
+                          ))}
+                          {isSelected && selectedTool !== "Node" && (
+                            <Transformer
+                              nodes={[layerRef.current.findOne(`#${shape.id}`)]}
+                              boundBoxFunc={(oldBox, newBox) => {
+                                if (newBox.width < 5 || newBox.height < 5) {
+                                  return oldBox;
+                                }
+                                return newBox;
+                              }}
+                            />
+                          )}
+                        </Group>
+                      );
+                    }
                     const renderedText =
                       blockProgression === "topToBottom"
-                        ? shape.text.split("").join("\n")
+                        ? (shape.text || "").split("").join("\n")
                         : shape.text;
-
                     return (
                       <React.Fragment key={shape.id}>
                         <KonvaText
+                          ref={(node) => {
+                            if (node) shapeRefs.current[shape.id] = node;
+                            else delete shapeRefs.current[shape.id];
+                          }}
                           key={shape.id}
                           id={shape.id}
                           x={textDirection === "rtl" ? shape.x + shape.width : shape.x}
@@ -4612,6 +4744,7 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
                           width={shape.width || 200}
                           fill={shape.fill || "black"}
                           rotation={shape.rotation || 0}
+                          letterSpacing={shape.letterSpacing || 0}
                           draggable
                           onDragMove={handleDragMove}
                           onClick={(e) => {
@@ -4641,6 +4774,10 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
                   } else if (shape.type === "Path") {
                     return (
                       <Path
+                        ref={(node) => {
+                          if (node) shapeRefs.current[shape.id] = node;
+                          else delete shapeRefs.current[shape.id];
+                        }}
                         key={shape.id}
                         id={shape.id}
                         data={shape.path}
@@ -5294,12 +5431,12 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
                                 gradientTarget: applyTo,
                               }));
                             }}
-                            onClick={e => {
+                          // onClick={e => {
 
-                              const stage = e.target.getStage();
-                              const pointer = stage.getPointerPosition();
-                              setColorPicker({ visible: true, x: pointer.x, y: pointer.y, idx });
-                            }}
+                          //   const stage = e.target.getStage();
+                          //   const pointer = stage.getPointerPosition();
+                          //   setColorPicker({ visible: true, x: pointer.x, y: pointer.y, idx });
+                          // }}
                           />
                         );
                       })}

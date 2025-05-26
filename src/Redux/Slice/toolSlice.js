@@ -59,7 +59,7 @@ const toolSlice = createSlice({
     pencilSmoothing: 0,
     pencilOption: "None",
     pencilMode: "Bezier Path",
-    pencilScale: 0,
+    pencilScale: 1,
     showInitialScreen: JSON.parse(localStorage.getItem("showEveryTime")) ?? true,
     shapeBuilderMode: "combine",
     sprayEraserMode: false,
@@ -298,73 +298,58 @@ const toolSlice = createSlice({
       state.zoomLevel = Math.max(state.zoomLevel - 0.1, 0.5);
     },
     copy: (state) => {
-      if (state.selectedShapeId) {
-        const selectedLayer = state.layers[state.selectedLayerIndex];
-        const shape = selectedLayer.shapes.find(
-          (shape) => shape.id === state.selectedShapeId
-        );
-        if (shape) {
-          state.clipboard = { ...shape };
-          state.clipboadType = "shape";
-        }
-      } else if (state.selectedLayerIndex !== null) {
-        const selectedLayer = state.layers[state.selectedLayerIndex];
-        state.clipboard = {
-          ...selectedLayer,
-          shapes: [...selectedLayer.shapes],
-        };
-        state.clipboadType = "layer";
-      }
-    },
-    cut: (state) => {
-      if (state.selectedShapeId) {
-        const selectedLayer = state.layers[state.selectedLayerIndex];
-        const shapeIndex = selectedLayer.shapes.findIndex(
-          (shape) => shape.id === state.selectedShapeId
-        );
-        if (shapeIndex !== -1) {
-          state.clipboard = selectedLayer.shapes[shapeIndex];
-          state.clipboadType = "shape";
-          selectedLayer.shapes.splice(shapeIndex, 1);
-          state.selectedShapeId = null;
-        }
-      } else if (state.selectedLayerIndex !== null) {
-        state.clipboard = {
-          ...state.layers[state.selectedLayerIndex],
-          shapes: [...state.layers[state.selectedLayerIndex].shapes],
-        };
-        state.clipboadType = "layer";
-        state.layers.splice(state.selectedLayerIndex, 1);
-        state.selectedLayerIndex = Math.max(0, state.selectedLayerIndex - 1);
-      }
+      const selectedLayer = state.layers[state.selectedLayerIndex];
+      const selectedShapes = selectedLayer.shapes.filter(shape =>
+        state.selectedShapeIds.includes(shape.id)
+      );
 
+      state.clipboard = selectedShapes.map(shape => ({
+        ...JSON.parse(JSON.stringify(shape)),
+        id: `shape-${Date.now()}-${Math.random()}`
+      }));
+      state.clipboadType = "copy";
+    },
+
+    cut: (state) => {
+      const selectedLayer = state.layers[state.selectedLayerIndex];
+      const selectedShapes = selectedLayer.shapes.filter(shape =>
+        state.selectedShapeIds.includes(shape.id)
+      );
+
+      state.clipboard = selectedShapes;
+      state.clipboadType = "cut";
+
+      selectedLayer.shapes = selectedLayer.shapes.filter(
+        shape => !state.selectedShapeIds.includes(shape.id)
+      );
+      state.selectedShapeIds = [];
+      state.selectedShapeId = null;
       state.history.push(JSON.parse(JSON.stringify(state)));
       state.future = [];
     },
-    paste: (state) => {
-      if (state.clipboadType === "shape" && state.clipboard) {
-        const targetLayer = state.layers[state.selectedLayerIndex];
-        const newShape = {
-          ...state.clipboard,
-          id: `shape-${Date.now()}`,
-          x: state.clipboard.x + 10,
-          y: state.clipboard.y + 10,
-        };
-        targetLayer.shapes.push(newShape);
-        state.selectedShapeId = newShape.id;
-      } else if (state.clipboadType === "layer" && state.clipboard) {
-        const newLayer = {
-          ...state.clipboard,
-          name: `${state.clipboard.name}`,
-          shapes: state.clipboard.shapes.map((shape) => ({
-            ...shape,
-            id: `shape-${Date.now()}-${Math.random()}`,
-          })),
-        };
-        state.layers.splice(state.selectedLayerIndex + 1, 0, newLayer);
-        state.selectedLayerIndex += 1;
-      }
 
+    paste: (state) => {
+      const targetLayer = state.layers[state.selectedLayerIndex];
+      if (state.clipboadType === "copy" && Array.isArray(state.clipboard)) {
+
+        const pastedShapes = state.clipboard.map(shape => ({
+          ...JSON.parse(JSON.stringify(shape)),
+          id: `shape-${Date.now()}-${Math.random()}`,
+          x: (shape.x || 0) + 20,
+          y: (shape.y || 0) + 20,
+        }));
+        targetLayer.shapes.push(...pastedShapes);
+        state.selectedShapeIds = pastedShapes.map(s => s.id);
+        state.selectedShapeId = pastedShapes.length === 1 ? pastedShapes[0].id : null;
+      } else if (state.clipboadType === "cut" && Array.isArray(state.clipboard)) {
+
+        targetLayer.shapes.push(...state.clipboard);
+        state.selectedShapeIds = state.clipboard.map(s => s.id);
+        state.selectedShapeId = state.clipboard.length === 1 ? state.clipboard[0].id : null;
+
+        state.clipboard = null;
+        state.clipboadType = null;
+      }
       state.history.push(JSON.parse(JSON.stringify(state)));
       state.future = [];
     },

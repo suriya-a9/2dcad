@@ -87,6 +87,11 @@
 
 }
 
+.top-bar .value input[type="checkbox"] {
+  width: 50px !important;
+  height: 20px !important;
+}
+
 .demo-wrapper {
 
   border-radius: 4px;

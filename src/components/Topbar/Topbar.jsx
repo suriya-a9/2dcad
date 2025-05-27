@@ -7,7 +7,9 @@ import { BsVectorPen } from "react-icons/bs";
 import { TbBrandSnapseed } from "react-icons/tb";
 import { FaBezierCurve, FaProjectDiagram, FaDrawPolygon, FaPlus, FaLink, FaUnlink } from "react-icons/fa";
 import { MdRoundedCorner, MdOutlineVerticalAlignTop } from "react-icons/md";
+import { FaMousePointer, FaStepForward, FaArrowsAltH, FaEyeSlash, FaLayerGroup } from "react-icons/fa";
 import { AiOutlineVerticalAlignBottom } from "react-icons/ai";
+import { VscDebugReverseContinue } from "react-icons/vsc";
 import { GiStraightPipe } from "react-icons/gi";
 import { PiPath } from "react-icons/pi";
 import { setSelectedTool } from "../../Redux/Slice/toolSlice";
@@ -89,6 +91,10 @@ import {
   setPressureMin,
   setPressureMax,
   setBrushCaps,
+  setShowMeasureBetween,
+  setIgnoreFirstLast,
+  setReverseMeasure,
+  setToGuides
 } from "../../Redux/Slice/toolSlice";
 import {
   TbDeselect,
@@ -1403,6 +1409,8 @@ const Topbar = ({
             <GradientTopbar />
           ) : selectedTool === "Dropper" ? (
             <DropperTopbar />
+          ) : selectedTool === "Measurement" ? (
+            <MeasurementTopbar />
           ) : (
             <DefaultTopbar />
           )}
@@ -2933,6 +2941,163 @@ function GradientTopbar() {
           </div>
         </>
       )}
+    </div>
+  );
+}
+function MeasurementTopbar() {
+  const dispatch = useDispatch();
+  const fontSize = useSelector(state => state.tool.measurementFontSize || 16);
+  const precision = useSelector(state => state.tool.measurementPrecision || 2);
+  const scale = useSelector(state => state.tool.measurementScale || 100);
+  const unit = useSelector(state => state.tool.measurementUnit || "px");
+  const measureOnlySelected = useSelector(state => state.tool.measureOnlySelected);
+  const ignoreFirstLast = useSelector(state => state.tool.ignoreFirstLast);
+  const showMeasureBetween = useSelector(state => state.tool.showMeasureBetween);
+  const showHiddenIntersections = useSelector(state => state.tool.showHiddenIntersections);
+  const measureAllLayers = useSelector(state => state.tool.measureAllLayers);
+  const reverseMeasure = useSelector(state => state.tool.reverseMeasure);
+  const toGuides = useSelector(state => state.tool.toGuides);
+
+  const handleFontSizeChange = (e) => {
+    dispatch({ type: "tool/setMeasurementFontSize", payload: Number(e.target.value) });
+  };
+  const handlePrecisionChange = (e) => {
+    dispatch({ type: "tool/setMeasurementPrecision", payload: Number(e.target.value) });
+  };
+  const handleScaleChange = (e) => {
+    dispatch({ type: "tool/setMeasurementScale", payload: Number(e.target.value) });
+  };
+  const handleUnitChange = (e) => {
+    dispatch({ type: "tool/setMeasurementUnit", payload: e.target.value });
+  };
+
+  const handleOptionChange = (type, value) => {
+    dispatch({ type, payload: value });
+  };
+
+  return (
+    <div className="d-flex flex-row mb-3 top-icons" style={{ alignItems: "center", color: "white", overflow: 'scroll' }}>
+      <div className="p-2 value" style={{ display: "flex", alignItems: "center" }}>
+        <label>Font:&nbsp;</label>
+        <input
+          type="number"
+          min={1}
+          max={200}
+          value={fontSize}
+          onChange={handleFontSizeChange}
+          style={{ width: 60 }}
+        />
+      </div>
+      <div className="p-2 value" style={{ display: "flex", alignItems: "center" }}>
+        <label>Precision:&nbsp;</label>
+        <input
+          type="number"
+          min={0}
+          max={10}
+          value={precision}
+          onChange={handlePrecisionChange}
+          style={{ width: 60 }}
+        />
+      </div>
+      <div className="p-2 value" style={{ display: "flex", alignItems: "center" }}>
+        <label>Scale:&nbsp;</label>
+        <input
+          type="number"
+          min={1}
+          max={1000}
+          value={scale}
+          onChange={handleScaleChange}
+          style={{ width: 60 }}
+        />
+      </div>
+      <div className="p-2 value" style={{ display: "flex", alignItems: "center" }}>
+        <label>Units:&nbsp;</label>
+        <select value={unit} onChange={handleUnitChange} style={{ height: "30px" }}>
+          <option value="px">px</option>
+          <option value="pc">pc</option>
+          <option value="mm">mm</option>
+          <option value="pt">pt</option>
+          <option value="in">in</option>
+          <option value="cm">cm</option>
+        </select>
+      </div>
+      <div className="p-2 value" style={{ display: "flex", alignItems: "center" }}>
+        <input
+          type="checkbox"
+          checked={measureOnlySelected}
+          onChange={e => handleOptionChange("tool/setMeasureOnlySelected", e.target.checked)}
+          id="measureOnlySelected"
+        />
+        <label htmlFor="measureOnlySelected" style={{ marginLeft: 4 }}>
+          <FaMousePointer title="Measure only selected" />
+        </label>
+      </div>
+      <div className="p-2 value" style={{ display: "flex", alignItems: "center" }}>
+        <input
+          type="checkbox"
+          checked={showMeasureBetween}
+          onChange={e => dispatch({ type: "tool/setShowMeasureBetween", payload: e.target.checked })}
+          id="showMeasureBetween"
+        />
+        <label htmlFor="showMeasureBetween" style={{ marginLeft: 4 }}>
+          <FaArrowsAltH title="Show measure between items" />
+        </label>
+      </div>
+      <div className="p-2 value" style={{ display: "flex", alignItems: "center" }}>
+        <input
+          type="checkbox"
+          checked={ignoreFirstLast}
+          onChange={e => dispatch(setIgnoreFirstLast(e.target.checked))}
+          id="ignoreFirstLast"
+        />
+        <label htmlFor="ignoreFirstLast" style={{ marginLeft: 4 }}>
+          <FaStepForward title="Ignore first and last" />
+        </label>
+      </div>
+      <div className="p-2 value" style={{ display: "flex", alignItems: "center" }}>
+        <input
+          type="checkbox"
+          checked={showHiddenIntersections}
+          onChange={e => handleOptionChange("tool/setShowHiddenIntersections", e.target.checked)}
+          id="showHiddenIntersections"
+        />
+        <label htmlFor="showHiddenIntersections" style={{ marginLeft: 4 }}>
+          <FaEyeSlash title="Show hidden intersections" />
+        </label>
+      </div>
+      <div className="p-2 value" style={{ display: "flex", alignItems: "center" }}>
+        <input
+          type="checkbox"
+          checked={measureAllLayers}
+          onChange={e => handleOptionChange("tool/setMeasureAllLayers", e.target.checked)}
+          id="measureAllLayers"
+        />
+        <label htmlFor="measureAllLayers" style={{ marginLeft: 4 }}>
+          <FaLayerGroup title="Measure all layers" />
+        </label>
+      </div>
+      <div className="p-2 value" style={{ display: "flex", alignItems: "center" }}>
+        <input
+          type="checkbox"
+          checked={reverseMeasure}
+          onChange={e => dispatch(setReverseMeasure(e.target.checked))}
+          id="reverseMeasure"
+        />
+        <label htmlFor="reverseMeasure" style={{ marginLeft: 4 }}>
+          <VscDebugReverseContinue title="Reverse measure" />
+        </label>
+      </div>
+      <div className="p-2 value" style={{ display: "flex", alignItems: "center" }}>
+        <input
+          type="checkbox"
+          checked={toGuides}
+          onChange={e => dispatch(setToGuides(e.target.checked))}
+          id="toGuides"
+        />
+        <label htmlFor="toGuides" style={{ marginLeft: 4 }}>
+          To guides
+        </label>
+      </div>
     </div>
   );
 }

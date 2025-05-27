@@ -228,11 +228,12 @@ const LeftSidebar = () => {
           >
             <GiSpray data-tooltip-content="Spray" data-tooltip-id="tool-left" />
           </div>
-          {/* <div
+          <div
             className="p-2 left-icon"
+            onClick={() => handleToolSelect("Measurement")}
           >
             <LiaRulerVerticalSolid data-tooltip-content="Measure Tool" data-tooltip-id="tool-left" />
-          </div> */}
+          </div>
           {/* <div
             className="p-2 left-icon"
           >

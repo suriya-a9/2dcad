@@ -79,6 +79,8 @@ import {
   addShapes,
   removeShapes,
   setPickedColor,
+  addMeasurementLine,
+  setMeasurementDraft
 } from "../../Redux/Slice/toolSlice";
 
 export const generateSpiralPath = (x, y, turns = 5, radius = 50, divergence = 1) => {
@@ -165,6 +167,151 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
   const [colorPicker, setColorPicker] = useState({ visible: false, x: 0, y: 0, idx: null });
   const pressureEnabled = useSelector(state => state.tool.pressureEnabled);
   const brushCaps = useSelector((state) => state.tool.brushCaps);
+  const measurementLines = useSelector(state => state.tool.measurementLines);
+  const measurementDraft = useSelector(state => state.tool.measurementDraft);
+  const measurementFontSize = useSelector(state => state.tool.measurementFontSize);
+  const measurementPrecision = useSelector(state => state.tool.measurementPrecision);
+  const measurementScale = useSelector(state => state.tool.measurementScale);
+  const measurementUnit = useSelector(state => state.tool.measurementUnit);
+  const measureAllLayers = useSelector(state => state.tool.measureAllLayers);
+  const measureOnlySelected = useSelector(state => state.tool.measureOnlySelected);
+  const ignoreFirstLast = useSelector(state => state.tool.ignoreFirstLast);
+  const showMeasureBetween = useSelector(state => state.tool.showMeasureBetween);
+  const showHiddenIntersections = useSelector(state => state.tool.showHiddenIntersections);
+  const [guides, setGuides] = useState([]);
+  const reverseMeasure = useSelector(state => state.tool.reverseMeasure);
+  function addGuidesAtLine(x1, y1, x2, y2) {
+    setGuides(prev => [
+      ...prev,
+      { orientation: "vertical", position: x1 },
+      { orientation: "horizontal", position: y1 },
+      { orientation: "vertical", position: x2 },
+      { orientation: "horizontal", position: y2 }
+    ]);
+  }
+  function pushMeasurementLine(x1, y1, x2, y2) {
+    if (reverseMeasure) {
+      extraMeasurementLines.push({ x1: x2, y1: y2, x2: x1, y2: y1 });
+    } else {
+      extraMeasurementLines.push({ x1, y1, x2, y2 });
+    }
+  }
+
+
+  const shapesToMeasure = measureAllLayers
+    ? layers.flatMap(layer => layer.shapes)
+    : shapes;
+
+
+  const filteredShapes = measureOnlySelected
+    ? shapesToMeasure.filter(s => selectedShapeIds.includes(s.id))
+    : shapesToMeasure;
+
+
+  const shapesWithPoints = filteredShapes.map(shape => {
+    let points = shape.points;
+    if (ignoreFirstLast && Array.isArray(points) && points.length > 2) {
+      points = points.slice(1, -1);
+    }
+    return { ...shape, points };
+  });
+
+
+  let extraMeasurementLines = [];
+  if (showMeasureBetween) {
+    shapesWithPoints.forEach(shape => {
+      const pts = shape.points;
+      if (Array.isArray(pts) && pts.length > 1) {
+        for (let i = 1; i < pts.length; i++) {
+          const p0 = Array.isArray(pts[i - 1]) ? { x: pts[i - 1][0], y: pts[i - 1][1] } : pts[i - 1];
+          const p1 = Array.isArray(pts[i]) ? { x: pts[i][0], y: pts[i][1] } : pts[i];
+          pushMeasurementLine(p0.x, p0.y, p1.x, p1.y);
+        }
+      }
+    });
+  }
+
+  if (showMeasureBetween && shapesWithPoints.length > 1) {
+    for (let i = 0; i < shapesWithPoints.length; i++) {
+      for (let j = i + 1; j < shapesWithPoints.length; j++) {
+        const a = shapesWithPoints[i];
+        const b = shapesWithPoints[j];
+
+        const aPt = Array.isArray(a.points) && a.points.length > 0
+          ? (Array.isArray(a.points[0]) ? { x: a.points[0][0], y: a.points[0][1] } : a.points[0])
+          : { x: a.x, y: a.y };
+        const bPt = Array.isArray(b.points) && b.points.length > 0
+          ? (Array.isArray(b.points[0]) ? { x: b.points[0][0], y: b.points[0][1] } : b.points[0])
+          : { x: b.x, y: b.y };
+        pushMeasurementLine(aPt.x, aPt.y, bPt.x, bPt.y);
+      }
+    }
+  }
+
+
+  if (showHiddenIntersections) {
+    for (let i = 0; i < shapesWithPoints.length; i++) {
+      for (let j = i + 1; j < shapesWithPoints.length; j++) {
+        const a = shapesWithPoints[i];
+        const b = shapesWithPoints[j];
+        if (
+          a.x !== undefined && a.y !== undefined && a.width && a.height &&
+          b.x !== undefined && b.y !== undefined && b.width && b.height
+        ) {
+          const ix = Math.max(a.x, b.x);
+          const iy = Math.max(a.y, b.y);
+          const ax2 = a.x + a.width, ay2 = a.y + a.height;
+          const bx2 = b.x + b.width, by2 = b.y + b.height;
+          const ix2 = Math.min(ax2, bx2);
+          const iy2 = Math.min(ay2, by2);
+          if (ix < ix2 && iy < iy2) {
+
+            extraMeasurementLines.push({ x1: ix, y1: iy, x2: ix2, y2: iy2 });
+          }
+        }
+      }
+    }
+  }
+
+  if (showMeasureBetween) {
+    shapesWithPoints.forEach(shape => {
+      const pts = shape.points;
+      if (Array.isArray(pts) && pts.length > 1) {
+        for (let i = 1; i < pts.length; i++) {
+          const p0 = Array.isArray(pts[i - 1]) ? { x: pts[i - 1][0], y: pts[i - 1][1] } : pts[i - 1];
+          const p1 = Array.isArray(pts[i]) ? { x: pts[i][0], y: pts[i][1] } : pts[i];
+          pushMeasurementLine(p0.x, p0.y, p1.x, p1.y);
+        }
+      }
+    });
+  }
+
+  if (showMeasureBetween && shapesWithPoints.length > 1) {
+    for (let i = 0; i < shapesWithPoints.length; i++) {
+      for (let j = i + 1; j < shapesWithPoints.length; j++) {
+        const a = shapesWithPoints[i];
+        const b = shapesWithPoints[j];
+        const aPt = Array.isArray(a.points) && a.points.length > 0
+          ? (Array.isArray(a.points[0]) ? { x: a.points[0][0], y: a.points[0][1] } : a.points[0])
+          : { x: a.x, y: a.y };
+        const bPt = Array.isArray(b.points) && b.points.length > 0
+          ? (Array.isArray(b.points[0]) ? { x: b.points[0][0], y: b.points[0][1] } : b.points[0])
+          : { x: b.x, y: b.y };
+        pushMeasurementLine(aPt.x, aPt.y, bPt.x, bPt.y);
+      }
+    }
+  }
+  console.log("SelectedShapeIds:", selectedShapeIds);
+  console.log("filteredShapes:", filteredShapes);
+  console.log("showMeasureBetween:", showMeasureBetween);
+  console.log("shapesWithPoints.length:", shapesWithPoints.length);
+  console.log("extraMeasurementLines after loop:", extraMeasurementLines);
+
+  const allMeasurementLines = [...measurementLines, ...extraMeasurementLines];
+  console.log("allMeasurementLines:", allMeasurementLines);
+  const [isMeasuring, setIsMeasuring] = useState(false);
+  const [hoveredShape, setHoveredShape] = useState(null);
+  const measurementDraftRef = useRef(null);
 
   const selectedLayerIndex = useSelector(
     (state) => state.tool.selectedLayerIndex
@@ -3148,9 +3295,96 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
 
     return validStops.flatMap(stop => [stop.pos, stop.color]);
   }
+  const handleMeasurementMouseDown = (e) => {
+    if (selectedTool !== "Measurement") return;
+    const stage = e.target.getStage();
+    const pointer = getAdjustedPointerPosition(stage, position, scale);
+    setIsMeasuring(true);
+    const draft = { x1: pointer.x, y1: pointer.y, x2: pointer.x, y2: pointer.y };
+    measurementDraftRef.current = draft;
+    dispatch({ type: "tool/setMeasurementDraft", payload: draft });
+  };
+
+  const handleMeasurementMouseMove = (e) => {
+    if (!isMeasuring || selectedTool !== "Measurement") return;
+    const stage = e.target.getStage();
+    const pointer = getAdjustedPointerPosition(stage, position, scale);
+    const draft = { ...measurementDraftRef.current, x2: pointer.x, y2: pointer.y };
+    measurementDraftRef.current = draft;
+    dispatch({ type: "tool/setMeasurementDraft", payload: draft });
+  };
+  const toGuides = useSelector(state => state.tool.toGuides);
+  const handleMeasurementMouseUp = (e) => {
+    if (!isMeasuring || selectedTool !== "Measurement") return;
+    setIsMeasuring(false);
+    const draft = measurementDraftRef.current;
+    if (draft && (draft.x1 !== draft.x2 || draft.y1 !== draft.y2)) {
+      dispatch({ type: "tool/addMeasurementLine", payload: draft });
+      if (toGuides) {
+        addGuidesAtLine(draft.x1, draft.y1, draft.x2, draft.y2);
+      }
+    }
+    measurementDraftRef.current = null;
+    dispatch({ type: "tool/setMeasurementDraft", payload: null });
+  };
+  const unitConversionFactors = {
+    px: 1,
+    mm: 3.779528,
+    cm: 37.79528,
+    in: 96,
+    pt: 1.333333,
+    pc: 16,
+  };
+  function formatMeasurement(line, scale, precision, unit, showAngle = false) {
+    const dx = line.x2 - line.x1;
+    const dy = line.y2 - line.y1;
+    const distPx = Math.sqrt(dx * dx + dy * dy) * (scale / 100);
+    const dist = distPx / (unitConversionFactors[unit] || 1);
+    let label = dist.toFixed(precision) + " " + unit;
+    if (showAngle) {
+      let angle = Math.atan2(dy, dx) * 180 / Math.PI;
+      if (angle < 0) angle += 360;
+      label += `\n${angle.toFixed(1)}°`;
+    }
+    return label;
+  }
+  function renderAngleArc(x1, y1, x2, y2, arcRadius = 32, color = "orange") {
+    const dx = x2 - x1;
+    const dy = y2 - y1;
+    let angle = Math.atan2(dy, dx);
+    if (angle < 0) angle += 2 * Math.PI;
+
+
+
+    if (Math.abs(angle) < 0.05) return null;
+
+    return (
+      <Arc
+        x={x1}
+        y={y1}
+        innerRadius={arcRadius - 4}
+        outerRadius={arcRadius}
+        angle={angle * 180 / Math.PI}
+        rotation={0}
+        fillEnabled={false}
+        stroke={color}
+        strokeWidth={2}
+        dash={[4, 4]}
+        listening={false}
+      />
+    );
+  }
+  useEffect(() => {
+    if (toGuides && allMeasurementLines.length > 0) {
+      allMeasurementLines.forEach(line => {
+        addGuidesAtLine(line.x1, line.y1, line.x2, line.y2);
+      });
+    }
+
+
+  }, [toGuides, allMeasurementLines.length]);
   return (
     <>
-
       {/* {selectedTool === "Dropper" && (
         <DropperTopbar onAssignAverageChange={setAssignAverage} />
       )} */}
@@ -3159,7 +3393,8 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
 
 
           marginRight: isSidebarOpen ? "0" : "0",
-          position: "relative"
+          position: "relative",
+          paddingBottom: '150px'
         }}
       >
         <div>
@@ -3167,9 +3402,9 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
             <Stage
               width={width}
               height={height}
-              onMouseDown={handleMouseDown}
-              onMouseMove={handleMouseMove}
-              onMouseUp={handleMouseUp}
+              onMouseDown={selectedTool === "Measurement" ? handleMeasurementMouseDown : handleMouseDown}
+              onMouseMove={selectedTool === "Measurement" ? handleMeasurementMouseMove : handleMouseMove}
+              onMouseUp={selectedTool === "Measurement" ? handleMeasurementMouseUp : handleMouseUp}
               onMouseEnter={(e) => {
                 const stage = e.target.getStage();
                 const adjustedPointerPosition = getAdjustedPointerPosition(stage, position, scale);
@@ -3497,6 +3732,12 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
                           onDragMove={handleDragMove}
                           onDragEnd={(e) => handleDragEnd(e, shape.id)}
                           onTransformEnd={(e) => handleResizeEnd(e, shape.id)}
+                          onMouseEnter={() => {
+                            if (selectedTool === "Measurement") setHoveredShape(shape);
+                          }}
+                          onMouseLeave={() => {
+                            if (selectedTool === "Measurement") setHoveredShape(null);
+                          }}
                           skewX={shape.skewX || 0}
                           skewY={shape.skewY || 0}
                           onClick={(e) => {
@@ -3896,6 +4137,12 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
                           skewX={shape.skewX || 0}
                           closed={false}
                           skewY={shape.skewY || 0}
+                          onMouseEnter={() => {
+                            if (selectedTool === "Measurement") setHoveredShape(shape);
+                          }}
+                          onMouseLeave={() => {
+                            if (selectedTool === "Measurement") setHoveredShape(null);
+                          }}
                           onClick={(e) => {
                             e.cancelBubble = true;
                             handleShapeClick(shape);
@@ -4009,6 +4256,12 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
                           skewX={shape.skewX || 0}
                           skewY={shape.skewY || 0}
                           onTransformEnd={(e) => handleBezierTransformEnd(e, shape)}
+                          onMouseEnter={() => {
+                            if (selectedTool === "Measurement") setHoveredShape(shape);
+                          }}
+                          onMouseLeave={() => {
+                            if (selectedTool === "Measurement") setHoveredShape(null);
+                          }}
                           onClick={(e) => {
                             e.cancelBubble = true;
                             handleShapeClick(shape);
@@ -4095,6 +4348,12 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
                           onDragMove={handleDragMove}
                           skewX={shape.skewX || 0}
                           skewY={shape.skewY || 0}
+                          onMouseEnter={() => {
+                            if (selectedTool === "Measurement") setHoveredShape(shape);
+                          }}
+                          onMouseLeave={() => {
+                            if (selectedTool === "Measurement") setHoveredShape(null);
+                          }}
                           onClick={(e) => {
                             e.cancelBubble = true;
                             handleShapeClick(shape);
@@ -4299,6 +4558,12 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
                           scaleY={shape.scaleY || 1}
                           skewX={shape.skewX || 0}
                           skewY={shape.skewY || 0}
+                          onMouseEnter={() => {
+                            if (selectedTool === "Measurement") setHoveredShape(shape);
+                          }}
+                          onMouseLeave={() => {
+                            if (selectedTool === "Measurement") setHoveredShape(null);
+                          }}
                           onClick={(e) => {
                             e.cancelBubble = true;
                             handleShapeClick(shape);
@@ -4438,6 +4703,12 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
                           offsetY={shape.height / 2}
                           skewX={shape.skewX || 0}
                           skewY={shape.skewY || 0}
+                          onMouseEnter={() => {
+                            if (selectedTool === "Measurement") setHoveredShape(shape);
+                          }}
+                          onMouseLeave={() => {
+                            if (selectedTool === "Measurement") setHoveredShape(null);
+                          }}
                           onClick={(e) => {
                             e.cancelBubble = true;
                             handleShapeClick(shape);
@@ -5431,19 +5702,173 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
                                 gradientTarget: applyTo,
                               }));
                             }}
-                          // onClick={e => {
 
-                          //   const stage = e.target.getStage();
-                          //   const pointer = stage.getPointerPosition();
-                          //   setColorPicker({ visible: true, x: pointer.x, y: pointer.y, idx });
-                          // }}
+
+
+
+
+
                           />
                         );
                       })}
                     </>
                   )}
-              </Layer>
 
+                {allMeasurementLines.map((line, idx) => (
+                  <React.Fragment key={idx}>
+                    {renderAngleArc(line.x1, line.y1, line.x2, line.y2)}
+                    <Line
+                      points={[line.x1, line.y1, line.x2, line.y2]}
+                      stroke="orange"
+                      strokeWidth={2}
+                      dash={[4, 4]}
+                    />
+                    <KonvaText
+                      x={(line.x1 + line.x2) / 2}
+                      y={(line.y1 + line.y2) / 2 - measurementFontSize}
+                      text={formatMeasurement(line, measurementScale, measurementPrecision, measurementUnit, true)}
+                      fontSize={measurementFontSize}
+                      fill="orange"
+                      align="center"
+                    />
+                  </React.Fragment>
+                ))}
+                {measurementDraft && (
+                  <>
+                    {renderAngleArc(measurementDraft.x1, measurementDraft.y1, measurementDraft.x2, measurementDraft.y2)}
+                    <Line
+                      points={[measurementDraft.x1, measurementDraft.y1, measurementDraft.x2, measurementDraft.y2]}
+                      stroke="orange"
+                      strokeWidth={2}
+                      dash={[4, 4]}
+                    />
+                    <KonvaText
+                      x={(measurementDraft.x1 + measurementDraft.x2) / 2}
+                      y={(measurementDraft.y1 + measurementDraft.y2) / 2 - measurementFontSize}
+                      text={formatMeasurement(measurementDraft, measurementScale, measurementPrecision, measurementUnit, true)}
+                      fontSize={measurementFontSize}
+                      fill="orange"
+                      align="center"
+                    />
+                  </>
+                )}
+                {hoveredShape && selectedTool === "Measurement" && (
+                  <Group>
+                    <Rect
+                      x={(hoveredShape.x ?? 0) * scale + position.x + 12}
+                      y={(hoveredShape.y ?? 0) * scale + position.y + 12}
+                      width={200}
+                      height={120}
+                      fill="rgba(255,255,255,0.9)"
+                      stroke="orange"
+                      strokeWidth={1}
+                      cornerRadius={8}
+                      shadowBlur={4}
+                    />
+                    <KonvaText
+                      x={(hoveredShape.x ?? 0) * scale + position.x + 20}
+                      y={(hoveredShape.y ?? 0) * scale + position.y + 20}
+                      text={
+                        hoveredShape.type === "Pencil" || hoveredShape.type === "Calligraphy"
+                          ? (() => {
+                            const points = hoveredShape.points || [];
+                            const length = points.length > 1
+                              ? points.reduce((sum, p, i, arr) => {
+                                if (i === 0) return 0;
+                                const prev = arr[i - 1];
+
+                                const x1 = Array.isArray(p) ? p[0] : p.x;
+                                const y1 = Array.isArray(p) ? p[1] : p.y;
+                                const x0 = Array.isArray(prev) ? prev[0] : prev.x;
+                                const y0 = Array.isArray(prev) ? prev[1] : prev.y;
+                                return sum + Math.hypot(x1 - x0, y1 - y0);
+                              }, 0)
+                              : 0;
+                            return (
+                              `points: ${points.length}\n` +
+                              `length: ${Math.round(length)}`
+                            );
+                          })()
+                          : hoveredShape.type === "Circle"
+                            ? (
+                              `x: ${Math.round(hoveredShape.x)}\n` +
+                              `y: ${Math.round(hoveredShape.y)}\n` +
+                              `radius: ${Math.round(hoveredShape.radius)}\n` +
+                              `diameter: ${Math.round(hoveredShape.radius * 2)}\n` +
+                              `circumf.: ${Math.round(2 * Math.PI * hoveredShape.radius)}\n` +
+                              `area: ${Math.round(Math.PI * hoveredShape.radius * hoveredShape.radius)}`
+                            )
+                            : hoveredShape.type === "Polygon"
+                              ? (
+                                `x: ${Math.round(hoveredShape.x)}\n` +
+                                `y: ${Math.round(hoveredShape.y)}\n` +
+                                `sides: ${hoveredShape.corners || (hoveredShape.points ? hoveredShape.points.length : "")}\n` +
+                                (hoveredShape.radius ? `radius: ${Math.round(hoveredShape.radius)}\n` : "") +
+                                (hoveredShape.points && hoveredShape.points.length > 1
+                                  ? `perimeter: ${Math.round(
+                                    hoveredShape.points.reduce((sum, p, i, arr) => {
+                                      const next = arr[(i + 1) % arr.length];
+                                      return sum + Math.hypot((next.x || 0) - (p.x || 0), (next.y || 0) - (p.y || 0));
+                                    }, 0)
+                                  )}\n`
+                                  : "")
+                              )
+                              : hoveredShape.type === "Star"
+                                ? (
+                                  `x: ${Math.round(hoveredShape.x)}\n` +
+                                  `y: ${Math.round(hoveredShape.y)}\n` +
+                                  `points: ${hoveredShape.corners}\n` +
+                                  `innerR: ${Math.round(hoveredShape.innerRadius)}\n` +
+                                  `outerR: ${Math.round(hoveredShape.outerRadius)}`
+                                )
+                                : (
+                                  `x: ${Math.round(hoveredShape.x)}\n` +
+                                  `y: ${Math.round(hoveredShape.y)}\n` +
+                                  (hoveredShape.width !== undefined
+                                    ? `width: ${Math.round(hoveredShape.width)}\n`
+                                    : hoveredShape.radius !== undefined
+                                      ? `radius: ${Math.round(hoveredShape.radius)}\n`
+                                      : "") +
+                                  (hoveredShape.height !== undefined
+                                    ? `height: ${Math.round(hoveredShape.height)}\n`
+                                    : "") +
+                                  (hoveredShape.type === "Line" && hoveredShape.points
+                                    ? `length: ${Math.round(
+                                      Math.sqrt(
+                                        Math.pow(hoveredShape.points[2] - hoveredShape.points[0], 2) +
+                                        Math.pow(hoveredShape.points[3] - hoveredShape.points[1], 2)
+                                      )
+                                    )}`
+                                    : "")
+                                )
+                      }
+                      fontSize={16}
+                      fill="black"
+                    />
+                  </Group>
+                )}
+                {guides.map((guide, idx) =>
+                  guide.orientation === "vertical" ? (
+                    <Line
+                      key={`guide-v-${idx}`}
+                      points={[guide.position, 0, guide.position, height]}
+                      stroke="blue"
+                      strokeWidth={1}
+                      dash={[4, 4]}
+                      listening={false}
+                    />
+                  ) : (
+                    <Line
+                      key={`guide-h-${idx}`}
+                      points={[0, guide.position, width, guide.position]}
+                      stroke="blue"
+                      strokeWidth={1}
+                      dash={[4, 4]}
+                      listening={false}
+                    />
+                  )
+                )}
+              </Layer>
             </Stage>
           </div>
 

@@ -82,6 +82,16 @@ const toolSlice = createSlice({
     pressureMin: 0,
     pressureMax: 1,
     brushCaps: "round",
+    measurementFontSize: 16,
+    measurementPrecision: 2,
+    measurementScale: 100,
+    measurementUnit: "px",
+    measurementLines: [],
+    measurementDraft: null,
+    showMeasureBetween: false,
+    ignoreFirstLast: false,
+    reverseMeasure: false,
+    toGuides: false,
   },
 
   reducers: {
@@ -2209,6 +2219,38 @@ const toolSlice = createSlice({
     setPressureMin: (state, action) => { state.pressureMin = action.payload; },
     setPressureMax: (state, action) => { state.pressureMax = action.payload; },
     setBrushCaps: (state, action) => { state.brushCaps = action.payload; },
+
+    addMeasurementLine: (state, action) => {
+      state.measurementLines.push(action.payload);
+      console.log("measurementLines", state.measurementLines);
+    },
+    setMeasurementDraft: (state, action) => {
+      state.measurementDraft = action.payload;
+    },
+    setMeasurementFontSize: (state, action) => {
+      state.measurementFontSize = action.payload;
+    },
+    setMeasurementPrecision: (state, action) => {
+      state.measurementPrecision = action.payload;
+    },
+    setMeasurementScale: (state, action) => {
+      state.measurementScale = action.payload;
+    },
+    setMeasurementUnit: (state, action) => {
+      state.measurementUnit = action.payload;
+    },
+    setShowMeasureBetween(state, action) {
+      state.showMeasureBetween = action.payload;
+    },
+    setIgnoreFirstLast(state, action) {
+      state.ignoreFirstLast = action.payload;
+    },
+    setReverseMeasure(state, action) {
+      state.reverseMeasure = action.payload;
+    },
+    setToGuides(state, action) {
+      state.toGuides = action.payload;
+    }
   },
 
 });
@@ -2353,7 +2395,17 @@ export const {
   setPressureEnabled,
   setPressureMin,
   setPressureMax,
-  setBrushCaps
+  setBrushCaps,
+  addMeasurementLine,
+  setMeasurementDraft,
+  setMeasurementFontSize,
+  setMeasurementPrecision,
+  setMeasurementScale,
+  setMeasurementUnit,
+  setShowMeasureBetween,
+  setIgnoreFirstLast,
+  setReverseMeasure,
+  setToGuides
 } = toolSlice.actions;
 
 export default toolSlice.reducer;

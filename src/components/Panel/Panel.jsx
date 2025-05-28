@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useLayoutEffect } from "react";
+import polygonClipping from "polygon-clipping";
 import { BsPaintBucket, BsPencil, BsVectorPen } from "react-icons/bs";
 import { FaRegCircle, FaRegSquare, FaRegStar } from "react-icons/fa";
 import { BiPolygon, BiSolidEraser, BiSolidEyedropper } from "react-icons/bi";
@@ -80,7 +81,9 @@ import {
   removeShapes,
   setPickedColor,
   addMeasurementLine,
-  setMeasurementDraft
+  setMeasurementDraft,
+  setConvertToItem,
+  removeMeasurementLine
 } from "../../Redux/Slice/toolSlice";
 
 export const generateSpiralPath = (x, y, turns = 5, radius = 50, divergence = 1) => {
@@ -179,7 +182,13 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
   const showMeasureBetween = useSelector(state => state.tool.showMeasureBetween);
   const showHiddenIntersections = useSelector(state => state.tool.showHiddenIntersections);
   const [guides, setGuides] = useState([]);
+  const phantomMeasure = useSelector(state => state.tool.phantomMeasure);
   const reverseMeasure = useSelector(state => state.tool.reverseMeasure);
+  const markDimension = useSelector(state => state.tool.markDimension);
+  const measurementOffset = useSelector(state => state.tool.measurementOffset || 16);
+  const convertToItem = useSelector(state => state.tool.convertToItem);
+  const shapeBuilderMode = useSelector(state => state.tool.shapeBuilderMode);
+
   function addGuidesAtLine(x1, y1, x2, y2) {
     setGuides(prev => [
       ...prev,
@@ -3081,91 +3090,170 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
       />
     )
   }
+  function isPointerInsideShape(shape, pointer) {
+    if (shape.type === "Rectangle") {
+      return (
+        pointer.x >= shape.x &&
+        pointer.x <= shape.x + shape.width &&
+        pointer.y >= shape.y &&
+        pointer.y <= shape.y + shape.height
+      );
+    }
+    if (shape.type === "Circle") {
+      const dx = pointer.x - shape.x;
+      const dy = pointer.y - shape.y;
+      return Math.sqrt(dx * dx + dy * dy) <= shape.radius;
+    }
+    if (shape.type === "Polygon" && Array.isArray(shape.points)) {
+
+      let inside = false;
+      const pts = shape.points.map(p =>
+        Array.isArray(p) ? { x: p[0] + (shape.x || 0), y: p[1] + (shape.y || 0) } : { x: p.x + (shape.x || 0), y: p.y + (shape.y || 0) }
+      );
+      for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+        if (
+          (pts[i].y > pointer.y) !== (pts[j].y > pointer.y) &&
+          pointer.x < ((pts[j].x - pts[i].x) * (pointer.y - pts[i].y)) / (pts[j].y - pts[i].y) + pts[i].x
+        ) {
+          inside = !inside;
+        }
+      }
+      return inside;
+    }
+
+    return false;
+  }
   const handleShapeBuilder = (pointerPosition) => {
     console.log("Pointer Position:", pointerPosition);
 
-    const overlappingShapes = shapes.filter((shape) => {
-      return (
-        pointerPosition.x >= shape.x &&
-        pointerPosition.x <= shape.x + shape.width &&
-        pointerPosition.y >= shape.y &&
-        pointerPosition.y <= shape.y + shape.height
-      );
-    });
+    const overlappingShapes = shapes.filter(shape => isPointerInsideShape(shape, pointerPosition));
+    const selectedShapesList = shapes.filter(shape => selectedShapeIds.includes(shape.id));
 
-    console.log("Overlapping Shapes:", overlappingShapes);
 
-    if (overlappingShapes.length === 0) {
-      console.log("No shapes found at the pointer position.");
+    if (selectedShapesList.length > 1) {
+      if (shapeBuilderMode === "combine") {
+        combineShapes(selectedShapesList);
+      } else if (shapeBuilderMode === "subtract") {
+        subtractShapes(selectedShapesList);
+      }
       return;
     }
 
-    if (overlappingShapes.length === 1) {
-      console.log("Single shape selected:", overlappingShapes[0].id);
-      dispatch(selectShape(overlappingShapes[0].id));
-    } else {
-      console.log("Multiple overlapping shapes found:", overlappingShapes);
 
+    if (overlappingShapes.length > 1) {
       if (shapeBuilderMode === "combine") {
-        console.log("Combining shapes...");
         combineShapes(overlappingShapes);
       } else if (shapeBuilderMode === "subtract") {
-        console.log("Subtracting shapes...");
         subtractShapes(overlappingShapes);
       }
+    } else if (overlappingShapes.length === 1) {
+      dispatch(selectShape(overlappingShapes[0].id));
+    } else {
+      dispatch(clearSelection());
     }
   };
-  const combineShapes = (shapesToCombine) => {
-    console.log("combineShapes called with:", shapesToCombine);
+  function shapeToPolygon(shape) {
 
-    if (shapesToCombine.length < 2) {
-      console.error("Not enough shapes to combine.");
-      return;
+    if (shape.type === "Polygon" && Array.isArray(shape.points)) {
+      return [shape.points.map(p => [p.x + (shape.x || 0), p.y + (shape.y || 0)])];
     }
 
-    const combinedShape = {
-      id: `combined-shape-${Date.now()}`,
-      type: "Rectangle",
-      x: Math.min(...shapesToCombine.map((shape) => shape.x)),
-      y: Math.min(...shapesToCombine.map((shape) => shape.y)),
-      width: Math.max(
-        ...shapesToCombine.map((shape) => shape.x + shape.width)
-      ) - Math.min(...shapesToCombine.map((shape) => shape.x)),
-      height: Math.max(
-        ...shapesToCombine.map((shape) => shape.y + shape.height)
-      ) - Math.min(...shapesToCombine.map((shape) => shape.y)),
+    if (shape.type === "Rectangle") {
+      return [[
+        [shape.x, shape.y],
+        [shape.x + shape.width, shape.y],
+        [shape.x + shape.width, shape.y + shape.height],
+        [shape.x, shape.y + shape.height],
+      ]];
+    }
+
+    if (shape.type === "Circle") {
+      const numPoints = 36;
+      const points = [];
+      for (let i = 0; i < numPoints; i++) {
+        const angle = (2 * Math.PI * i) / numPoints;
+        points.push([
+          shape.x + shape.radius * Math.cos(angle),
+          shape.y + shape.radius * Math.sin(angle)
+        ]);
+      }
+      return [points];
+    }
+
+    if (shape.type === "Star") {
+      const numPoints = (shape.corners || 5) * 2;
+      const points = [];
+      for (let i = 0; i < numPoints; i++) {
+        const angle = (Math.PI * 2 * i) / numPoints;
+        const radius = i % 2 === 0 ? shape.outerRadius : shape.innerRadius;
+        points.push([
+          shape.x + radius * Math.cos(angle),
+          shape.y + radius * Math.sin(angle)
+        ]);
+      }
+      return [points];
+    }
+    if (shape.type === "Pencil" && Array.isArray(shape.points)) {
+
+      if (shape.closed || shape.points.length > 2) {
+        return [shape.points.map(p => Array.isArray(p) ? [p[0], p[1]] : [p.x, p.y])];
+      }
+    }
+
+    if (shape.type === "Calligraphy" && Array.isArray(shape.points)) {
+      if (shape.closed || shape.points.length > 2) {
+        return [shape.points.map(p => [p.x, p.y])];
+      }
+    }
+    return null;
+  }
+
+
+  function polygonToShape(polygon, baseShape) {
+
+    const points = polygon[0].map(([x, y]) => ({ x: x, y: y }));
+    return {
+      id: `shape-builder-${Date.now()}`,
+      type: "Polygon",
+      x: 0,
+      y: 0,
+      points,
       fill: "gray",
       stroke: "black",
       strokeWidth: 1,
     };
+  }
 
-    console.log("Combined Shape:", combinedShape);
+  const combineShapes = (shapesToCombine) => {
+    const polygons = shapesToCombine.map(shapeToPolygon).filter(Boolean);
+    if (polygons.length < 2) return;
 
-    dispatch(removeShapes(shapesToCombine.map((shape) => shape.id)));
-    dispatch(addShape(combinedShape));
+
+    let result = polygons[0];
+    for (let i = 1; i < polygons.length; i++) {
+      result = polygonClipping.union(result, polygons[i]);
+    }
+    if (!result || !result[0]) return;
+
+    const newShape = polygonToShape(result[0], shapesToCombine[0]);
+    dispatch(removeShapes(shapesToCombine.map(s => s.id)));
+    dispatch(addShape(newShape));
   };
 
   const subtractShapes = (shapesToSubtract) => {
-    console.log("subtractShapes called with:", shapesToSubtract);
+    const polygons = shapesToSubtract.map(shapeToPolygon).filter(Boolean);
+    if (polygons.length < 2) return;
 
-    if (shapesToSubtract.length < 2) {
-      console.error("Not enough shapes to subtract.");
-      return;
+
+    let result = polygons[0];
+    for (let i = 1; i < polygons.length; i++) {
+      result = polygonClipping.difference(result, polygons[i]);
     }
+    if (!result || !result[0]) return;
 
-    const baseShape = shapesToSubtract[0];
-    const subtractedShapes = shapesToSubtract.slice(1);
-
-    const remainingShape = {
-      ...baseShape,
-      width: baseShape.width - subtractedShapes.reduce((acc, shape) => acc + shape.width, 0),
-      height: baseShape.height - subtractedShapes.reduce((acc, shape) => acc + shape.height, 0),
-    };
-
-    console.log("Remaining Shape after subtraction:", remainingShape);
-
-    dispatch(removeShapes(shapesToSubtract.map((shape) => shape.id)));
-    dispatch(addShape(remainingShape));
+    const newShape = polygonToShape(result[0], shapesToSubtract[0]);
+    dispatch(removeShapes(shapesToSubtract.map(s => s.id)));
+    dispatch(addShape(newShape));
   };
   useEffect(() => {
     if (transformerRef.current) {
@@ -3383,6 +3471,176 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
 
 
   }, [toGuides, allMeasurementLines.length]);
+  function renderDimensionMarkers(line, length = 16, offset = 16) {
+    const dx = line.x2 - line.x1;
+    const dy = line.y2 - line.y1;
+    const len = Math.sqrt(dx * dx + dy * dy);
+    if (len === 0) return null;
+
+    const px = -dy / len;
+    const py = dx / len;
+
+
+    const tick1 = {
+      x1: line.x1 + px * length / 2,
+      y1: line.y1 + py * length / 2,
+      x2: line.x1 - px * length / 2,
+      y2: line.y1 - py * length / 2,
+    };
+    const tick2 = {
+      x1: line.x2 + px * length / 2,
+      y1: line.y2 + py * length / 2,
+      x2: line.x2 - px * length / 2,
+      y2: line.y2 - py * length / 2,
+    };
+
+
+    const labelX = line.x1 - px * (offset + length / 2);
+    const labelY = line.y1 - py * (offset + length / 2) - 10;
+
+    return (
+      <>
+        <Line
+          points={[tick1.x1, tick1.y1, tick1.x2, tick1.y2]}
+          stroke="black"
+          strokeWidth={2}
+          listening={false}
+        />
+        <Line
+          points={[tick2.x1, tick2.y1, tick2.x2, tick2.y2]}
+          stroke="black"
+          strokeWidth={2}
+          listening={false}
+        />
+        <KonvaText
+          x={labelX}
+          y={labelY}
+          text={formatMeasurement(line, measurementScale, measurementPrecision, measurementUnit, true)}
+          fontSize={measurementFontSize}
+          fill="black"
+          align="center"
+        />
+      </>
+    );
+  }
+
+  function convertMeasurementToItem(line) {
+    const dx = line.x2 - line.x1;
+    const dy = line.y2 - line.y1;
+    const len = Math.sqrt(dx * dx + dy * dy);
+    if (len === 0) return;
+
+    const px = -dy / len;
+    const py = dx / len;
+    const length = 16;
+
+
+    const tick1 = {
+      type: "Line",
+      points: [
+        line.x1 + px * length / 2, line.y1 + py * length / 2,
+        line.x1 - px * length / 2, line.y1 - py * length / 2
+      ],
+      stroke: "black",
+      strokeWidth: 2,
+    };
+    const tick2 = {
+      type: "Line",
+      points: [
+        line.x2 + px * length / 2, line.y2 + py * length / 2,
+        line.x2 - px * length / 2, line.y2 - py * length / 2
+      ],
+      stroke: "black",
+      strokeWidth: 2,
+    };
+
+    const mainLine = {
+      type: "Line",
+      points: [line.x1, line.y1, line.x2, line.y2],
+      stroke: "orange",
+      strokeWidth: 2,
+      dash: [4, 4],
+    };
+
+    const label = {
+      type: "Text",
+      x: line.x1 - px * (length + 8),
+      y: line.y1 - py * (length + 8) - 10,
+      text: formatMeasurement(line, measurementScale, measurementPrecision, measurementUnit, true),
+      fontSize: measurementFontSize,
+      fill: "black",
+    };
+
+
+    dispatch(addShape(tick1));
+    dispatch(addShape(tick2));
+    dispatch(addShape(mainLine));
+    dispatch(addShape(label));
+    dispatch(removeMeasurementLine(line));
+    dispatch(setConvertToItem(false));
+  }
+  function handleConvertToItem(line) {
+
+    const dx = line.x2 - line.x1;
+    const dy = line.y2 - line.y1;
+    const len = Math.sqrt(dx * dx + dy * dy);
+    if (len === 0) return;
+
+    const px = -dy / len;
+    const py = dx / len;
+    const length = 16;
+
+
+    const tick1 = {
+      type: "Line",
+      points: [
+        line.x1 + px * length / 2, line.y1 + py * length / 2,
+        line.x1 - px * length / 2, line.y1 - py * length / 2
+      ],
+      stroke: "black",
+      strokeWidth: 2,
+    };
+    const tick2 = {
+      type: "Line",
+      points: [
+        line.x2 + px * length / 2, line.y2 + py * length / 2,
+        line.x2 - px * length / 2, line.y2 - py * length / 2
+      ],
+      stroke: "black",
+      strokeWidth: 2,
+    };
+
+    const mainLine = {
+      type: "Line",
+      points: [line.x1, line.y1, line.x2, line.y2],
+      stroke: "orange",
+      strokeWidth: 2,
+      dash: [4, 4],
+    };
+
+    const label = {
+      type: "Text",
+      x: line.x1 - px * (length + 8),
+      y: line.y1 - py * (length + 8) - 10,
+      text: formatMeasurement(line, measurementScale, measurementPrecision, measurementUnit, true),
+      fontSize: measurementFontSize,
+      fill: "black",
+    };
+
+
+    dispatch({
+      type: "tool/convertMeasurementToItem",
+      payload: { shapes: [tick1, tick2, mainLine, label], line }
+    });
+  }
+  useEffect(() => {
+    if (convertToItem && allMeasurementLines.length > 0) {
+      allMeasurementLines.forEach(line => {
+        convertMeasurementToItem(line);
+      });
+    }
+
+  }, [convertToItem]);
   return (
     <>
       {/* {selectedTool === "Dropper" && (
@@ -5731,6 +5989,7 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
                       fill="orange"
                       align="center"
                     />
+                    {markDimension && renderDimensionMarkers(line, 16, measurementOffset)}
                   </React.Fragment>
                 ))}
                 {measurementDraft && (
@@ -5867,6 +6126,29 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
                       listening={false}
                     />
                   )
+                )}
+                {phantomMeasure && measurementDraft && (
+                  <>
+                    <Line
+                      points={[
+                        measurementDraft.x1, measurementDraft.y1,
+                        measurementDraft.x2, measurementDraft.y2
+                      ]}
+                      stroke="purple"
+                      strokeWidth={2}
+                      dash={[8, 8]}
+                      opacity={0.7}
+                    />
+                    <KonvaText
+                      x={(measurementDraft.x1 + measurementDraft.x2) / 2}
+                      y={(measurementDraft.y1 + measurementDraft.y2) / 2 - measurementFontSize}
+                      text={formatMeasurement(measurementDraft, measurementScale, measurementPrecision, measurementUnit, true)}
+                      fontSize={measurementFontSize}
+                      fill="purple"
+                      align="center"
+                      opacity={0.7}
+                    />
+                  </>
                 )}
               </Layer>
             </Stage>

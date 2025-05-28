@@ -92,6 +92,10 @@ const toolSlice = createSlice({
     ignoreFirstLast: false,
     reverseMeasure: false,
     toGuides: false,
+    phantomMeasure: false,
+    markDimension: false,
+    measurementOffset: 16,
+    convertToItem: false,
   },
 
   reducers: {
@@ -2250,7 +2254,32 @@ const toolSlice = createSlice({
     },
     setToGuides(state, action) {
       state.toGuides = action.payload;
-    }
+    },
+    setPhantomMeasure(state, action) {
+      state.phantomMeasure = action.payload;
+    },
+    setMarkDimension(state, action) {
+      state.markDimension = action.payload;
+    },
+    setMeasurementOffset: (state, action) => {
+      state.measurementOffset = action.payload;
+    },
+    setConvertToItem: (state, action) => {
+      state.convertToItem = action.payload;
+    },
+    removeMeasurementLine: (state, action) => {
+
+      const line = action.payload;
+      state.measurementLines = state.measurementLines.filter(
+        l =>
+          !(
+            l.x1 === line.x1 &&
+            l.y1 === line.y1 &&
+            l.x2 === line.x2 &&
+            l.y2 === line.y2
+          )
+      );
+    },
   },
 
 });
@@ -2405,7 +2434,12 @@ export const {
   setShowMeasureBetween,
   setIgnoreFirstLast,
   setReverseMeasure,
-  setToGuides
+  setToGuides,
+  setPhantomMeasure,
+  setMarkDimension,
+  setMeasurementOffset,
+  setConvertToItem,
+  removeMeasurementLine
 } = toolSlice.actions;
 
 export default toolSlice.reducer;

@@ -94,7 +94,11 @@ import {
   setShowMeasureBetween,
   setIgnoreFirstLast,
   setReverseMeasure,
-  setToGuides
+  setToGuides,
+  setPhantomMeasure,
+  setMarkDimension,
+  setMeasurementOffset,
+  setConvertToItem
 } from "../../Redux/Slice/toolSlice";
 import {
   TbDeselect,
@@ -2957,6 +2961,10 @@ function MeasurementTopbar() {
   const measureAllLayers = useSelector(state => state.tool.measureAllLayers);
   const reverseMeasure = useSelector(state => state.tool.reverseMeasure);
   const toGuides = useSelector(state => state.tool.toGuides);
+  const phantomMeasure = useSelector(state => state.tool.phantomMeasure);
+  const markDimension = useSelector(state => state.tool.markDimension);
+  const measurementOffset = useSelector(state => state.tool.measurementOffset || 16);
+  const convertToItem = useSelector(state => state.tool.convertToItem);
 
   const handleFontSizeChange = (e) => {
     dispatch({ type: "tool/setMeasurementFontSize", payload: Number(e.target.value) });
@@ -2973,6 +2981,9 @@ function MeasurementTopbar() {
 
   const handleOptionChange = (type, value) => {
     dispatch({ type, payload: value });
+  };
+  const handleOffsetChange = (e) => {
+    dispatch({ type: "tool/setMeasurementOffset", payload: Number(e.target.value) });
   };
 
   return (
@@ -3095,7 +3106,51 @@ function MeasurementTopbar() {
           id="toGuides"
         />
         <label htmlFor="toGuides" style={{ marginLeft: 4 }}>
-          To guides
+          Guides
+        </label>
+      </div>
+      <div className="p-2 value" style={{ display: "flex", alignItems: "center" }}>
+        <input
+          type="checkbox"
+          checked={phantomMeasure}
+          onChange={e => dispatch(setPhantomMeasure(e.target.checked))}
+          id="phantomMeasure"
+        />
+        <label htmlFor="phantomMeasure" style={{ marginLeft: 4 }}>
+          Phantom
+        </label>
+      </div>
+      <div className="p-2 value" style={{ display: "flex", alignItems: "center" }}>
+        <input
+          type="checkbox"
+          checked={markDimension}
+          onChange={e => dispatch(setMarkDimension(e.target.checked))}
+          id="markDimension"
+        />
+        <label htmlFor="markDimension" style={{ marginLeft: 4 }}>
+          Mark
+        </label>
+      </div>
+      <div className="p-2 value" style={{ display: "flex", alignItems: "center" }}>
+        <label>Offset:&nbsp;</label>
+        <input
+          type="number"
+          min={0}
+          max={100}
+          value={measurementOffset}
+          onChange={handleOffsetChange}
+          style={{ width: 60 }}
+        />
+      </div>
+      <div className="p-2 value" style={{ display: "flex", alignItems: "center" }}>
+        <input
+          type="checkbox"
+          checked={convertToItem}
+          onChange={e => dispatch(setConvertToItem(e.target.checked))}
+          id="convertToItem"
+        />
+        <label htmlFor="convertToItem" style={{ marginLeft: 4 }}>
+          Convert to item
         </label>
       </div>
     </div>

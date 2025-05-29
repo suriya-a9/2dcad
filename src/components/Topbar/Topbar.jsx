@@ -6,12 +6,15 @@ import { setBezierOption } from "../../Redux/Slice/toolSlice";
 import { BsVectorPen } from "react-icons/bs";
 import { TbBrandSnapseed } from "react-icons/tb";
 import { FaBezierCurve, FaProjectDiagram, FaDrawPolygon, FaPlus, FaLink, FaUnlink } from "react-icons/fa";
+import { RxCheckCircled } from "react-icons/rx";
+import { RxCrossCircled } from "react-icons/rx";
 import { MdRoundedCorner, MdOutlineVerticalAlignTop } from "react-icons/md";
 import { FaMousePointer, FaStepForward, FaArrowsAltH, FaEyeSlash, FaLayerGroup } from "react-icons/fa";
 import { AiOutlineVerticalAlignBottom } from "react-icons/ai";
 import { VscDebugReverseContinue } from "react-icons/vsc";
 import { GiStraightPipe } from "react-icons/gi";
 import { PiPath } from "react-icons/pi";
+import { FaObjectGroup, FaObjectUngroup } from "react-icons/fa";
 import { setSelectedTool } from "../../Redux/Slice/toolSlice";
 import { EditorState, ContentState } from "draft-js";
 import {
@@ -98,7 +101,8 @@ import {
   setPhantomMeasure,
   setMarkDimension,
   setMeasurementOffset,
-  setConvertToItem
+  setConvertToItem,
+  setReplaceShapes
 } from "../../Redux/Slice/toolSlice";
 import {
   TbDeselect,
@@ -1441,10 +1445,12 @@ function convertToPx(value, unit) {
 }
 function DefaultTopbar() {
   const selectedTool = useSelector((state) => state.tool.selectedTool);
+  const replaceShapes = useSelector((state) => state.tool.replaceShapes)
   const dispatch = useDispatch();
   const [circleArcMode, setCircleArcMode] = useState(null);
   const [unit, setUnit] = useState("px");
   const shapeBuilderMode = useSelector((state) => state.tool.shapeBuilderMode);
+
   const [isSnappingEnabled, setIsSnappingEnabled] = useState(false);
   const handleSelectAll = () => {
     dispatch(selecteAllShapes());
@@ -1909,19 +1915,83 @@ function DefaultTopbar() {
           className="p-2 value"
           style={
             selectedTool === "ShapeBuilder"
-              ? { display: "block" }
+              ? { display: "flex", alignItems: "center", gap: 8 }
               : { display: "none" }
           }
         >
-          <label htmlFor="shapeBuilderMode">Mode:&nbsp;</label>
-          <select
-            id="shapeBuilderMode"
-            value={shapeBuilderMode}
-            onChange={(e) => dispatch(setShapeBuilderMode(e.target.value))}
+          <label>Mode:&nbsp;</label>
+          <button
+            style={{
+              background: shapeBuilderMode === "combine" ? "#007bff" : "#222",
+              color: "white",
+              border: "none",
+              borderRadius: 4,
+              cursor: "pointer"
+            }}
+            onClick={() => dispatch(setShapeBuilderMode("combine"))}
+            title="Combine"
           >
-            <option value="combine">Combine</option>
-            <option value="subtract">Subtract</option>
-          </select>
+            <FaObjectGroup size={20} />
+          </button>
+          <button
+            style={{
+              background: shapeBuilderMode === "subtract" ? "#007bff" : "#222",
+              color: "white",
+              border: "none",
+              borderRadius: 4,
+              cursor: "pointer"
+            }}
+            onClick={() => dispatch(setShapeBuilderMode("subtract"))}
+            title="Subtract"
+          >
+            <FaObjectUngroup size={20} />
+          </button>
+          {selectedTool === "ShapeBuilder" && window.shapeBuilderRegions?.length > 0 && window.selectedRegionIndices?.length > 0 && (
+            <>
+              <button
+                style={{
+                  background: "#007bff",
+                  color: "white",
+                  border: "none",
+                  borderRadius: 4,
+                  // padding: "6px 12px",
+                  marginLeft: 8,
+                  cursor: "pointer"
+                }}
+                onClick={() => {
+
+                  window.dispatchEvent(new CustomEvent("shapeBuilderCombine"));
+                }}
+              >
+                <RxCheckCircled />
+              </button>
+              <button
+                style={{
+                  background: "#dc3545",
+                  color: "white",
+                  border: "none",
+                  borderRadius: 4,
+                  // padding: "6px 12px",
+                  marginLeft: 8,
+                  cursor: "pointer"
+                }}
+                onClick={() => {
+                  window.dispatchEvent(new CustomEvent("shapeBuilderSubtract"));
+                }}
+              >
+                <RxCrossCircled />
+              </button>
+            </>
+          )}
+          <label style={{ marginLeft: 12, display: "flex", alignItems: "center", gap: 4 }}>
+            <input
+              type="checkbox"
+              checked={replaceShapes}
+              onChange={e => dispatch(setReplaceShapes(e.target.checked))}
+              style={{ marginRight: 4 }}
+            />
+            Replace
+          </label>
         </div>
         <div className="p-2 value" style={selectedTool === "Circle" ? { display: "flex", flexDirection: 'row', alignItems: 'center' } : { display: "none" }}>
           <label>Arc:&nbsp;</label>
@@ -2762,7 +2832,7 @@ function GradientTopbar() {
             const value = e.target.value;
             setApplyTo(value);
 
-            // If switching to stroke and it's not a gradient, initialize it
+
             if (
               value === "stroke" &&
               selectedShape &&
@@ -2782,7 +2852,7 @@ function GradientTopbar() {
                 gradientTarget: "stroke"
               }));
             }
-            // If switching to fill and it's not a gradient, initialize it
+
             if (
               value === "fill" &&
               selectedShape &&

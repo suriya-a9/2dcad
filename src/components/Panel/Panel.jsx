@@ -188,6 +188,10 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
   const measurementOffset = useSelector(state => state.tool.measurementOffset || 16);
   const convertToItem = useSelector(state => state.tool.convertToItem);
   const shapeBuilderMode = useSelector(state => state.tool.shapeBuilderMode);
+  const replaceShapes = useSelector(state => state.tool.replaceShapes);
+  const [shapeBuilderRegions, setShapeBuilderRegions] = useState([]);
+  const [selectedRegionIndices, setSelectedRegionIndices] = useState([]);
+  const [shapeBuilderShapes, setShapeBuilderShapes] = useState([]);
 
   function addGuidesAtLine(x1, y1, x2, y2) {
     setGuides(prev => [
@@ -3130,12 +3134,18 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
     const selectedShapesList = shapes.filter(shape => selectedShapeIds.includes(shape.id));
 
 
-    if (selectedShapesList.length > 1) {
-      if (shapeBuilderMode === "combine") {
-        combineShapes(selectedShapesList);
-      } else if (shapeBuilderMode === "subtract") {
-        subtractShapes(selectedShapesList);
-      }
+    const shapesToUse = selectedShapesList.length > 1 ? selectedShapesList : overlappingShapes;
+    if (selectedTool === "ShapeBuilder" && shapesToUse.length > 1) {
+
+      const polygons = shapesToUse.map(shapeToPolygon).filter(Boolean);
+
+
+      const regions = polygonClipping.xor(...polygons);
+
+
+      setShapeBuilderRegions(regions);
+      setSelectedRegionIndices([]);
+      setShapeBuilderShapes(shapesToUse);
       return;
     }
 
@@ -3209,25 +3219,36 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
   }
 
 
-  function polygonToShape(polygon, baseShape) {
-
+  function polygonToShape(polygon, baseShape, shapesToCombine = []) {
     const points = polygon[0].map(([x, y]) => ({ x: x, y: y }));
+
+
+    let fill = baseShape?.fill || "gray";
+    let stroke = baseShape?.stroke || "black";
+    let strokeWidth = baseShape?.strokeWidth || 1;
+
+    if (Array.isArray(shapesToCombine) && shapesToCombine.length > 0) {
+
+      fill = shapesToCombine[0].fill || fill;
+      stroke = shapesToCombine[0].stroke || stroke;
+      strokeWidth = shapesToCombine[0].strokeWidth || strokeWidth;
+    }
+
     return {
       id: `shape-builder-${Date.now()}`,
       type: "Polygon",
       x: 0,
       y: 0,
       points,
-      fill: "gray",
-      stroke: "black",
-      strokeWidth: 1,
+      fill,
+      stroke,
+      strokeWidth,
     };
   }
 
-  const combineShapes = (shapesToCombine) => {
+  const combineShapes = (shapesToCombine, replace = true) => {
     const polygons = shapesToCombine.map(shapeToPolygon).filter(Boolean);
     if (polygons.length < 2) return;
-
 
     let result = polygons[0];
     for (let i = 1; i < polygons.length; i++) {
@@ -3235,15 +3256,16 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
     }
     if (!result || !result[0]) return;
 
-    const newShape = polygonToShape(result[0], shapesToCombine[0]);
-    dispatch(removeShapes(shapesToCombine.map(s => s.id)));
+    const newShape = polygonToShape(result[0], shapesToCombine[0], shapesToCombine);
+    if (replace) {
+      dispatch(removeShapes(shapesToCombine.map(s => s.id)));
+    }
     dispatch(addShape(newShape));
   };
 
-  const subtractShapes = (shapesToSubtract) => {
+  const subtractShapes = (shapesToSubtract, replace = true) => {
     const polygons = shapesToSubtract.map(shapeToPolygon).filter(Boolean);
     if (polygons.length < 2) return;
-
 
     let result = polygons[0];
     for (let i = 1; i < polygons.length; i++) {
@@ -3251,8 +3273,10 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
     }
     if (!result || !result[0]) return;
 
-    const newShape = polygonToShape(result[0], shapesToSubtract[0]);
-    dispatch(removeShapes(shapesToSubtract.map(s => s.id)));
+    const newShape = polygonToShape(result[0], shapesToSubtract[0], shapesToSubtract);
+    if (replace) {
+      dispatch(removeShapes(shapesToSubtract.map(s => s.id)));
+    }
     dispatch(addShape(newShape));
   };
   useEffect(() => {
@@ -3641,6 +3665,59 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
     }
 
   }, [convertToItem]);
+  useEffect(() => {
+    window.shapeBuilderRegions = shapeBuilderRegions;
+    window.selectedRegionIndices = selectedRegionIndices;
+  }, [shapeBuilderRegions, selectedRegionIndices]);
+  useEffect(() => {
+    function handleCombine() {
+      if (
+        shapeBuilderRegions.length > 0 &&
+        selectedRegionIndices.length > 0
+      ) {
+        const selectedPolygons = selectedRegionIndices.map(idx => shapeBuilderRegions[idx]);
+        const result = polygonClipping.union(...selectedPolygons);
+        if (result && result.length > 0) {
+          result.forEach((poly, i) => {
+            const newShape = polygonToShape(poly, shapeBuilderShapes[0], shapeBuilderShapes);
+            dispatch(addShape(newShape));
+          });
+          if (replaceShapes) {
+            dispatch(removeShapes(shapeBuilderShapes.map(s => s.id)));
+          }
+          setShapeBuilderRegions([]);
+          setSelectedRegionIndices([]);
+        }
+      }
+    }
+    function handleSubtract() {
+      if (
+        shapeBuilderRegions.length > 0 &&
+        selectedRegionIndices.length > 0
+      ) {
+        const restPolygons = shapeBuilderRegions.filter((_, idx) => !selectedRegionIndices.includes(idx));
+        if (restPolygons.length === 0) return;
+        const result = polygonClipping.union(...restPolygons);
+        if (result && result.length > 0) {
+          result.forEach((poly, i) => {
+            const newShape = polygonToShape(poly, shapeBuilderShapes[0], shapeBuilderShapes);
+            dispatch(addShape(newShape));
+          });
+          if (replaceShapes) {
+            dispatch(removeShapes(shapeBuilderShapes.map(s => s.id)));
+          }
+          setShapeBuilderRegions([]);
+          setSelectedRegionIndices([]);
+        }
+      }
+    }
+    window.addEventListener("shapeBuilderCombine", handleCombine);
+    window.addEventListener("shapeBuilderSubtract", handleSubtract);
+    return () => {
+      window.removeEventListener("shapeBuilderCombine", handleCombine);
+      window.removeEventListener("shapeBuilderSubtract", handleSubtract);
+    };
+  }, [shapeBuilderRegions, selectedRegionIndices, shapeBuilderShapes, replaceShapes, dispatch]);
   return (
     <>
       {/* {selectedTool === "Dropper" && (
@@ -3745,6 +3822,27 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
                     globalCompositeOperation="source-over"
                   />
                 ))}
+
+                {selectedTool === "ShapeBuilder" && shapeBuilderRegions.length > 0 &&
+                  shapeBuilderRegions.map((region, idx) => (
+                    <Path
+                      key={idx}
+                      data={generatePolygonPath(region[0].map(([x, y]) => ({ x, y })))}
+                      fill={selectedRegionIndices.includes(idx) ? "rgba(0,128,255,0.4)" : "rgba(128,128,128,0.2)"}
+                      stroke="#007bff"
+                      strokeWidth={selectedRegionIndices.includes(idx) ? 3 : 1}
+                      onClick={() => {
+                        setSelectedRegionIndices(indices =>
+                          indices.includes(idx)
+                            ? indices.filter(i => i !== idx)
+                            : [...indices, idx]
+                        );
+                      }}
+                      listening={true}
+                      closed
+                    />
+                  ))
+                }
 
                 {renderSpiroPath()}
 

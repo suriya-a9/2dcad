@@ -61,7 +61,7 @@ const toolSlice = createSlice({
     pencilMode: "Bezier Path",
     pencilScale: 1,
     showInitialScreen: JSON.parse(localStorage.getItem("showEveryTime")) ?? true,
-    shapeBuilderMode: "combine",
+    shapeBuilderMode: null,
     sprayEraserMode: false,
     calligraphyAngle: 0,
     calligraphyFixation: 0,
@@ -96,6 +96,7 @@ const toolSlice = createSlice({
     markDimension: false,
     measurementOffset: 16,
     convertToItem: false,
+    replaceShapes: true,
   },
 
   reducers: {
@@ -2280,6 +2281,9 @@ const toolSlice = createSlice({
           )
       );
     },
+    setReplaceShapes: (state, action) => {
+      state.replaceShapes = action.payload;
+    }
   },
 
 });
@@ -2439,7 +2443,8 @@ export const {
   setMarkDimension,
   setMeasurementOffset,
   setConvertToItem,
-  removeMeasurementLine
+  removeMeasurementLine,
+  setReplaceShapes
 } = toolSlice.actions;
 
 export default toolSlice.reducer;

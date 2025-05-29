@@ -814,7 +814,7 @@ const Main = () => {
             <RightSidebar toggleSidebar={toggleSidebar} isSidebarOpen={isSidebarOpen} handleSave={handleSave} activeTab={activeTab} setActiveTab={(tab) => console.log("Active Tab:", tab)} handleDownloadPdf={handleDownloadPdf} selectedGroupId={selectedGroupId} setSelectedGroupId={setSelectedGroupId} />
           </div>
         </div>
-        {/* <div style={{ display: 'flex', alignItems: 'stretch' }}>
+        <div style={{ display: 'flex', alignItems: 'stretch' }}>
           <div style={{ flexGrow: '1', position: 'fixed', bottom: '0px', overflowY: 'scroll', scrollbarWidth: 'thin' }}>
             <ColorPalette />
             <div
@@ -863,7 +863,7 @@ const Main = () => {
               />
             </div>
           </div>
-        </div> */}
+        </div>
       </div >
     </>
   )

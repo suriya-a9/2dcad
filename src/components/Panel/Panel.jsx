@@ -192,6 +192,10 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
   const [shapeBuilderRegions, setShapeBuilderRegions] = useState([]);
   const [selectedRegionIndices, setSelectedRegionIndices] = useState([]);
   const [shapeBuilderShapes, setShapeBuilderShapes] = useState([]);
+  const paintBucketFillBy = useSelector(state => state.tool.paintBucketFillBy);
+  const paintBucketThreshold = useSelector(state => state.tool.paintBucketThreshold);
+  const paintBucketGrowSink = useSelector(state => state.tool.paintBucketGrowSink || 0);
+  const paintBucketCloseGaps = useSelector(state => state.tool.paintBucketCloseGaps || "none");
 
   function addGuidesAtLine(x1, y1, x2, y2) {
     setGuides(prev => [
@@ -723,6 +727,246 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
         dispatch(clearSelection());
       }
     }
+    if (selectedTool === "PaintBucket") {
+      const clickedShape = e.target;
+      if (clickedShape && clickedShape.attrs.id) {
+        const shape = shapes.find(s => s.id === clickedShape.attrs.id);
+        if (!shape) return;
+
+        const currentFill = shape.fill || "#fff";
+        const targetFill = fillColor;
+
+        function hexToRgb(hex) {
+          hex = hex.replace(/^#/, "");
+          if (hex.length === 3) hex = hex.split("").map(x => x + x).join("");
+          const num = parseInt(hex, 16);
+          return {
+            r: (num >> 16) & 255,
+            g: (num >> 8) & 255,
+            b: num & 255,
+            a: 255
+          };
+        }
+        function rgbToHsl({ r, g, b }) {
+          r /= 255; g /= 255; b /= 255;
+          const max = Math.max(r, g, b), min = Math.min(r, g, b);
+          let h, s, l = (max + min) / 2;
+          if (max === min) {
+            h = s = 0;
+          } else {
+            const d = max - min;
+            s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+            switch (max) {
+              case r: h = (g - b) / d + (g < b ? 6 : 0); break;
+              case g: h = (b - r) / d + 2; break;
+              case b: h = (r - g) / d + 4; break;
+            }
+            h /= 6;
+          }
+          return { h: h * 360, s: s * 100, l: l * 100 };
+        }
+
+        const rgbCurrent = hexToRgb(currentFill);
+        const rgbTarget = hexToRgb(targetFill);
+        const hslCurrent = rgbToHsl(rgbCurrent);
+        const hslTarget = rgbToHsl(rgbTarget);
+
+        let shouldFill = false;
+        const t = paintBucketThreshold;
+        let gapThreshold = 0;
+        if (paintBucketCloseGaps === "small") gapThreshold = 5;
+        else if (paintBucketCloseGaps === "medium") gapThreshold = 15;
+        else if (paintBucketCloseGaps === "large") gapThreshold = 30;
+
+        switch (paintBucketFillBy) {
+          case "visible colors":
+            shouldFill =
+              Math.abs(rgbCurrent.r - rgbTarget.r) <= t &&
+              Math.abs(rgbCurrent.g - rgbTarget.g) <= t &&
+              Math.abs(rgbCurrent.b - rgbTarget.b) <= t;
+            break;
+          case "red":
+            shouldFill = rgbCurrent.r === 255 && Math.abs(rgbTarget.r - 255) <= t;
+            break;
+          case "green":
+            shouldFill = rgbCurrent.g === 255 && Math.abs(rgbTarget.g - 255) <= t;
+            break;
+          case "blue":
+            shouldFill = rgbCurrent.b === 255 && Math.abs(rgbTarget.b - 255) <= t;
+            break;
+          case "hue":
+            const hueDiff = Math.abs(hslCurrent.h - hslTarget.h);
+            shouldFill = Math.min(hueDiff, 360 - hueDiff) <= t;
+            break;
+          case "saturation":
+            shouldFill = Math.abs(hslCurrent.s - hslTarget.s) <= t;
+            break;
+          case "lightness":
+            shouldFill = Math.abs(hslCurrent.l - hslTarget.l) <= t;
+            break;
+          case "alpha":
+            shouldFill = Math.abs(rgbCurrent.a - rgbTarget.a) <= t;
+            break;
+          default:
+            shouldFill = true;
+        }
+
+        if (shouldFill) {
+          dispatch(
+            updateShapePosition({ id: clickedShape.attrs.id, fill: fillColor })
+          );
+
+
+          if (shape.type === "Rectangle") {
+            let points = [
+              { x: shape.x, y: shape.y },
+              { x: shape.x + shape.width, y: shape.y },
+              { x: shape.x + shape.width, y: shape.y + shape.height },
+              { x: shape.x, y: shape.y + shape.height }
+            ];
+            if (paintBucketGrowSink !== 0) {
+              points = offsetPoints(points, paintBucketGrowSink);
+            }
+            console.log(paintBucketGrowSink, points)
+            dispatch(addShape({
+              id: `path-${Date.now()}`,
+              type: "Path",
+              path: `M ${points.map(p => `${p.x},${p.y}`).join(" L ")} Z`,
+              stroke: "#000",
+              strokeWidth: 2,
+              fill: fillColor
+            }));
+          } else if (shape.type === "Circle") {
+
+            const numPoints = 36;
+            let points = [];
+            for (let i = 0; i < numPoints; i++) {
+              const angle = (2 * Math.PI * i) / numPoints;
+              points.push({
+                x: shape.x + shape.radius * Math.cos(angle),
+                y: shape.y + shape.radius * Math.sin(angle)
+              });
+            }
+            if (paintBucketGrowSink !== 0) {
+              points = offsetPoints(points, paintBucketGrowSink);
+            }
+            dispatch(addShape({
+              id: `path-${Date.now()}`,
+              type: "Path",
+              path: `M ${points.map(p => `${p.x},${p.y}`).join(" L ")} Z`,
+              stroke: "#000",
+              strokeWidth: 2,
+              fill: fillColor
+            }));
+          } else if (shape.type === "Polygon" && Array.isArray(shape.points)) {
+            let points = shape.points.map(p =>
+              Array.isArray(p)
+                ? { x: p[0] + (shape.x || 0), y: p[1] + (shape.y || 0) }
+                : { x: p.x + (shape.x || 0), y: p.y + (shape.y || 0) }
+            );
+            if (paintBucketGrowSink !== 0) {
+              points = offsetPoints(points, paintBucketGrowSink);
+            }
+            dispatch(addShape({
+              id: `path-${Date.now()}`,
+              type: "Path",
+              path: `M ${points.map(p => `${p.x},${p.y}`).join(" L ")} Z`,
+              stroke: "#000",
+              strokeWidth: 2,
+              fill: fillColor
+            }));
+          } else if (shape.type === "Star") {
+            const numPoints = (shape.corners || 5) * 2;
+            let points = [];
+            for (let i = 0; i < numPoints; i++) {
+
+              const angle = (Math.PI * 2 * i) / numPoints - Math.PI / 2;
+              const radius = i % 2 === 0 ? shape.outerRadius : shape.innerRadius;
+              points.push({
+                x: shape.x + radius * Math.cos(angle),
+                y: shape.y + radius * Math.sin(angle)
+              });
+            }
+            if (paintBucketGrowSink !== 0) {
+              points = offsetPoints(points, paintBucketGrowSink);
+            }
+            dispatch(addShape({
+              id: `path-${Date.now()}`,
+              type: "Path",
+              path: `M ${points.map(p => `${p.x},${p.y}`).join(" L ")} Z`,
+              stroke: "#000",
+              strokeWidth: 2,
+              fill: fillColor
+            }));
+          }
+
+          else if (shape.type === "Pencil" && Array.isArray(shape.points)) {
+            let points = shape.points.map(p =>
+              Array.isArray(p)
+                ? { x: p[0] + (shape.x || 0), y: p[1] + (shape.y || 0) }
+                : { x: p.x + (shape.x || 0), y: p.y + (shape.y || 0) }
+            );
+
+            let shouldClose = false;
+            if (gapThreshold > 0 && points.length > 2) {
+              const first = points[0];
+              const last = points[points.length - 1];
+              const dist = Math.hypot(first.x - last.x, first.y - last.y);
+              if (dist <= gapThreshold) {
+                points.push({ ...first });
+                shouldClose = true;
+              }
+            }
+
+            if (paintBucketGrowSink !== 0) {
+              points = offsetPoints(points, paintBucketGrowSink);
+            }
+
+            const pathStr = `M ${points.map(p => `${p.x},${p.y}`).join(" L ")}${shouldClose ? " Z" : ""}`;
+
+            dispatch(addShape({
+              id: `path-${Date.now()}`,
+              type: "Path",
+              path: pathStr,
+              stroke: "#000",
+              strokeWidth: 2,
+              fill: fillColor
+            }));
+          }
+
+          else if (shape.type === "Calligraphy" && Array.isArray(shape.points)) {
+            let points = shape.points.map(p => ({ x: p.x, y: p.y }));
+
+            let shouldClose = false;
+            if (gapThreshold > 0 && points.length > 2) {
+              const first = points[0];
+              const last = points[points.length - 1];
+              const dist = Math.hypot(first.x - last.x, first.y - last.y);
+              if (dist <= gapThreshold) {
+                points.push({ ...first });
+                shouldClose = true;
+              }
+            }
+
+            if (paintBucketGrowSink !== 0) {
+              points = offsetPoints(points, paintBucketGrowSink);
+            }
+
+            const pathStr = `M ${points.map(p => `${p.x},${p.y}`).join(" L ")}${shouldClose ? " Z" : ""}`;
+
+            dispatch(addShape({
+              id: `path-${Date.now()}`,
+              type: "Path",
+              path: pathStr,
+              stroke: "#000",
+              strokeWidth: 2,
+              fill: fillColor,
+              listening: false
+            }));
+          }
+        }
+      }
+    }
     if (selectedTool === "Gradient") {
       if (clickedShape && clickedShape.attrs && clickedShape.attrs.id) {
         dispatch(selectShape(clickedShape.attrs.id));
@@ -962,13 +1206,6 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
       }, 0);
       setTextContent("");
       setEditingTextId(null);
-    } else if (selectedTool === "PaintBucket") {
-      const clickedShape = e.target;
-      if (clickedShape && clickedShape.attrs.id) {
-        dispatch(
-          updateShapePosition({ id: clickedShape.attrs.id, fill: fillColor })
-        );
-      }
     } else if (selectedTool === "Dropper") {
       const clickedShape = e.target;
       if (clickedShape && clickedShape.attrs.fill) {
@@ -3718,6 +3955,20 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
       window.removeEventListener("shapeBuilderSubtract", handleSubtract);
     };
   }, [shapeBuilderRegions, selectedRegionIndices, shapeBuilderShapes, replaceShapes, dispatch]);
+  function offsetPoints(points, offset) {
+
+    const cx = points.reduce((sum, p) => sum + p.x, 0) / points.length;
+    const cy = points.reduce((sum, p) => sum + p.y, 0) / points.length;
+    return points.map(p => {
+      const dx = p.x - cx;
+      const dy = p.y - cy;
+      const len = Math.sqrt(dx * dx + dy * dy) || 1;
+      return {
+        x: cx + dx / len * (len + offset),
+        y: cy + dy / len * (len + offset)
+      };
+    });
+  }
   return (
     <>
       {/* {selectedTool === "Dropper" && (
@@ -5051,6 +5302,7 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
                           closed={false}
                           draggable={selectedTool !== "Node"}
                           dash={getDashArray(shape.strokeStyle)}
+                          listening="false"
                           onDragMove={handleDragMove}
                           rotation={shape.rotation || 0}
                           scaleX={shape.scaleX || 1}

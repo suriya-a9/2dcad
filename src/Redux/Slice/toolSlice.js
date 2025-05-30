@@ -97,6 +97,10 @@ const toolSlice = createSlice({
     measurementOffset: 16,
     convertToItem: false,
     replaceShapes: true,
+    paintBucketFillBy: "visible colors",
+    paintBucketThreshold: 20,
+    paintBucketGrowSink: 0,
+    paintBucketCloseGaps: "none",
   },
 
   reducers: {
@@ -2283,7 +2287,19 @@ const toolSlice = createSlice({
     },
     setReplaceShapes: (state, action) => {
       state.replaceShapes = action.payload;
-    }
+    },
+    setPaintBucketFillBy: (state, action) => {
+      state.paintBucketFillBy = action.payload;
+    },
+    setPaintBucketThreshold: (state, action) => {
+      state.paintBucketThreshold = action.payload;
+    },
+    setPaintBucketGrowSink: (state, action) => {
+      state.paintBucketGrowSink = action.payload;
+    },
+    setPaintBucketCloseGaps: (state, action) => {
+      state.paintBucketCloseGaps = action.payload;
+    },
   },
 
 });
@@ -2444,7 +2460,11 @@ export const {
   setMeasurementOffset,
   setConvertToItem,
   removeMeasurementLine,
-  setReplaceShapes
+  setReplaceShapes,
+  setPaintBucketFillBy,
+  setPaintBucketThreshold,
+  setPaintBucketGrowSink,
+  setPaintBucketCloseGaps
 } = toolSlice.actions;
 
 export default toolSlice.reducer;

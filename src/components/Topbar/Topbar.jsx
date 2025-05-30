@@ -102,7 +102,11 @@ import {
   setMarkDimension,
   setMeasurementOffset,
   setConvertToItem,
-  setReplaceShapes
+  setReplaceShapes,
+  setPaintBucketFillBy,
+  setPaintBucketThreshold,
+  setPaintBucketGrowSink,
+  setPaintBucketCloseGaps
 } from "../../Redux/Slice/toolSlice";
 import {
   TbDeselect,
@@ -1419,6 +1423,8 @@ const Topbar = ({
             <DropperTopbar />
           ) : selectedTool === "Measurement" ? (
             <MeasurementTopbar />
+          ) : selectedTool === "PaintBucket" ? (
+            <PaintBucketTopbar />
           ) : (
             <DefaultTopbar />
           )}
@@ -1954,7 +1960,7 @@ function DefaultTopbar() {
                   color: "white",
                   border: "none",
                   borderRadius: 4,
-                  // padding: "6px 12px",
+
                   marginLeft: 8,
                   cursor: "pointer"
                 }}
@@ -1971,7 +1977,7 @@ function DefaultTopbar() {
                   color: "white",
                   border: "none",
                   borderRadius: 4,
-                  // padding: "6px 12px",
+
                   marginLeft: 8,
                   cursor: "pointer"
                 }}
@@ -3015,6 +3021,73 @@ function GradientTopbar() {
           </div>
         </>
       )}
+    </div>
+  );
+}
+function PaintBucketTopbar() {
+  const fillBy = useSelector(state => state.tool.paintBucketFillBy);
+  const threshold = useSelector(state => state.tool.paintBucketThreshold);
+  const growSink = useSelector(state => state.tool.paintBucketGrowSink);
+  const closeGaps = useSelector(state => state.tool.paintBucketCloseGaps || "none");
+  const dispatch = useDispatch();
+  return (
+    <div className="d-flex flex-row mb-3 top-icons" style={{ alignItems: "center", color: "white" }}>
+      <div className="p-2 value" style={{ display: "flex", alignItems: "center" }}>
+        <label htmlFor="fillBy">Fill By:&nbsp;</label>
+        <select
+          id="fillBy"
+          value={fillBy}
+          onChange={e => dispatch(setPaintBucketFillBy(e.target.value))}
+          style={{ height: "30px" }}
+        >
+          <option value="visible colors">Visible Colors</option>
+          <option value="red">Red</option>
+          <option value="green">Green</option>
+          <option value="blue">Blue</option>
+          <option value="hue">Hue</option>
+          <option value="saturation">Saturation</option>
+          <option value="lightness">Lightness</option>
+          <option value="alpha">Alpha</option>
+        </select>
+      </div>
+      <div className="p-2 value" style={{ display: "flex", alignItems: "center" }}>
+        <label htmlFor="threshold">Threshold:&nbsp;</label>
+        <input
+          id="threshold"
+          type="number"
+          min={0}
+          max={255}
+          value={threshold}
+          onChange={e => dispatch(setPaintBucketThreshold(Number(e.target.value)))}
+          style={{ width: 60, marginLeft: 4 }}
+        />
+      </div>
+      <div className="p-2 value" style={{ display: "flex", alignItems: "center" }}>
+        <label htmlFor="growSink">Grow/Sink:&nbsp;</label>
+        <input
+          id="growSink"
+          type="number"
+          min={-100}
+          max={100}
+          value={growSink}
+          onChange={e => dispatch(setPaintBucketGrowSink(Number(e.target.value)))}
+          style={{ width: 60, marginLeft: 4 }}
+        />
+      </div>
+      <div className="p-2 value" style={{ display: "flex", alignItems: "center" }}>
+        <label htmlFor="closeGaps">Close gaps:&nbsp;</label>
+        <select
+          id="closeGaps"
+          value={closeGaps}
+          onChange={e => dispatch(setPaintBucketCloseGaps(e.target.value))}
+          style={{ height: "30px" }}
+        >
+          <option value="none">None</option>
+          <option value="small">Small</option>
+          <option value="medium">Medium</option>
+          <option value="large">Large</option>
+        </select>
+      </div>
     </div>
   );
 }

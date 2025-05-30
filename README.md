@@ -29,15 +29,15 @@ A web-based interactive canvas application built with React, Redux, and Konva.js
 
 src/
 ├── assets/
-├── components/ # React components (Dialogs, Panel, Modal, Toolbar, etc.)
-├── Redux/ # Redux store and slices
-│ ├── Action/
-│ │ └── toolsAction.js
-│ ├── Slice/
-│ │ └── toolSlice.js
-│ └── store.js
-├── App.jsx # Main app component
-├── index.js # Entry point
+├── components/         # React components (Dialogs, Panel, Modal, Toolbar, etc.)
+├── Redux/              # Redux store and slices
+│   ├── Action/
+│   │   └── toolsAction.js
+│   ├── Slice/
+│   │   └── toolSlice.js
+│   └── store.js
+├── App.jsx             # Main app component
+├── index.js            # Entry point
 
 ---
 

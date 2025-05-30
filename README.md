@@ -27,6 +27,7 @@ A web-based interactive canvas application built with React, Redux, and Konva.js
 
 ## 🗂️ Project Structure
 
+```text
 src/
 ├── assets/
 ├── components/         # React components (Dialogs, Panel, Modal, Toolbar, etc.)
@@ -38,6 +39,7 @@ src/
 │   └── store.js
 ├── App.jsx             # Main app component
 ├── index.js            # Entry point
+```
 
 ---
 

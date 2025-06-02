@@ -206,14 +206,15 @@ const LeftSidebar = () => {
               data-tooltip-id="tool-left"
             />
           </div> */}
-          {/* <div
+          <div
             className="p-2 left-icon"
+            onClick={() => handleToolSelect("Mesh")}
           >
             <LuCircuitBoard
               data-tooltip-content="Mesh Tool"
               data-tooltip-id="tool-left"
             />
-          </div> */}
+          </div>
           {/* <div
             className="p-2 left-icon"
           >

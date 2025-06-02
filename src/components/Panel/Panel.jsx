@@ -196,6 +196,11 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
   const paintBucketThreshold = useSelector(state => state.tool.paintBucketThreshold);
   const paintBucketGrowSink = useSelector(state => state.tool.paintBucketGrowSink || 0);
   const paintBucketCloseGaps = useSelector(state => state.tool.paintBucketCloseGaps || "none");
+  const meshRows = useSelector(state => state.tool.meshRows || 4);
+  const meshCols = useSelector(state => state.tool.meshCols || 4);
+  const meshMode = useSelector(state => state.tool.meshMode || "mesh-gradient");
+  const [meshStart, setMeshStart] = useState(null);
+  const [meshPreview, setMeshPreview] = useState(null);
 
   function addGuidesAtLine(x1, y1, x2, y2) {
     setGuides(prev => [
@@ -726,6 +731,58 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
 
         dispatch(clearSelection());
       }
+    }
+    if (selectedTool === "Mesh" && clickedShape && clickedShape.attrs && clickedShape.attrs.id) {
+      const shape = shapes.find(s => s.id === clickedShape.attrs.id);
+      if (!shape) return;
+
+
+      let x = shape.x, y = shape.y, width = 100, height = 100;
+      if (shape.type === "Rectangle") {
+        width = shape.width;
+        height = shape.height;
+      } else if (shape.type === "Circle") {
+        x = shape.x - shape.radius;
+        y = shape.y - shape.radius;
+        width = shape.radius * 2;
+        height = shape.radius * 2;
+      } else if (shape.type === "Polygon" && Array.isArray(shape.points)) {
+        const pts = shape.points.map(p => ({
+          x: (p.x ?? p[0]) + (shape.x || 0),
+          y: (p.y ?? p[1]) + (shape.y || 0)
+        }));
+        const minX = Math.min(...pts.map(p => p.x));
+        const minY = Math.min(...pts.map(p => p.y));
+        const maxX = Math.max(...pts.map(p => p.x));
+        const maxY = Math.max(...pts.map(p => p.y));
+        x = minX;
+        y = minY;
+        width = maxX - minX;
+        height = maxY - minY;
+      }
+
+      const nodes = [];
+      for (let row = 0; row < meshRows; row++) {
+        const rowNodes = [];
+        for (let col = 0; col < meshCols; col++) {
+          rowNodes.push({
+            x: x + (col / (meshCols - 1)) * width,
+            y: y + (row / (meshRows - 1)) * height,
+            color: fillColor || "#ffffff"
+          });
+        }
+        nodes.push(rowNodes);
+      }
+      dispatch(updateShapePosition({
+        id: shape.id,
+        mesh: {
+          rows: meshRows,
+          cols: meshCols,
+          nodes,
+          mode: meshMode
+        }
+      }));
+      return;
     }
     if (selectedTool === "PaintBucket") {
       const clickedShape = e.target;
@@ -1839,7 +1896,16 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
         innerRadius,
         divergence
       );
-
+      if (selectedTool === "Mesh" && isDrawing && meshStart) {
+        const stage = e.target.getStage();
+        const pointer = getAdjustedPointerPosition(stage, position, scale);
+        setMeshPreview({
+          x: Math.min(meshStart.x, pointer.x),
+          y: Math.min(meshStart.y, pointer.y),
+          width: Math.abs(pointer.x - meshStart.x),
+          height: Math.abs(pointer.y - meshStart.y),
+        });
+      }
       if (newShape.type === "Bezier") {
         setNewShape((prev) => {
           if (!prev.points || prev.points.length < 6) {
@@ -2437,7 +2503,57 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
       };
     }
 
+    if (selectedTool === "Mesh" && isDrawing && meshStart && meshPreview) {
 
+      const { x, y, width, height } = meshPreview;
+      const nodes = [];
+      for (let row = 0; row < meshRows; row++) {
+        const rowNodes = [];
+        for (let col = 0; col < meshCols; col++) {
+          rowNodes.push({
+            x: x + (col / (meshCols - 1)) * width,
+            y: y + (row / (meshRows - 1)) * height,
+            color: fillColor || "#ffffff"
+          });
+        }
+        nodes.push(rowNodes);
+      }
+      const overlapsShape = shapes.some(shape => {
+        if (shape.type === "Rectangle") {
+
+          return !(
+            meshPreview.x + meshPreview.width < shape.x ||
+            meshPreview.x > shape.x + shape.width ||
+            meshPreview.y + meshPreview.height < shape.y ||
+            meshPreview.y > shape.y + shape.height
+          );
+        }
+
+        return false;
+      });
+      if (!overlapsShape) {
+        setIsDrawing(false);
+        setMeshStart(null);
+        setMeshPreview(null);
+        setNewShape(null);
+        return;
+      }
+      dispatch(addShape({
+        id: `mesh-${Date.now()}`,
+        type: "Mesh",
+        x,
+        y,
+        rows: meshRows,
+        cols: meshCols,
+        nodes,
+        mode: meshMode
+      }));
+      setIsDrawing(false);
+      setMeshStart(null);
+      setMeshPreview(null);
+      setNewShape(null);
+      return;
+    }
     if (selectedTool === "Gradient" && gradientDrag && selectedShapeId) {
       const shape = shapes.find(s => s.id === selectedShapeId);
       if (!shape) return;
@@ -3430,8 +3546,9 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
     if (shape.type === "Star") {
       const numPoints = (shape.corners || 5) * 2;
       const points = [];
+      const rotation = -Math.PI / 2;
       for (let i = 0; i < numPoints; i++) {
-        const angle = (Math.PI * 2 * i) / numPoints;
+        const angle = (Math.PI * 2 * i) / numPoints + rotation;
         const radius = i % 2 === 0 ? shape.outerRadius : shape.innerRadius;
         points.push([
           shape.x + radius * Math.cos(angle),
@@ -3969,6 +4086,28 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
       };
     });
   }
+  function calculateMeshGradientStroke(nodes) {
+    if (!nodes || nodes.length === 0) return "black";
+
+    const hexToRgb = (hex) => {
+      hex = hex.replace(/^#/, "");
+      if (hex.length === 3) hex = hex.split("").map((x) => x + x).join("");
+      const num = parseInt(hex, 16);
+      return { r: (num >> 16) & 255, g: (num >> 8) & 255, b: num & 255 };
+    };
+
+    const rgbToHex = ({ r, g, b }) =>
+      `#${[r, g, b].map((x) => x.toString(16).padStart(2, "0")).join("")}`;
+
+    const colors = nodes.flatMap((row) => row.map((node) => hexToRgb(node.color)));
+    const avgRgb = {
+      r: Math.round(colors.reduce((sum, c) => sum + c.r, 0) / colors.length),
+      g: Math.round(colors.reduce((sum, c) => sum + c.g, 0) / colors.length),
+      b: Math.round(colors.reduce((sum, c) => sum + c.b, 0) / colors.length),
+    };
+
+    return rgbToHex(avgRgb);
+  }
   return (
     <>
       {/* {selectedTool === "Dropper" && (
@@ -4073,27 +4212,6 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
                     globalCompositeOperation="source-over"
                   />
                 ))}
-
-                {selectedTool === "ShapeBuilder" && shapeBuilderRegions.length > 0 &&
-                  shapeBuilderRegions.map((region, idx) => (
-                    <Path
-                      key={idx}
-                      data={generatePolygonPath(region[0].map(([x, y]) => ({ x, y })))}
-                      fill={selectedRegionIndices.includes(idx) ? "rgba(0,128,255,0.4)" : "rgba(128,128,128,0.2)"}
-                      stroke="#007bff"
-                      strokeWidth={selectedRegionIndices.includes(idx) ? 3 : 1}
-                      onClick={() => {
-                        setSelectedRegionIndices(indices =>
-                          indices.includes(idx)
-                            ? indices.filter(i => i !== idx)
-                            : [...indices, idx]
-                        );
-                      }}
-                      listening={true}
-                      closed
-                    />
-                  ))
-                }
 
                 {renderSpiroPath()}
 
@@ -4257,121 +4375,245 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
                   if (shape.type === "Rectangle") {
                     return (
                       <React.Fragment key={shape.id}>
-                        <Rect
-                          ref={(node) => {
-                            if (node) shapeRefs.current[shape.id] = node;
-                            else delete shapeRefs.current[shape.id];
-                          }}
-                          key={shape.id}
-                          id={shape.id}
-                          x={shape.x}
-                          y={shape.y}
-                          width={shape.width}
-                          height={shape.height}
-                          fill={
-                            shape.gradientTarget === "stroke"
-                              ? "transparent"
-                              : shape.gradientTarget === "fill" && shape.fill?.type === "linear-gradient"
+                        {shape.mesh && shape.mesh.nodes ? (
+                          <Group
+                            ref={node => {
+                              if (node) shapeRefs.current[shape.id] = node;
+                              else delete shapeRefs.current[shape.id];
+                            }}
+                            key={shape.id}
+                            id={shape.id}
+                          >
+                            {shape.mesh.nodes.slice(0, -1).map((row, r) =>
+                              row.slice(0, -1).map((node, c) => {
+                                const p1 = node;
+                                const p2 = shape.mesh.nodes[r][c + 1];
+                                const p3 = shape.mesh.nodes[r + 1][c + 1];
+                                const p4 = shape.mesh.nodes[r + 1][c];
+                                function hexToRgb(hex) {
+                                  hex = hex.replace(/^#/, "");
+                                  if (hex.length === 3) hex = hex.split("").map(x => x + x).join("");
+                                  const num = parseInt(hex, 16);
+                                  return {
+                                    r: (num >> 16) & 255,
+                                    g: (num >> 8) & 255,
+                                    b: num & 255
+                                  };
+                                }
+                                function rgbToHex({ r, g, b }) {
+                                  return (
+                                    "#" +
+                                    [r, g, b]
+                                      .map((x) => {
+                                        const hex = x.toString(16);
+                                        return hex.length === 1 ? "0" + hex : hex;
+                                      })
+                                      .join("")
+                                  );
+                                }
+                                function avgColor(colors) {
+                                  const rgbs = colors.map(hexToRgb);
+                                  const r = Math.round(rgbs.reduce((sum, c) => sum + c.r, 0) / rgbs.length);
+                                  const g = Math.round(rgbs.reduce((sum, c) => sum + c.g, 0) / rgbs.length);
+                                  const b = Math.round(rgbs.reduce((sum, c) => sum + c.b, 0) / rgbs.length);
+                                  return rgbToHex({ r, g, b });
+                                }
+                                const fillColor = avgColor([p1.color, p2.color, p3.color, p4.color]);
+                                return (
+                                  <Line
+                                    key={`${r}-${c}`}
+                                    points={[p1.x, p1.y, p2.x, p2.y, p3.x, p3.y, p4.x, p4.y]}
+                                    closed
+                                    fill={fillColor}
+                                    stroke={isSelected ? "#888" : undefined}
+                                    strokeWidth={isSelected ? 1 : 0}
+                                  />
+                                );
+                              })
+                            )}
+                            {shape.mesh.nodes.flat().map((node, idx) => (
+                              <Circle
+                                key={`white-${idx}`}
+                                x={node.x}
+                                y={node.y}
+                                radius={Math.min(
+                                  shape.width / (shape.mesh.cols * 2),
+                                  shape.height / (shape.mesh.rows * 2),
+                                  32
+                                )}
+                                fill="rgba(255,255,255,0.35)"
+                                listening={false}
+                              />
+                            ))}
+                            {selectedTool === "Mesh" && isSelected && shape.mesh.nodes.flat().map((node, idx) => (
+                              <Circle
+                                key={idx}
+                                x={node.x}
+                                y={node.y}
+                                radius={6}
+                                fill={blendWithWhite(node.color, 0.7)}
+                                stroke="#000"
+                                strokeWidth={1}
+                                draggable
+                                onDragMove={e => {
+                                  const { x, y } = e.target.position();
+
+                                  dispatch({
+                                    type: "tool/updateMeshNode",
+                                    payload: { meshId: shape.id, nodeIdx: idx, x, y }
+                                  });
+
+
+                                  if (
+                                    shape.fill &&
+                                    (shape.fill.type === "linear-gradient" || shape.fill.type === "radial-gradient")
+                                  ) {
+                                    let newFill = { ...shape.fill };
+                                    if (shape.fill.type === "linear-gradient") {
+                                      if (idx === 0) {
+                                        newFill.start = { x, y };
+                                      } else if (idx === shape.mesh.nodes.flat().length - 1) {
+                                        newFill.end = { x, y };
+                                      }
+                                    } else if (shape.fill.type === "radial-gradient") {
+                                      if (idx === 0) {
+                                        newFill.center = { x, y };
+                                      } else if (idx === shape.mesh.nodes.flat().length - 1) {
+                                        const dx = x - newFill.center.x;
+                                        const dy = y - newFill.center.y;
+                                        newFill.radius = Math.sqrt(dx * dx + dy * dy);
+                                      }
+                                    }
+                                    dispatch(
+                                      updateShapePosition({
+                                        id: shape.id,
+                                        fill: newFill
+                                      })
+                                    );
+                                  }
+                                }}
+                              />
+                            ))}
+                          </Group>
+                        ) : (
+                          <Rect
+                            ref={(node) => {
+                              if (node) shapeRefs.current[shape.id] = node;
+                              else delete shapeRefs.current[shape.id];
+                            }}
+                            key={shape.id}
+                            id={shape.id}
+                            x={shape.x}
+                            y={shape.y}
+                            width={shape.width}
+                            height={shape.height}
+                            fill={
+                              shape.gradientTarget === "fill" && shape.fill?.type === "linear-gradient"
                                 ? undefined
                                 : shape.fill?.type === "linear-gradient" || shape.fill?.type === "radial-gradient"
                                   ? undefined
                                   : shape.fill || "transparent"
-                          }
-                          fillLinearGradientStartPoint={
-                            shape.gradientTarget === "fill" && shape.fill?.type === "linear-gradient"
-                              ? shape.fill.start
-                              : undefined
-                          }
-                          fillLinearGradientEndPoint={
-                            shape.gradientTarget === "fill" && shape.fill?.type === "linear-gradient"
-                              ? shape.fill.end
-                              : undefined
-                          }
-                          fillLinearGradientColorStops={
-                            shape.gradientTarget === "fill" && shape.fill?.type === "linear-gradient"
-                              ? getLinearGradientColorStops(shape.fill)
-                              : undefined
-                          }
-                          fillRadialGradientStartPoint={shape.fill?.type === "radial-gradient" ? shape.fill.center : undefined}
-                          fillRadialGradientEndPoint={shape.fill?.type === "radial-gradient" && shape.fill.radius !== undefined
-                            ? { x: shape.fill.center.x + shape.fill.radius, y: shape.fill.center.y }
-                            : undefined}
-                          fillRadialGradientColorStops={shape.fill?.type === "radial-gradient"
-                            ? shape.fill.colors.flatMap(stop => [stop.pos, stop.color])
-                            : undefined}
-                          stroke={
-                            shape.gradientTarget === "stroke" && shape.stroke?.type === "linear-gradient"
-                              ? undefined
-                              : shape.stroke || "black"
-                          }
-                          strokeLinearGradientStartPoint={
-                            shape.gradientTarget === "stroke" && shape.stroke?.type === "linear-gradient"
-                              ? shape.stroke.start
-                              : undefined
-                          }
-                          strokeLinearGradientEndPoint={
-                            shape.gradientTarget === "stroke" && shape.stroke?.type === "linear-gradient"
-                              ? shape.stroke.end
-                              : undefined
-                          }
-                          strokeLinearGradientColorStops={
-                            shape.gradientTarget === "stroke" && shape.stroke?.type === "linear-gradient"
-                              ? shape.stroke.colors.flatMap(stop => [stop.pos, stop.color])
-                              : undefined
-                          }
-                          strokeRadialGradientStartPoint={shape.stroke?.type === "radial-gradient" ? shape.stroke.center : undefined}
-                          strokeRadialGradientEndPoint={shape.stroke?.type === "radial-gradient" && shape.stroke.radius !== undefined
-                            ? {
-                              x: shape.stroke.center.x + shape.stroke.radius,
-                              y: shape.stroke.center.y
                             }
-                            : undefined}
-                          strokeRadialGradientColorStops={shape.stroke?.type === "radial-gradient"
-                            ? shape.stroke.colors.flatMap(stop => [stop.pos, stop.color])
-                            : undefined}
-                          strokeWidth={shape.strokeWidth || 1}
-                          cornerRadius={tempCornerRadius !== null ? tempCornerRadius : shape.cornerRadius}
-                          dash={getDashArray(shape.strokeStyle)}
-                          rotation={shape.rotation || 0}
-                          scaleX={shape.scaleX || 1}
-                          scaleY={shape.scaleY || 1}
-                          draggable={selectedTool !== "Node"}
-                          onDragMove={handleDragMove}
-                          onDragEnd={(e) => handleDragEnd(e, shape.id)}
-                          onTransformEnd={(e) => handleResizeEnd(e, shape.id)}
-                          onMouseEnter={() => {
-                            if (selectedTool === "Measurement") setHoveredShape(shape);
-                          }}
-                          onMouseLeave={() => {
-                            if (selectedTool === "Measurement") setHoveredShape(null);
-                          }}
-                          skewX={shape.skewX || 0}
-                          skewY={shape.skewY || 0}
-                          onClick={(e) => {
-                            e.cancelBubble = true;
-                            handleShapeClick(shape);
-                            if (selectedTool !== "Dropper") {
-                              if (e.evt.ctrlKey && selectedShape) {
-
-                                dispatch(
-                                  selectNodePoint({
-                                    shapeId: selectedShape.id,
-                                    index,
-                                    x: point.x,
-                                    y: point.y,
-                                  })
-                                );
-                              } else if (sprayEraserMode) {
-                                dispatch(deleteShape(shape.id));
-                              } else if (selectedTool === "Eraser" && eraserMode === "delete") {
-                                dispatch(deleteShape(shape.id));
-                              } else {
-
-                                dispatch(selectShape(shape.id));
+                            fillLinearGradientStartPoint={
+                              shape.gradientTarget === "fill" && shape.fill?.type === "linear-gradient"
+                                ? shape.fill.start
+                                : undefined
+                            }
+                            fillLinearGradientEndPoint={
+                              shape.gradientTarget === "fill" && shape.fill?.type === "linear-gradient"
+                                ? shape.fill.end
+                                : undefined
+                            }
+                            fillLinearGradientColorStops={
+                              shape.gradientTarget === "fill" && shape.fill?.type === "linear-gradient"
+                                ? getLinearGradientColorStops(shape.fill)
+                                : undefined
+                            }
+                            fillRadialGradientStartPoint={shape.fill?.type === "radial-gradient" ? shape.fill.center : undefined}
+                            fillRadialGradientEndPoint={shape.fill?.type === "radial-gradient" && shape.fill.radius !== undefined
+                              ? { x: shape.fill.center.x + shape.fill.radius, y: shape.fill.center.y }
+                              : undefined}
+                            fillRadialGradientColorStops={shape.fill?.type === "radial-gradient"
+                              ? shape.fill.colors.flatMap(stop => [stop.pos, stop.color])
+                              : undefined}
+                            stroke={
+                              shape.gradientTarget === "stroke"
+                                ? shape.stroke?.type === "linear-gradient"
+                                  ? undefined
+                                  : shape.fill?.type === "mesh-gradient"
+                                    ? calculateMeshGradientStroke(shape.fill.nodes)
+                                    : shape.stroke || "black"
+                                : undefined
+                            }
+                            strokeLinearGradientStartPoint={
+                              shape.gradientTarget === "stroke" && shape.stroke?.type === "linear-gradient"
+                                ? shape.stroke.start
+                                : undefined
+                            }
+                            strokeLinearGradientEndPoint={
+                              shape.gradientTarget === "stroke" && shape.stroke?.type === "linear-gradient"
+                                ? shape.stroke.end
+                                : undefined
+                            }
+                            strokeLinearGradientColorStops={
+                              shape.gradientTarget === "stroke" && shape.stroke?.type === "linear-gradient"
+                                ? shape.stroke.colors.flatMap(stop => [stop.pos, stop.color])
+                                : undefined
+                            }
+                            strokeRadialGradientStartPoint={shape.stroke?.type === "radial-gradient" ? shape.stroke.center : undefined}
+                            strokeRadialGradientEndPoint={shape.stroke?.type === "radial-gradient" && shape.stroke.radius !== undefined
+                              ? {
+                                x: shape.stroke.center.x + shape.stroke.radius,
+                                y: shape.stroke.center.y
                               }
-                            }
-                          }}
-                        />
+                              : undefined}
+                            strokeRadialGradientColorStops={shape.stroke?.type === "radial-gradient"
+                              ? shape.stroke.colors.flatMap(stop => [stop.pos, stop.color])
+                              : undefined}
+                            strokeWidth={shape.strokeWidth || 1}
+                            cornerRadius={tempCornerRadius !== null ? tempCornerRadius : shape.cornerRadius}
+                            dash={getDashArray(shape.strokeStyle)}
+                            rotation={shape.rotation || 0}
+                            scaleX={shape.scaleX || 1}
+                            scaleY={shape.scaleY || 1}
+                            draggable={selectedTool !== "Node" && selectedTool !== "Mesh"}
+                            onDragMove={handleDragMove}
+                            onDragEnd={(e) => handleDragEnd(e, shape.id)}
+                            onTransformEnd={(e) => handleResizeEnd(e, shape.id)}
+                            onMouseEnter={() => {
+                              if (selectedTool === "Measurement") setHoveredShape(shape);
+                            }}
+                            onMouseLeave={() => {
+                              if (selectedTool === "Measurement") setHoveredShape(null);
+                            }}
+                            skewX={shape.skewX || 0}
+                            skewY={shape.skewY || 0}
+                            onClick={(e) => {
+                              e.cancelBubble = true;
+                              handleShapeClick(shape);
+                              if (selectedTool !== "Dropper") {
+                                if (e.evt.ctrlKey && selectedShape) {
+
+                                  dispatch(
+                                    selectNodePoint({
+                                      shapeId: selectedShape.id,
+                                      index,
+                                      x: point.x,
+                                      y: point.y,
+                                    })
+                                  );
+                                } else if (sprayEraserMode) {
+                                  dispatch(deleteShape(shape.id));
+                                } else if (selectedTool === "Eraser" && eraserMode === "delete") {
+                                  dispatch(deleteShape(shape.id));
+                                } else {
+
+                                  dispatch(selectShape(shape.id));
+                                }
+                              }
+                            }}
+                          />
+                        )}
                         {isSelected && shapeRefs.current[shape.id] && selectedTool !== "Node" && (
                           <Transformer
                             nodes={[shapeRefs.current[shape.id]]}
@@ -5650,6 +5892,83 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
                         )}
                       </React.Fragment>
                     );
+                  } if (shape.type === "Mesh") {
+                    return (
+                      <Group key={shape.id}>
+                        {/* Draw mesh polygons (approximate) */}
+                        {shape.nodes.slice(0, -1).map((row, r) =>
+                          row.slice(0, -1).map((node, c) => {
+                            const p1 = node;
+                            const p2 = shape.nodes[r][c + 1];
+                            const p3 = shape.nodes[r + 1][c + 1];
+                            const p4 = shape.nodes[r + 1][c];
+
+
+                            function hexToRgb(hex) {
+                              hex = hex.replace(/^#/, "");
+                              if (hex.length === 3) hex = hex.split("").map(x => x + x).join("");
+                              const num = parseInt(hex, 16);
+                              return {
+                                r: (num >> 16) & 255,
+                                g: (num >> 8) & 255,
+                                b: num & 255
+                              };
+                            }
+                            function rgbToHex({ r, g, b }) {
+                              return (
+                                "#" +
+                                [r, g, b]
+                                  .map((x) => {
+                                    const hex = x.toString(16);
+                                    return hex.length === 1 ? "0" + hex : hex;
+                                  })
+                                  .join("")
+                              );
+                            }
+                            function avgColor(colors) {
+                              const rgbs = colors.map(hexToRgb);
+                              const r = Math.round(rgbs.reduce((sum, c) => sum + c.r, 0) / rgbs.length);
+                              const g = Math.round(rgbs.reduce((sum, c) => sum + c.g, 0) / rgbs.length);
+                              const b = Math.round(rgbs.reduce((sum, c) => sum + c.b, 0) / rgbs.length);
+                              return rgbToHex({ r, g, b });
+                            }
+
+                            const fillColor = avgColor([p1.color, p2.color, p3.color, p4.color]);
+
+                            return (
+                              <Line
+                                key={`${r}-${c}`}
+                                points={[p1.x, p1.y, p2.x, p2.y, p3.x, p3.y, p4.x, p4.y]}
+                                closed
+                                fill={fillColor}
+                                stroke="#888"
+                                strokeWidth={1}
+                              />
+                            );
+                          })
+                        )}
+                        {shape.nodes.flat().map((node, idx) => (
+                          <Circle
+                            key={idx}
+                            x={node.x}
+                            y={node.y}
+                            radius={6}
+                            fill={blendWithWhite(node.color, 0.7)}
+                            stroke="#000"
+                            strokeWidth={1}
+                            draggable
+                            onDragMove={e => {
+                              const { x, y } = e.target.position();
+                              dispatch({
+                                type: "tool/updateMeshNode",
+                                payload: { meshId: shape.id, nodeIdx: idx, x, y }
+                              });
+                            }}
+                            onClick={e => { }}
+                          />
+                        ))}
+                      </Group>
+                    );
                   } else if (shape.type === "Path") {
                     return (
                       <Path
@@ -5793,6 +6112,21 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
                     onDragEnd={(e) => handleDragEnd(e, shape.id)}
                     onTransformEnd={(e) => handleResizeEnd(e, shape.id)}
                     onDragMove={handleDragMove}
+                  />
+                )}
+
+
+                {meshPreview && selectedTool === "Mesh" && (
+                  <Rect
+                    x={meshPreview.x}
+                    y={meshPreview.y}
+                    width={meshPreview.width}
+                    height={meshPreview.height}
+                    stroke="#00f"
+                    strokeWidth={2}
+                    dash={[6, 4]}
+                    fill="rgba(0,0,255,0.1)"
+                    listening={false}
                   />
                 )}
                 {newShape && newShape.type === "Circle" && (
@@ -6310,12 +6644,6 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
                                 gradientTarget: applyTo,
                               }));
                             }}
-
-
-
-
-
-
                           />
                         );
                       })}
@@ -6500,6 +6828,28 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
                     />
                   </>
                 )}
+
+
+                {selectedTool === "ShapeBuilder" && shapeBuilderRegions.length > 0 &&
+                  shapeBuilderRegions.map((region, idx) => (
+                    <Path
+                      key={idx}
+                      data={generatePolygonPath(region[0].map(([x, y]) => ({ x, y })))}
+                      fill={selectedRegionIndices.includes(idx) ? "rgba(0,128,255,0.4)" : "rgba(128,128,128,0.2)"}
+                      stroke="#007bff"
+                      strokeWidth={selectedRegionIndices.includes(idx) ? 3 : 1}
+                      onClick={() => {
+                        setSelectedRegionIndices(indices =>
+                          indices.includes(idx)
+                            ? indices.filter(i => i !== idx)
+                            : [...indices, idx]
+                        );
+                      }}
+                      listening={true}
+                      closed
+                    />
+                  ))
+                }
               </Layer>
             </Stage>
           </div>

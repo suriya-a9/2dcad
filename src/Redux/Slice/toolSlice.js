@@ -101,6 +101,10 @@ const toolSlice = createSlice({
     paintBucketThreshold: 20,
     paintBucketGrowSink: 0,
     paintBucketCloseGaps: "none",
+    meshMode: "mesh-gradient",
+    meshRows: 4,
+    meshCols: 4,
+    gradientTarget: "fill"
   },
 
   reducers: {
@@ -2300,6 +2304,23 @@ const toolSlice = createSlice({
     setPaintBucketCloseGaps: (state, action) => {
       state.paintBucketCloseGaps = action.payload;
     },
+    setMeshMode: (state, action) => {
+      state.meshMode = action.payload;
+    },
+    setMeshRows: (state, action) => { state.meshRows = action.payload; },
+    setMeshCols: (state, action) => { state.meshCols = action.payload; },
+    updateMeshNode: (state, action) => {
+      const { meshId, nodeIdx, x, y } = action.payload;
+      const mesh = state.layers[state.selectedLayerIndex].shapes.find(s => s.id === meshId);
+      if (!mesh || !mesh.mesh || !mesh.mesh.nodes) return;
+      let flat = mesh.mesh.nodes.flat();
+      flat[nodeIdx].x = x;
+      flat[nodeIdx].y = y;
+    },
+    setGradientTarget: (state, action) => {
+      console.log("setGradientTarget Reducer Triggered:", action.payload); // Debugging
+      state.gradientTarget = action.payload;
+    },
   },
 
 });
@@ -2464,7 +2485,12 @@ export const {
   setPaintBucketFillBy,
   setPaintBucketThreshold,
   setPaintBucketGrowSink,
-  setPaintBucketCloseGaps
+  setPaintBucketCloseGaps,
+  setMeshMode,
+  setMeshRows,
+  setMeshCols,
+  updateMeshNode,
+  setGradientTarget
 } = toolSlice.actions;
 
 export default toolSlice.reducer;

@@ -15,6 +15,7 @@ import { VscDebugReverseContinue } from "react-icons/vsc";
 import { GiStraightPipe } from "react-icons/gi";
 import { PiPath } from "react-icons/pi";
 import { FaObjectGroup, FaObjectUngroup } from "react-icons/fa";
+import { MdGridOn, MdOutlineGradient, MdOutlineFormatColorFill, MdOutlineBorderColor } from "react-icons/md";
 import { setSelectedTool } from "../../Redux/Slice/toolSlice";
 import { EditorState, ContentState } from "draft-js";
 import {
@@ -106,7 +107,9 @@ import {
   setPaintBucketFillBy,
   setPaintBucketThreshold,
   setPaintBucketGrowSink,
-  setPaintBucketCloseGaps
+  setPaintBucketCloseGaps,
+  setMeshMode,
+  setGradientTarget
 } from "../../Redux/Slice/toolSlice";
 import {
   TbDeselect,
@@ -1423,6 +1426,8 @@ const Topbar = ({
             <DropperTopbar />
           ) : selectedTool === "Measurement" ? (
             <MeasurementTopbar />
+          ) : selectedTool === "Mesh" ? (
+            <MeshTopbar />
           ) : selectedTool === "PaintBucket" ? (
             <PaintBucketTopbar />
           ) : (
@@ -3295,6 +3300,83 @@ function MeasurementTopbar() {
         <label htmlFor="convertToItem" style={{ marginLeft: 4 }}>
           Convert to item
         </label>
+      </div>
+    </div>
+  );
+}
+function MeshTopbar() {
+  const dispatch = useDispatch();
+  const meshMode = useSelector((state) => state.tool.meshMode || null);
+  const gradientTarget = useSelector((state) => state.tool.gradientTarget || null);
+  const meshRows = useSelector((state) => state.tool.meshRows || 2);
+  const meshCols = useSelector((state) => state.tool.meshCols || 2);
+
+  const handleMeshModeChange = (mode) => {
+    console.log("Dispatching setMeshMode with mode:", mode);
+    dispatch({ type: "tool/setMeshMode", payload: mode });
+    dispatch({ type: "tool/setGradientTarget", payload: null });
+  };
+
+  const handleGradientTargetChange = (target) => {
+    if (meshMode === "mesh-gradient" || meshMode === "conical-gradient") {
+      console.log("Dispatching setGradientTarget with target:", target);
+      dispatch({ type: "tool/setGradientTarget", payload: target });
+    } else {
+      alert("Please select 'Create Mesh Gradient' or 'Create Conical Gradient' first.");
+    }
+  };
+
+  return (
+    <div className="d-flex flex-row mb-3 top-icons" style={{ alignItems: "center", color: "white" }}>
+      <div className="p-2 value" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <span
+          style={{ cursor: "pointer", color: meshMode === "mesh-gradient" ? "#00f" : "#fff" }}
+          title="Create Mesh Gradient"
+          onClick={() => handleMeshModeChange("mesh-gradient")}
+        >
+          <MdGridOn size={28} />
+        </span>
+        <span
+          style={{ cursor: "pointer", color: meshMode === "conical-gradient" ? "#00f" : "#fff" }}
+          title="Create Conical Gradient"
+          onClick={() => handleMeshModeChange("conical-gradient")}
+        >
+          <MdOutlineGradient size={28} />
+        </span>
+        <span
+          style={{ cursor: "pointer", color: gradientTarget === "fill" ? "#00f" : "#fff" }}
+          title="Create Gradient in Fill"
+          onClick={() => handleGradientTargetChange("fill")}
+        >
+          <MdOutlineFormatColorFill size={28} />
+        </span>
+        <span
+          style={{ cursor: "pointer", color: gradientTarget === "stroke" ? "#00f" : "#fff" }}
+          title="Create Gradient in Stroke"
+          onClick={() => handleGradientTargetChange("stroke")}
+        >
+          <MdOutlineBorderColor size={28} />
+        </span>
+      </div>
+      <div className="p-2 value" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <label>Rows:&nbsp;</label>
+        <input
+          type="number"
+          min={2}
+          max={20}
+          value={meshRows}
+          onChange={(e) => dispatch({ type: "tool/setMeshRows", payload: Number(e.target.value) })}
+          style={{ width: 60 }}
+        />
+        <label>Columns:&nbsp;</label>
+        <input
+          type="number"
+          min={2}
+          max={20}
+          value={meshCols}
+          onChange={(e) => dispatch({ type: "tool/setMeshCols", payload: Number(e.target.value) })}
+          style={{ width: 60 }}
+        />
       </div>
     </div>
   );

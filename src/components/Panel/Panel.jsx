@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useLayoutEffect } from "react";
+import { useEffect, useRef, useState, useLayoutEffect, useImperativeHandle, forwardRef } from "react";
 import polygonClipping from "polygon-clipping";
 import { BsPaintBucket, BsPencil, BsVectorPen } from "react-icons/bs";
 import { FaRegCircle, FaRegSquare, FaRegStar } from "react-icons/fa";
@@ -113,7 +113,14 @@ const toolCursors = {
   Polygon: <BiPolygon size={20} color="black" />,
 };
 
-const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, toggleSidebar }) => {
+const Panel = React.forwardRef(({
+  textValue,
+  isSidebarOpen,
+  stageRef,
+  printRef,
+  setActiveTab,
+  toggleSidebar
+}, ref) => {
   const [scale, setScale] = useState(1);
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const selectedNodePoints = useSelector((state) => state.tool.selectedNodePoints);
@@ -4108,6 +4115,96 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
 
     return rgbToHex(avgRgb);
   }
+
+  const zoomToSelectedShape = () => {
+    if (!selectedShape) return;
+
+
+    let shapeX = selectedShape.x || 0;
+    let shapeY = selectedShape.y || 0;
+    let shapeWidth = selectedShape.width || (selectedShape.radius ? selectedShape.radius * 2 : 100);
+    let shapeHeight = selectedShape.height || (selectedShape.radius ? selectedShape.radius * 2 : 100);
+
+    if (selectedShape.radius !== undefined) {
+      shapeX = (selectedShape.x || 0) - selectedShape.radius;
+      shapeY = (selectedShape.y || 0) - selectedShape.radius;
+      shapeWidth = selectedShape.radius * 2;
+      shapeHeight = selectedShape.radius * 2;
+    }
+
+
+    const viewportWidth = width;
+    const viewportHeight = height;
+    const margin = 40;
+    const scaleX = (viewportWidth - margin) / shapeWidth;
+    const scaleY = (viewportHeight - margin) / shapeHeight;
+    const zoom = Math.max(0.1, Math.min(3, Math.min(scaleX, scaleY)));
+
+    setScale(zoom);
+
+
+    const shapeCenterX = shapeX + shapeWidth / 2;
+    const shapeCenterY = shapeY + shapeHeight / 2;
+    const viewportCenterX = viewportWidth / 2;
+    const viewportCenterY = viewportHeight / 2;
+
+    setPosition({
+      x: viewportCenterX - shapeCenterX * zoom,
+      y: viewportCenterY - shapeCenterY * zoom,
+    });
+  };
+  const zoomToDrawing = () => {
+    if (!shapes || shapes.length === 0) return;
+
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    shapes.forEach(shape => {
+      let x = shape.x || 0;
+      let y = shape.y || 0;
+      let w = shape.width || (shape.radius ? shape.radius * 2 : 0);
+      let h = shape.height || (shape.radius ? shape.radius * 2 : 0);
+
+      if (shape.radius !== undefined) {
+        x = (shape.x || 0) - shape.radius;
+        y = (shape.y || 0) - shape.radius;
+        w = shape.radius * 2;
+        h = shape.radius * 2;
+      }
+
+      minX = Math.min(minX, x);
+      minY = Math.min(minY, y);
+      maxX = Math.max(maxX, x + w);
+      maxY = Math.max(maxY, y + h);
+    });
+
+    const drawingWidth = maxX - minX;
+    const drawingHeight = maxY - minY;
+
+    const margin = 40;
+    const viewportWidth = width;
+    const viewportHeight = height;
+    const scaleX = (viewportWidth - margin) / drawingWidth;
+    const scaleY = (viewportHeight - margin) / drawingHeight;
+    const zoom = Math.max(0.1, Math.min(3, Math.min(scaleX, scaleY)));
+
+    setScale(() => zoom);
+
+
+    setPosition(() => {
+      const drawingCenterX = minX + drawingWidth / 2;
+      const drawingCenterY = minY + drawingHeight / 2;
+      const viewportCenterX = viewportWidth / 2;
+      const viewportCenterY = viewportHeight / 2;
+      return {
+        x: viewportCenterX - drawingCenterX * zoom,
+        y: viewportCenterY - drawingCenterY * zoom,
+      };
+    });
+  };
+
+  useImperativeHandle(ref, () => ({
+    zoomToSelectedShape,
+    zoomToDrawing,
+  }));
   return (
     <>
       {/* {selectedTool === "Dropper" && (
@@ -6928,6 +7025,6 @@ const Panel = ({ textValue, isSidebarOpen, stageRef, printRef, setActiveTab, tog
       )}
     </>
   );
-};
+});
 
 export default Panel;

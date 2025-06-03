@@ -104,7 +104,8 @@ const toolSlice = createSlice({
     meshMode: "mesh-gradient",
     meshRows: 4,
     meshCols: 4,
-    gradientTarget: "fill"
+    gradientTarget: "fill",
+    zoomLevel: 1,
   },
 
   reducers: {
@@ -313,6 +314,9 @@ const toolSlice = createSlice({
     addShapes: (state, action) => {
       const selectedLayer = state.layers[state.selectedLayerIndex];
       selectedLayer.shapes.push(...action.payload);
+    },
+    setZoomLevel: (state, action) => {
+      state.zoomLevel = action.payload; // Set zoom level
     },
     zoomIn: (state) => {
       state.zoomLevel = Math.min(state.zoomLevel + 0.1, 3);
@@ -2490,7 +2494,8 @@ export const {
   setMeshRows,
   setMeshCols,
   updateMeshNode,
-  setGradientTarget
+  setGradientTarget,
+  setZoomLevel
 } = toolSlice.actions;
 
 export default toolSlice.reducer;

@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
+import { useDispatch } from "react-redux";
 import './Main.css'
 import Panel from '../Panel/Panel'
 import ColorPalette from '../Sidebars/ColorPalette'
@@ -12,6 +13,7 @@ import * as React from "react";
 import Ruler from "../Ruler/Ruler";
 import html2canvas from "html2canvas";
 import { useSelector } from "react-redux";
+import { zoomIn, zoomOut, setZoomLevel } from "../../Redux/Slice/toolSlice";
 const Main = () => {
 
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -22,6 +24,66 @@ const Main = () => {
   const [draggingGuide, setDraggingGuide] = useState(null);
   const [cursorPosition, setCursorPosition] = useState({ x: 0, y: 0 });
   const [canvasRotation, setCanvasRotation] = useState(0);
+  // const zoomLevel = useSelector(state => state.tool.zoomLevel);
+  const [zoomHistory, setZoomHistory] = useState([{ zoom: 1, position: { x: 0, y: 0 } }]);
+  const [zoomHistoryIndex, setZoomHistoryIndex] = useState(0);
+  const dispatch = useDispatch();
+  const [zoomLevel, setZoomLevel] = useState(1);
+  const [canvasPosition, setCanvasPosition] = useState({ x: 0, y: 0 });
+  const selectedTool = useSelector(state => state.tool.selectedTool);
+  const shapes = useSelector(state => state.tool.layers[state.tool.selectedLayerIndex].shapes || []);
+  const selectedShapeId = useSelector(state => state.tool.selectedShapeId);
+  // const width = useSelector(state => state.tool.width);
+  // const height = useSelector(state => state.tool.height);
+  const setZoomAndPosition = (zoom, position) => {
+    setZoomLevel(zoom);
+    setCanvasPosition(position);
+    setZoomHistory(prev => {
+      const current = prev[zoomHistoryIndex];
+      if (current && current.zoom === zoom && current.position.x === position.x && current.position.y === position.y) {
+        return prev;
+      }
+      const newHistory = prev.slice(0, zoomHistoryIndex + 1).concat([{ zoom, position }]);
+      setZoomHistoryIndex(newHistory.length - 1);
+      return newHistory;
+    });
+  };
+
+  // const handleSetZoom = (zoom) => {
+  //   setZoomAndPosition(zoom, canvasPosition);
+  // };
+
+  const handleZoomPrevious = () => {
+    if (zoomHistoryIndex > 0) {
+      const prev = zoomHistory[zoomHistoryIndex - 1];
+      setZoomLevel(prev.zoom);
+      setCanvasPosition(prev.position);
+      setZoomHistoryIndex(zoomHistoryIndex - 1);
+    }
+  };
+
+  const handleZoomNext = () => {
+    if (zoomHistoryIndex < zoomHistory.length - 1) {
+      const next = zoomHistory[zoomHistoryIndex + 1];
+      setZoomLevel(next.zoom);
+      setCanvasPosition(next.position);
+      setZoomHistoryIndex(zoomHistoryIndex + 1);
+    }
+  };
+  const handleZoomIn = () => {
+    const newZoom = Math.min(zoomLevel * 1.1, 3);
+    setZoomAndPosition(newZoom, canvasPosition);
+  };
+  const handleZoomOut = () => {
+    const newZoom = Math.max(zoomLevel / 1.1, 0.5);
+    setZoomAndPosition(newZoom, canvasPosition);
+  };
+  const handleSetZoom = (value) => {
+    setZoomAndPosition(Number(value), canvasPosition);
+  };
+  // const handleSetZoom = (zoom) => {
+  //   setZoomAndPosition(zoom, canvasPosition);
+  // };
   const toggleSidebar = (state) => {
     if (typeof state === "boolean") {
       setIsSidebarOpen(state);
@@ -483,25 +545,25 @@ const Main = () => {
 
   const [activeTab, setActiveTab] = useState("layers");
 
-  const [panelScale, setPanelScale] = useState(1);
-  const [canvasPosition, setCanvasPosition] = useState({ x: 0, y: 0 });
+  // const [panelScale, setPanelScale] = useState(1);
+  // const [canvasPosition, setCanvasPosition] = useState({ x: 0, y: 0 });
   const handleWheel = (e) => {
     if (e.ctrlKey) {
       e.preventDefault();
 
       const scaleBy = 1.1;
-      const newScale = e.deltaY > 0 ? panelScale / scaleBy : panelScale * scaleBy;
+      const newScale = e.deltaY > 0 ? zoomLevel / scaleBy : zoomLevel * scaleBy;
 
 
       const clampedScale = Math.max(0.5, Math.min(newScale, 3));
 
-      setPanelScale(clampedScale);
+      setZoomAndPosition(clampedScale, canvasPosition);
     }
   };
   const handleDragGuide = (orientation, position) => {
     setGuidelines((prev) => [
       ...prev,
-      { orientation, position }, // Add a new guideline
+      { orientation, position },
     ]);
   };
 
@@ -526,9 +588,9 @@ const Main = () => {
       const updatedGuide = { ...draggingGuide };
 
       if (updatedGuide.orientation === "horizontal") {
-        updatedGuide.position = (e.clientY - canvasPosition.y) / panelScale;
+        updatedGuide.position = (e.clientY - canvasPosition.y) / zoomLevel;
       } else if (updatedGuide.orientation === "vertical") {
-        updatedGuide.position = (e.clientX - canvasPosition.x) / panelScale;
+        updatedGuide.position = (e.clientX - canvasPosition.x) / zoomLevel;
       }
 
       setDraggingGuide(updatedGuide);
@@ -555,7 +617,7 @@ const Main = () => {
 
     if (!isNaN(newScale)) {
       const clampedScale = Math.max(0.5, Math.min(newScale, 3));
-      setPanelScale(clampedScale);
+      dispatch(setZoomLevel(clampedScale));
     }
   };
   const handleRotationChange = (value) => {
@@ -623,11 +685,81 @@ const Main = () => {
   //     canvas.removeEventListener('mouseleave', stopDraw);
   //   };
   // }, []);
+  const mainPanelRef = useRef();
 
+  useEffect(() => {
+    const panel = mainPanelRef.current;
+    if (!panel) return;
 
+    const handleWheelNonPassive = (e) => {
+      if (e.ctrlKey) {
+        e.preventDefault();
+        const scaleBy = 1.1;
+        const newScale = e.deltaY > 0 ? zoomLevel / scaleBy : zoomLevel * scaleBy;
+        const clampedScale = Math.max(0.5, Math.min(newScale, 3));
+        dispatch(setZoomLevel(clampedScale));
+      }
+    };
+
+    panel.addEventListener('wheel', handleWheelNonPassive, { passive: false });
+
+    return () => {
+      panel.removeEventListener('wheel', handleWheelNonPassive);
+    };
+  }, [zoomLevel, dispatch]);
+  const panelRef = useRef();
+  const handleZoomSelected = () => {
+    panelRef.current?.zoomToSelectedShape();
+  };
+  const handleZoomDrawing = () => {
+    panelRef.current?.zoomToDrawing();
+  };
+  const handleZoomPage = () => {
+    const zoom = 1;
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+    setZoomAndPosition(zoom, {
+      x: (viewportWidth - width * zoom) / 2,
+      y: (viewportHeight - height * zoom) / 2,
+    });
+  };
+
+  const handleZoomPageWidth = () => {
+    const zoom = 2;
+    const viewportWidth = window.innerWidth;
+    setZoomAndPosition(zoom, {
+      x: (viewportWidth - width * zoom) / 2,
+      y: canvasPosition.y,
+    });
+  };
+
+  const handleZoomCenterPage = () => {
+    const viewportWidth = window.innerWidth;
+    setZoomAndPosition(zoomLevel, {
+      x: (viewportWidth - width * zoomLevel) / 2,
+      y: canvasPosition.y,
+    });
+  };
+
+  const handleCanvasMouseDown = (e) => {
+    if (selectedTool !== "Zoom") return;
+
+    if (e.button === 0) {
+      e.preventDefault();
+      handleZoomIn();
+    } else if (e.button === 2) {
+      e.preventDefault();
+      handleZoomOut();
+    }
+  };
+  const handleCanvasContextMenu = (e) => {
+    if (selectedTool === "Zoom") {
+      e.preventDefault();
+    }
+  };
   return (
     <>
-      <div className="main-panel"
+      <div ref={mainPanelRef} className="main-panel"
         style={{
           overflow: 'hidden',
           width: '100vw',
@@ -642,7 +774,18 @@ const Main = () => {
 
         <div style={{ display: 'flex', alignItems: 'stretch' }}>
           <div style={{ flexGrow: '1', position: 'fixed', width: '100%', zIndex: '1' }}>
-            <Topbar editorState={editorState} onEditorStateChange={onEditorStateChange} handleSave={handleSave} setIsSidebarOpen={setIsSidebarOpen} activeTab={activeTab} setActiveTab={setActiveTab} handleDownloadPdf={handleDownloadPdf} selectedGroupId={selectedGroupId} setSelectedGroupId={setSelectedGroupId} />
+            <Topbar editorState={editorState} onEditorStateChange={onEditorStateChange} handleSave={handleSave} setIsSidebarOpen={setIsSidebarOpen} activeTab={activeTab} setActiveTab={setActiveTab} handleDownloadPdf={handleDownloadPdf} selectedGroupId={selectedGroupId} setSelectedGroupId={setSelectedGroupId} zoomLevel={zoomLevel}
+              onZoomIn={handleZoomIn}
+              onZoomOut={handleZoomOut}
+              onSetZoom={handleSetZoom}
+              onZoomSelected={handleZoomSelected}
+              onZoomDrawing={handleZoomDrawing}
+              onZoomPage={handleZoomPage}
+              onZoomPageWidth={handleZoomPageWidth}
+              onZoomCenterPage={handleZoomCenterPage}
+              onZoomPrevious={handleZoomPrevious}
+              onZoomNext={handleZoomNext}
+            />
           </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'stretch' }}>
@@ -651,8 +794,8 @@ const Main = () => {
           </div>
           <Ruler
             orientation="horizontal"
-            length={width * panelScale + 1000}
-            scale={panelScale}
+            length={width * zoomLevel + 1000}
+            scale={zoomLevel}
             position={canvasPosition}
             canvasSize={{ width, height }}
             canvasPosition={canvasPosition}
@@ -662,8 +805,8 @@ const Main = () => {
             highlightRange={
               selectedBounds
                 ? {
-                  start: selectedBounds.x * panelScale + canvasPosition.x,
-                  end: (selectedBounds.x + selectedBounds.width) * panelScale + canvasPosition.x
+                  start: selectedBounds.x * zoomLevel + canvasPosition.x,
+                  end: (selectedBounds.x + selectedBounds.width) * zoomLevel + canvasPosition.x
                 }
                 : null
             }
@@ -673,8 +816,8 @@ const Main = () => {
 
           <Ruler
             orientation="vertical"
-            length={height * panelScale + 1000}
-            scale={panelScale}
+            length={height * zoomLevel + 1000}
+            scale={zoomLevel}
             position={canvasPosition}
             canvasSize={{ width, height }}
             canvasPosition={canvasPosition}
@@ -683,8 +826,8 @@ const Main = () => {
             highlightRange={
               selectedBounds
                 ? {
-                  start: selectedBounds.y * panelScale + canvasPosition.y,
-                  end: (selectedBounds.y + selectedBounds.height) * panelScale + canvasPosition.y
+                  start: selectedBounds.y * zoomLevel + canvasPosition.y,
+                  end: (selectedBounds.y + selectedBounds.height) * zoomLevel + canvasPosition.y
                 }
                 : null
             }
@@ -731,8 +874,8 @@ const Main = () => {
               onMouseDown={(e) => handleGuideMouseDown(e, index)}
               style={{
                 position: "absolute",
-                top: guide.orientation === "horizontal" ? `${guide.position * panelScale}px` : "0",
-                left: guide.orientation === "vertical" ? `${guide.position * panelScale}px` : "0",
+                top: guide.orientation === "horizontal" ? `${guide.position * zoomLevel}px` : "0",
+                left: guide.orientation === "vertical" ? `${guide.position * zoomLevel}px` : "0",
                 width: guide.orientation === "horizontal" ? "100%" : "1px",
                 height: guide.orientation === "vertical" ? "100%" : "1px",
                 backgroundColor: "blue",
@@ -746,8 +889,8 @@ const Main = () => {
               draggable
               style={{
                 position: "absolute",
-                top: draggingGuide.orientation === "horizontal" ? `${draggingGuide.position * panelScale}px` : "0",
-                left: draggingGuide.orientation === "vertical" ? `${draggingGuide.position * panelScale}px` : "0",
+                top: draggingGuide.orientation === "horizontal" ? `${draggingGuide.position * zoomLevel}px` : "0",
+                left: draggingGuide.orientation === "vertical" ? `${draggingGuide.position * zoomLevel}px` : "0",
                 width: draggingGuide.orientation === "horizontal" ? "100%" : "1px",
                 height: draggingGuide.orientation === "vertical" ? "100%" : "1px",
                 backgroundColor: "red",
@@ -771,10 +914,12 @@ const Main = () => {
               alignItems: 'flex-start',
             }}
             onWheel={handleWheel}
+            onMouseDown={handleCanvasMouseDown}
+            onContextMenu={handleCanvasContextMenu}
           >
             <div
               style={{
-                transform: `scale(${panelScale}) rotate(${canvasRotation}deg)`,
+                transform: `scale(${zoomLevel}) rotate(${canvasRotation}deg)`,
                 transformOrigin: 'top center',
                 width: `${width} px`,
                 height: `${height}px`,
@@ -794,6 +939,7 @@ const Main = () => {
                 }}
               /> */}
               <Panel
+                ref={panelRef}
                 printRef={printRef}
                 isSidebarOpen={isSidebarOpen}
                 stageRef={stageRef}
@@ -802,6 +948,7 @@ const Main = () => {
                 setActiveTab={(tab) => console.log("Active Tab:", tab)}
                 toggleSidebar={toggleSidebar}
                 height={height}
+                zoomLevel={zoomLevel}
                 className="center-panel"
                 style={{
                   backgroundColor: 'white',
@@ -837,7 +984,7 @@ const Main = () => {
                 step={0.1}
                 min={0.5}
                 max={3}
-                value={panelScale.toFixed(2)}
+                value={zoomLevel.toFixed(2)}
                 onChange={(e) => handleZoomChange(e.target.value)}
                 style={{
                   width: '60px',

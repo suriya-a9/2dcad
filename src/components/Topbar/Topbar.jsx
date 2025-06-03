@@ -12,9 +12,10 @@ import { MdRoundedCorner, MdOutlineVerticalAlignTop } from "react-icons/md";
 import { FaMousePointer, FaStepForward, FaArrowsAltH, FaEyeSlash, FaLayerGroup } from "react-icons/fa";
 import { AiOutlineVerticalAlignBottom } from "react-icons/ai";
 import { VscDebugReverseContinue } from "react-icons/vsc";
+import { FaSearchPlus, FaUndo, FaRedo } from "react-icons/fa";
 import { GiStraightPipe } from "react-icons/gi";
 import { PiPath } from "react-icons/pi";
-import { FaObjectGroup, FaObjectUngroup } from "react-icons/fa";
+import { FaObjectGroup, FaObjectUngroup, FaExpand, FaRegFile, FaRegDotCircle } from "react-icons/fa";
 import { MdGridOn, MdOutlineGradient, MdOutlineFormatColorFill, MdOutlineBorderColor } from "react-icons/md";
 import { setSelectedTool } from "../../Redux/Slice/toolSlice";
 import { EditorState, ContentState } from "draft-js";
@@ -29,6 +30,7 @@ import {
   paste,
   zoomIn,
   zoomOut,
+  setZoomLevel,
   moveLayerUp,
   moveLayerDown,
   addLayer,
@@ -109,7 +111,7 @@ import {
   setPaintBucketGrowSink,
   setPaintBucketCloseGaps,
   setMeshMode,
-  setGradientTarget
+  setGradientTarget,
 } from "../../Redux/Slice/toolSlice";
 import {
   TbDeselect,
@@ -140,6 +142,17 @@ const Topbar = ({
   handleDownloadPdf,
   selectedGroupId,
   setSelectedGroupId,
+  zoomLevel,
+  onZoomIn,
+  onZoomOut,
+  onSetZoom,
+  onZoomSelected,
+  onZoomDrawing,
+  onZoomPage,
+  onZoomPageWidth,
+  onZoomCenterPage,
+  onZoomPrevious,
+  onZoomNext
 }) => {
   const selectedTool = useSelector((state) => state.tool.selectedTool);
   const dispatch = useDispatch();
@@ -1430,6 +1443,22 @@ const Topbar = ({
             <MeshTopbar />
           ) : selectedTool === "PaintBucket" ? (
             <PaintBucketTopbar />
+          ) : selectedTool === "Pages" ? (
+            <PagesTopbar />
+          ) : selectedTool === "Zoom" ? (
+            <ZoomTopbar
+              zoomLevel={zoomLevel}
+              onZoomIn={onZoomIn}
+              onZoomOut={onZoomOut}
+              onSetZoom={onSetZoom}
+              onZoomSelected={onZoomSelected}
+              onZoomDrawing={onZoomDrawing}
+              onZoomPage={onZoomPage}
+              onZoomPageWidth={onZoomPageWidth}
+              onZoomCenterPage={onZoomCenterPage}
+              onZoomPrevious={onZoomPrevious}
+              onZoomNext={onZoomNext}
+            />
           ) : (
             <DefaultTopbar />
           )}
@@ -2459,6 +2488,61 @@ function CalligraphyTopbar() {
     </div>
   );
 }
+function PagesTopbar() {
+  const dispatch = useDispatch();
+  const pages = useSelector(state => state.tool.pages || []);
+  const currentPageIndex = useSelector(state => state.tool.currentPageIndex || 0);
+
+  const handleAddPage = () => {
+    dispatch(createNewPage());
+  };
+
+  return (
+    <div className="d-flex flex-row mb-3 top-icons" style={{ alignItems: "center", color: "white" }}>
+      <span style={{ marginRight: 12, fontWeight: 500 }}>
+        Pages: {pages.length > 0 ? pages.length : 1}
+      </span>
+      <button
+        onClick={handleAddPage}
+        style={{
+          padding: "7px",
+          margin: "5px",
+          background: "#007bff",
+          color: "white",
+          border: "none",
+          borderRadius: "4px",
+          cursor: "pointer",
+          display: "flex",
+          alignItems: "center"
+        }}
+        title="Add Page"
+      >
+        <FaPlus style={{ marginRight: 4 }} />
+        Add Page
+      </button>
+      <span style={{ marginLeft: 16 }}>
+        {pages.length > 0 && `Current: Page ${currentPageIndex + 1}`}
+      </span>
+      {pages.map((page, idx) => (
+        <button
+          key={page.id}
+          style={{
+            margin: "0 4px",
+            padding: "4px 8px",
+            background: idx === currentPageIndex ? "#007bff" : "#222",
+            color: "white",
+            border: "1px solid #444",
+            borderRadius: "4px",
+            cursor: "pointer"
+          }}
+          onClick={() => dispatch(selectPage(idx))}
+        >
+          {page.name}
+        </button>
+      ))}
+    </div>
+  );
+}
 function EraserTopbar() {
   const dispatch = useDispatch();
   const eraserMode = useSelector((state) => state.tool.eraserMode || "delete");
@@ -2645,6 +2729,196 @@ export function DropperTopbar() {
           onChange={handleAltInverse}
         />
       </div>
+    </div>
+  );
+}
+function ZoomTopbar({ zoomLevel, onZoomIn, onZoomOut, onSetZoom, onZoomSelected, onZoomDrawing, onZoomPage, onZoomPageWidth, onZoomCenterPage, onZoomPrevious, onZoomNext }) {
+  return (
+    <div className="d-flex flex-row mb-3 top-icons" style={{ alignItems: "center", color: "white" }}>
+      <button
+        onClick={onZoomIn}
+        style={{
+          padding: "7px",
+          margin: "5px",
+          background: "none",
+          color: "white",
+          border: "none",
+          borderRadius: "4px",
+          cursor: "pointer",
+        }}
+        title="Zoom In"
+      >
+        +
+      </button>
+      <button
+        onClick={onZoomOut}
+        style={{
+          padding: "7px",
+          margin: "5px",
+          background: "none",
+          color: "white",
+          border: "none",
+          borderRadius: "4px",
+          cursor: "pointer",
+        }}
+        title="Zoom Out"
+      >
+        -
+      </button>
+      {/* Ratio Buttons */}
+      <button
+        onClick={() => onSetZoom(1)}
+        style={{
+          padding: "7px",
+          margin: "5px",
+          background: zoomLevel === 1 ? "#0056b3" : "none",
+          color: "white",
+          border: "none",
+          borderRadius: "4px",
+          cursor: "pointer",
+        }}
+        title="Zoom 1:1"
+      >
+        1:1
+      </button>
+      <button
+        onClick={() => onSetZoom(0.5)}
+        style={{
+          padding: "7px",
+          margin: "5px",
+          background: zoomLevel === 0.5 ? "#0056b3" : "none",
+          color: "white",
+          border: "none",
+          borderRadius: "4px",
+          cursor: "pointer",
+        }}
+        title="Zoom 1:2"
+      >
+        1:2
+      </button>
+      <button
+        onClick={() => onSetZoom(2)}
+        style={{
+          padding: "7px",
+          margin: "5px",
+          background: zoomLevel === 2 ? "#0056b3" : "none",
+          color: "white",
+          border: "none",
+          borderRadius: "4px",
+          cursor: "pointer",
+        }}
+        title="Zoom 2:1"
+      >
+        2:1
+      </button>
+      <button
+        onClick={onZoomDrawing}
+        style={{
+          padding: "7px",
+          margin: "5px",
+          background: "none",
+          color: "white",
+          border: "none",
+          borderRadius: "4px",
+          cursor: "pointer",
+        }}
+        title="Zoom Drawing"
+      >
+        <FaExpand />
+      </button>
+      <button
+        onClick={onZoomSelected}
+        style={{
+          padding: "7px",
+          margin: "5px",
+          background: "none",
+          color: "white",
+          border: "none",
+          borderRadius: "4px",
+          cursor: "pointer",
+        }}
+        title="Zoom to Selected"
+      >
+        <FaSearchPlus />
+      </button>
+      <button
+        onClick={onZoomPage}
+        style={{
+          padding: "7px",
+          margin: "5px",
+          background: "none",
+          color: "white",
+          border: "none",
+          borderRadius: "4px",
+          cursor: "pointer",
+        }}
+        title="Zoom Page"
+      >
+        <FaRegFile />
+      </button>
+      <button
+        onClick={onZoomPageWidth}
+        style={{
+          padding: "7px",
+          margin: "5px",
+          background: "none",
+          color: "white",
+          border: "none",
+          borderRadius: "4px",
+          cursor: "pointer",
+        }}
+        title="Zoom Page Width"
+      >
+        <FaArrowsAltH />
+      </button>
+      <button
+        onClick={onZoomCenterPage}
+        style={{
+          padding: "7px",
+          margin: "5px",
+          background: "none",
+          color: "white",
+          border: "none",
+          borderRadius: "4px",
+          cursor: "pointer",
+        }}
+        title="Zoom Center Page"
+      >
+        <FaRegDotCircle />
+      </button>
+      <button
+        onClick={onZoomPrevious}
+        style={{
+          padding: "7px",
+          margin: "5px",
+          background: "none",
+          color: "white",
+          border: "none",
+          borderRadius: "4px",
+          cursor: "pointer",
+        }}
+        title="Zoom Previous"
+      >
+        <FaUndo />
+      </button>
+      <button
+        onClick={onZoomNext}
+        style={{
+          padding: "7px",
+          margin: "5px",
+          background: "none",
+          color: "white",
+          border: "none",
+          borderRadius: "4px",
+          cursor: "pointer",
+        }}
+        title="Zoom Next"
+      >
+        <FaRedo />
+      </button>
+      <span style={{ marginLeft: "10px", color: "white" }}>
+        Zoom: {zoomLevel.toFixed(2)}x
+      </span>
     </div>
   );
 }

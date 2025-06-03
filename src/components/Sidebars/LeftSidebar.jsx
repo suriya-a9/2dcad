@@ -5,6 +5,7 @@ import { FaRegCircle, FaRegSquare, FaRegStar } from "react-icons/fa";
 import { BiPolygon, BiSolidEraser, BiSolidEyedropper } from "react-icons/bi";
 import { TiSpiral } from "react-icons/ti";
 import { BsPaintBucket, BsPencil, BsVectorPen } from "react-icons/bs";
+import { FaMagnifyingGlass } from "react-icons/fa6";
 import { IoText } from "react-icons/io5";
 import { PiPaintBrush } from "react-icons/pi";
 import { MdGradient } from "react-icons/md";
@@ -235,11 +236,18 @@ const LeftSidebar = () => {
           >
             <LiaRulerVerticalSolid data-tooltip-content="Measure Tool" data-tooltip-id="tool-left" />
           </div>
-          {/* <div
+          <div
             className="p-2 left-icon"
+            onClick={() => handleToolSelect("Zoom")}
+          >
+            <FaMagnifyingGlass data-tooltip-content="Zoom Tool" data-tooltip-id="tool-left" />
+          </div>
+          <div
+            className="p-2 left-icon"
+            onClick={() => handleToolSelect("Pages")}
           >
             <ImCopy data-tooltip-content="Pages Tool" data-tooltip-id="tool-left" />
-          </div> */}
+          </div>
           <Tooltip id="tool-left" place="right" />
         </div>
       </div>

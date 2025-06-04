@@ -12,7 +12,7 @@ import { MdRoundedCorner, MdOutlineVerticalAlignTop } from "react-icons/md";
 import { FaMousePointer, FaStepForward, FaArrowsAltH, FaEyeSlash, FaLayerGroup } from "react-icons/fa";
 import { AiOutlineVerticalAlignBottom } from "react-icons/ai";
 import { VscDebugReverseContinue } from "react-icons/vsc";
-import { FaSearchPlus, FaUndo, FaRedo } from "react-icons/fa";
+import { FaSearchPlus, FaUndo, FaRedo, FaEdit, FaCheck, FaTimes, FaArrowLeft, FaArrowRight } from "react-icons/fa";
 import { GiStraightPipe } from "react-icons/gi";
 import { PiPath } from "react-icons/pi";
 import { FaObjectGroup, FaObjectUngroup, FaExpand, FaRegFile, FaRegDotCircle } from "react-icons/fa";
@@ -112,6 +112,9 @@ import {
   setPaintBucketCloseGaps,
   setMeshMode,
   setGradientTarget,
+  selectPage,
+  renamePage,
+  setPageMargin
 } from "../../Redux/Slice/toolSlice";
 import {
   TbDeselect,
@@ -1873,6 +1876,31 @@ function DefaultTopbar() {
         <div
           className="p-2 value"
           style={
+            selectedTool === "Rectangle"
+              ? { display: "flex", alignItems: "center", gap: "0.5rem" }
+              : { display: "none" }
+          }
+        >
+          <label htmlFor="cornerRadius">Border:&nbsp;</label>
+          <input
+            type="number"
+            name="cornerRadius"
+            id="cornerRadius"
+            min={0}
+            max={Math.min(selectedShape.width, selectedShape.height) / 2 || 100}
+            value={selectedShape.cornerRadius || 0}
+            onChange={e => {
+              const value = parseFloat(e.target.value);
+              if (!isNaN(value) && selectedShapeId) {
+                dispatch(updateShapePosition({ id: selectedShapeId, cornerRadius: value }));
+              }
+            }}
+            style={{ width: 60 }}
+          />
+        </div>
+        <div
+          className="p-2 value"
+          style={
             selectedTool === "Select" ||
               selectedTool === "Node" ||
               selectedTool === "Eraser" ||
@@ -2492,11 +2520,48 @@ function PagesTopbar() {
   const dispatch = useDispatch();
   const pages = useSelector(state => state.tool.pages || []);
   const currentPageIndex = useSelector(state => state.tool.currentPageIndex || 0);
+  const pageMargin = useSelector(state => state.tool.pageMargin || { top: 0, right: 40, bottom: 40, left: 40 });
+
+
+  const [editingIndex, setEditingIndex] = useState(null);
+  const [editValue, setEditValue] = useState("");
 
   const handleAddPage = () => {
     dispatch(createNewPage());
   };
 
+  const handleEditClick = (idx, currentName) => {
+    setEditingIndex(idx);
+    setEditValue(currentName);
+  };
+
+  const handleEditChange = (e) => {
+    setEditValue(e.target.value);
+  };
+
+  const handleEditSave = (idx) => {
+    if (editValue.trim()) {
+      dispatch(renamePage({ pageIndex: idx, newName: editValue }));
+    }
+    setEditingIndex(null);
+    setEditValue("");
+  };
+
+  const handleEditCancel = () => {
+    setEditingIndex(null);
+    setEditValue("");
+  };
+
+  const handleMarginChange = (side, value) => {
+    dispatch(setPageMargin({ [side]: Number(value) }));
+  };
+
+  const handleMovePage = (direction) => {
+
+    const newIndex = currentPageIndex + direction;
+    if (newIndex < 0 || newIndex >= pages.length) return;
+    dispatch({ type: "tool/movePage", payload: { from: currentPageIndex, to: newIndex } });
+  };
   return (
     <div className="d-flex flex-row mb-3 top-icons" style={{ alignItems: "center", color: "white" }}>
       <span style={{ marginRight: 12, fontWeight: 500 }}>
@@ -2524,22 +2589,121 @@ function PagesTopbar() {
         {pages.length > 0 && `Current: Page ${currentPageIndex + 1}`}
       </span>
       {pages.map((page, idx) => (
-        <button
-          key={page.id}
-          style={{
-            margin: "0 4px",
-            padding: "4px 8px",
-            background: idx === currentPageIndex ? "#007bff" : "#222",
-            color: "white",
-            border: "1px solid #444",
-            borderRadius: "4px",
-            cursor: "pointer"
-          }}
-          onClick={() => dispatch(selectPage(idx))}
-        >
-          {page.name}
-        </button>
+        <span key={page.id} style={{ display: "flex", alignItems: "center", margin: "0 4px" }}>
+          <button
+            style={{
+              padding: "4px 8px",
+              background: idx === currentPageIndex ? "white" : "#222",
+              color: "black",
+              border: "1px solid #444",
+              borderRadius: "4px",
+              cursor: "pointer",
+              marginRight: 4
+            }}
+            onClick={() => dispatch(selectPage(idx))}
+          >
+            {editingIndex === idx ? (
+              <input
+                type="text"
+                value={editValue}
+                onChange={handleEditChange}
+                onBlur={() => handleEditSave(idx)}
+                onKeyDown={e => {
+                  if (e.key === "Enter") handleEditSave(idx);
+                  if (e.key === "Escape") handleEditCancel();
+                }}
+                autoFocus
+                style={{ width: 70 }}
+              />
+            ) : (
+              page.name
+            )}
+          </button>
+          {editingIndex === idx ? (
+            <>
+              <FaCheck
+                style={{ color: "#0f0", cursor: "pointer", marginRight: 2 }}
+                onClick={() => handleEditSave(idx)}
+                title="Save"
+              />
+              <FaTimes
+                style={{ color: "#f00", cursor: "pointer" }}
+                onClick={handleEditCancel}
+                title="Cancel"
+              />
+            </>
+          ) : (
+            <FaEdit
+              style={{ color: "#fff", cursor: "pointer" }}
+              onClick={() => handleEditClick(idx, page.name)}
+              title="Edit Page Label"
+            />
+          )}
+        </span>
       ))}
+      <div style={{ display: "flex", alignItems: "center", marginLeft: 16 }}>
+        <label style={{ marginRight: 8 }}>Margin:</label>
+        <label style={{ marginRight: 4 }}>T</label>
+        <input
+          type="number"
+          value={pageMargin.top}
+          min={0}
+          style={{ width: 50, marginRight: 4 }}
+          onChange={e => handleMarginChange("top", e.target.value)}
+        />
+        <label style={{ marginRight: 4 }}>R</label>
+        <input
+          type="number"
+          value={pageMargin.right}
+          min={0}
+          style={{ width: 50, marginRight: 4 }}
+          onChange={e => handleMarginChange("right", e.target.value)}
+        />
+        <label style={{ marginRight: 4 }}>B</label>
+        <input
+          type="number"
+          value={pageMargin.bottom}
+          min={0}
+          style={{ width: 50, marginRight: 4 }}
+          onChange={e => handleMarginChange("bottom", e.target.value)}
+        />
+        <label style={{ marginRight: 4 }}>L</label>
+        <input
+          type="number"
+          value={pageMargin.left}
+          min={0}
+          style={{ width: 50 }}
+          onChange={e => handleMarginChange("left", e.target.value)}
+        />
+      </div>
+      <button
+        onClick={() => handleMovePage(-1)}
+        disabled={currentPageIndex === 0}
+        style={{
+          marginLeft: 8,
+          background: "none",
+          border: "none",
+          color: currentPageIndex === 0 ? "#888" : "#fff",
+          cursor: currentPageIndex === 0 ? "not-allowed" : "pointer"
+        }}
+        title="Move Page Backward"
+      >
+        <FaArrowLeft />
+      </button>
+      <button
+        onClick={() => handleMovePage(1)}
+        disabled={currentPageIndex === pages.length - 1}
+        style={{
+          marginLeft: 4,
+          background: "none",
+          border: "none",
+          color: currentPageIndex === pages.length - 1 ? "#888" : "#fff",
+          cursor: currentPageIndex === pages.length - 1 ? "not-allowed" : "pointer"
+        }}
+        title="Move Page Forward"
+      >
+        <FaArrowRight />
+      </button>
     </div>
   );
 }

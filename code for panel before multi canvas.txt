@@ -1,0 +1,38 @@
+<div
+              style={{
+                transform: `scale(${zoomLevel}) rotate(${canvasRotation}deg)`,
+                transformOrigin: 'top center',
+                width: `${width} px`,
+                height: `${height}px`,
+              }}
+            >
+              {/* <canvas
+                id="drawingCanvas"
+                ref={canvasRef}
+                width={5000}
+                height={5000}
+                style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  zIndex: -1,
+                  cursor: 'crosshair',
+                }}
+              /> */}
+              <Panel
+                ref={panelRef}
+                printRef={printRef}
+                isSidebarOpen={isSidebarOpen}
+                stageRef={stageRef}
+                textValue={textValue}
+                width={width}
+                setActiveTab={(tab) => console.log("Active Tab:", tab)}
+                toggleSidebar={toggleSidebar}
+                height={height}
+                zoomLevel={zoomLevel}
+                className="center-panel"
+                style={{
+                  backgroundColor: 'white',
+                }}
+              />
+            </div>

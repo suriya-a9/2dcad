@@ -4216,7 +4216,6 @@ const Panel = React.forwardRef(({
 
           marginRight: isSidebarOpen ? "0" : "0",
           position: "relative",
-          paddingBottom: '150px'
         }}
       >
         <div>

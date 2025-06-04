@@ -106,6 +106,18 @@ const toolSlice = createSlice({
     meshCols: 4,
     gradientTarget: "fill",
     zoomLevel: 1,
+    pages: [
+      {
+        id: 1,
+        name: "Page 1",
+        layers: [{ name: "Layer 1", shapes: [], visible: true }],
+        selectedLayerIndex: 0,
+        width: 800,
+        height: 600,
+      }
+    ],
+    currentPageIndex: 0,
+    pageMargin: { top: 0, right: 40, bottom: 40, left: 40 },
   },
 
   reducers: {
@@ -928,12 +940,17 @@ const toolSlice = createSlice({
       }
     },
     createNewPage: (state) => {
-      const newLayerName = `Layer ${state.layers.length + 1}`;
-      state.layers.push({ name: newLayerName, shapes: [] });
-      state.selectedLayerIndex = state.layers.length - 1;
-
-      state.history.push(JSON.parse(JSON.stringify(state)));
-      state.future = [];
+      if (!state.pages) state.pages = [];
+      const newPageId = Date.now();
+      state.pages.push({
+        id: newPageId,
+        name: `Page ${state.pages.length + 1}`,
+        layers: [{ name: "Layer 1", shapes: [], visible: true }],
+        selectedLayerIndex: 0,
+        width: 800,
+        height: 600,
+      });
+      state.currentPageIndex = state.pages.length - 1;
     },
     addPenPoint: (state, action) => {
       const selectedLayer = state.layers[state.selectedLayerIndex];
@@ -2325,6 +2342,31 @@ const toolSlice = createSlice({
       console.log("setGradientTarget Reducer Triggered:", action.payload); // Debugging
       state.gradientTarget = action.payload;
     },
+    selectPage: (state, action) => {
+      state.currentPageIndex = action.payload;
+    },
+    renamePage: (state, action) => {
+      const { pageIndex, newName } = action.payload;
+      if (state.pages[pageIndex]) {
+        state.pages[pageIndex].name = newName;
+      }
+    },
+    setPageMargin: (state, action) => {
+      state.pageMargin = { ...state.pageMargin, ...action.payload };
+    },
+    movePage: (state, action) => {
+      const { from, to } = action.payload;
+      if (
+        from < 0 ||
+        to < 0 ||
+        from >= state.pages.length ||
+        to >= state.pages.length ||
+        from === to
+      ) return;
+      const [moved] = state.pages.splice(from, 1);
+      state.pages.splice(to, 0, moved);
+      state.currentPageIndex = to;
+    },
   },
 
 });
@@ -2495,7 +2537,11 @@ export const {
   setMeshCols,
   updateMeshNode,
   setGradientTarget,
-  setZoomLevel
+  setZoomLevel,
+  selectPage,
+  renamePage,
+  setPageMargin,
+  movePage,
 } = toolSlice.actions;
 
 export default toolSlice.reducer;

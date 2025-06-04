@@ -26,13 +26,19 @@ const Main = () => {
   const [canvasRotation, setCanvasRotation] = useState(0);
   // const zoomLevel = useSelector(state => state.tool.zoomLevel);
   const [zoomHistory, setZoomHistory] = useState([{ zoom: 1, position: { x: 0, y: 0 } }]);
+  const pages = useSelector(state => state.tool.pages || []);
+  const currentPageIndex = useSelector(state => state.tool.currentPageIndex || 0);
+  const currentPage = pages[currentPageIndex] || {};
+  const layers = currentPage.layers || [];
+  const selectedLayerIndex = currentPage.selectedLayerIndex || 0;
+  const shapes = layers[selectedLayerIndex]?.shapes || [];
   const [zoomHistoryIndex, setZoomHistoryIndex] = useState(0);
   const dispatch = useDispatch();
   const [zoomLevel, setZoomLevel] = useState(1);
   const [canvasPosition, setCanvasPosition] = useState({ x: 0, y: 0 });
   const selectedTool = useSelector(state => state.tool.selectedTool);
-  const shapes = useSelector(state => state.tool.layers[state.tool.selectedLayerIndex].shapes || []);
   const selectedShapeId = useSelector(state => state.tool.selectedShapeId);
+  const pageMargin = useSelector(state => state.tool.pageMargin || { top: 0, right: 40, bottom: 40, left: 40 });
   // const width = useSelector(state => state.tool.width);
   // const height = useSelector(state => state.tool.height);
   const setZoomAndPosition = (zoom, position) => {
@@ -912,6 +918,7 @@ const Main = () => {
               display: 'flex',
               justifyContent: 'center',
               alignItems: 'flex-start',
+              paddingBottom: '150px'
             }}
             onWheel={handleWheel}
             onMouseDown={handleCanvasMouseDown}
@@ -921,39 +928,48 @@ const Main = () => {
               style={{
                 transform: `scale(${zoomLevel}) rotate(${canvasRotation}deg)`,
                 transformOrigin: 'top center',
-                width: `${width} px`,
-                height: `${height}px`,
-              }}
-            >
-              {/* <canvas
-                id="drawingCanvas"
-                ref={canvasRef}
-                width={5000}
-                height={5000}
-                style={{
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  zIndex: -1,
-                  cursor: 'crosshair',
-                }}
-              /> */}
-              <Panel
-                ref={panelRef}
-                printRef={printRef}
-                isSidebarOpen={isSidebarOpen}
-                stageRef={stageRef}
-                textValue={textValue}
-                width={width}
-                setActiveTab={(tab) => console.log("Active Tab:", tab)}
-                toggleSidebar={toggleSidebar}
-                height={height}
-                zoomLevel={zoomLevel}
-                className="center-panel"
-                style={{
-                  backgroundColor: 'white',
-                }}
-              />
+              }}>
+              {pages.map((page, idx) => (
+                <div
+                  key={page.id}
+                  style={{
+                    border: idx === currentPageIndex ? '2px solid #007bff' : '1px solid #ccc',
+                    background: '#fff',
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+                    marginTop: pageMargin.top,
+                    marginBottom: pageMargin.bottom,
+                    marginLeft: pageMargin.left,
+                    marginRight: pageMargin.right,
+                    position: 'relative',
+                  }}
+                  onClick={() => dispatch({ type: "tool/selectPage", payload: idx })}
+                >
+                  <Panel
+                    pageIndex={idx}
+                    ref={idx === currentPageIndex ? panelRef : null}
+                    printRef={printRef}
+                    isSidebarOpen={isSidebarOpen}
+                    stageRef={stageRef}
+                    textValue={textValue}
+                    setActiveTab={setActiveTab}
+                    toggleSidebar={toggleSidebar}
+                    zoomLevel={zoomLevel}
+                    className="center-panel"
+                  />
+                  <div style={{
+                    position: 'absolute',
+                    top: 4,
+                    left: 4,
+                    background: 'rgba(0,0,0,0.1)',
+                    color: '#333',
+                    padding: '2px 8px',
+                    borderRadius: 4,
+                    fontSize: 12,
+                  }}>
+                    {page.name}
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
 

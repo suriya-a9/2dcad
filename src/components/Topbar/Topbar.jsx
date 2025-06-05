@@ -8,14 +8,14 @@ import { TbBrandSnapseed } from "react-icons/tb";
 import { FaBezierCurve, FaProjectDiagram, FaDrawPolygon, FaPlus, FaLink, FaUnlink } from "react-icons/fa";
 import { RxCheckCircled } from "react-icons/rx";
 import { RxCrossCircled } from "react-icons/rx";
-import { MdRoundedCorner, MdOutlineVerticalAlignTop } from "react-icons/md";
+import { MdRoundedCorner, MdOutlineVerticalAlignTop, MdOutlineAltRoute } from "react-icons/md";
 import { FaMousePointer, FaStepForward, FaArrowsAltH, FaEyeSlash, FaLayerGroup } from "react-icons/fa";
 import { AiOutlineVerticalAlignBottom } from "react-icons/ai";
 import { VscDebugReverseContinue } from "react-icons/vsc";
 import { FaSearchPlus, FaUndo, FaRedo, FaEdit, FaCheck, FaTimes, FaArrowLeft, FaArrowRight } from "react-icons/fa";
 import { GiStraightPipe } from "react-icons/gi";
 import { PiPath } from "react-icons/pi";
-import { FaObjectGroup, FaObjectUngroup, FaExpand, FaRegFile, FaRegDotCircle } from "react-icons/fa";
+import { FaObjectGroup, FaObjectUngroup, FaExpand, FaRegFile, FaRegDotCircle, FaBan, FaVectorSquare } from "react-icons/fa";
 import { MdGridOn, MdOutlineGradient, MdOutlineFormatColorFill, MdOutlineBorderColor } from "react-icons/md";
 import { setSelectedTool } from "../../Redux/Slice/toolSlice";
 import { EditorState, ContentState } from "draft-js";
@@ -114,7 +114,9 @@ import {
   setGradientTarget,
   selectPage,
   renamePage,
-  setPageMargin
+  setPageMargin,
+  setConnectorSpacing,
+  setConnectorLength 
 } from "../../Redux/Slice/toolSlice";
 import {
   TbDeselect,
@@ -1442,6 +1444,8 @@ const Topbar = ({
             <DropperTopbar />
           ) : selectedTool === "Measurement" ? (
             <MeasurementTopbar />
+          ) : selectedTool === "Connector" ? (
+            <ConnectorTopbar />
           ) : selectedTool === "Mesh" ? (
             <MeshTopbar />
           ) : selectedTool === "PaintBucket" ? (
@@ -3738,6 +3742,97 @@ function MeasurementTopbar() {
         <label htmlFor="convertToItem" style={{ marginLeft: 4 }}>
           Convert to item
         </label>
+      </div>
+    </div>
+  );
+}
+function ConnectorTopbar() {
+  const dispatch = useDispatch();
+  const connectorMode = useSelector(state => state.tool.connectorMode || "avoid");
+  const orthogonal = useSelector(state => state.tool.connectorOrthogonal || false);
+  const curvature = useSelector(state => state.tool.connectorCurvature ?? 0);
+  const spacing = useSelector(state => state.tool.connectorSpacing ?? 0);
+  const length = useSelector(state => state.tool.connectorLength ?? 0);
+
+  const setMode = (mode) => {
+    dispatch({ type: "tool/setConnectorMode", payload: mode });
+  };
+  const setOrthogonal = (value) => {
+    dispatch({ type: "tool/setConnectorOrthogonal", payload: value });
+  };
+  const setCurvature = (value) => {
+    dispatch({ type: "tool/setConnectorCurvature", payload: Number(value) });
+  };
+  const setSpacing = (value) => {
+    dispatch(setConnectorSpacing(Number(value)));
+  };
+  const setLength = (value) => {
+    dispatch(setConnectorLength(Number(value)));
+  };
+  return (
+    <div className="d-flex flex-row mb-3 top-icons" style={{ alignItems: "center", color: "white" }}>
+      <div className="p-2 top-icon"
+        style={{ background: connectorMode === "avoid" ? "#007bff" : "none", borderRadius: 4 }}
+        onClick={() => setMode("avoid")}
+        title="Make connectors avoid selected objects"
+      >
+        <FaVectorSquare size={22} />
+      </div>
+      <div className="p-2 top-icon"
+        style={{ background: connectorMode === "ignore" ? "#007bff" : "none", borderRadius: 4 }}
+        onClick={() => setMode("ignore")}
+        title="Make connectors ignore selected objects"
+      >
+        <FaBan size={22} />
+      </div>
+      <div className="p-2 top-icon"
+        style={{ background: orthogonal ? "#007bff" : "none", borderRadius: 4 }}
+        onClick={() => setOrthogonal(!orthogonal)}
+        title="Make connectors orthogonal"
+      >
+        <MdOutlineAltRoute size={22} />
+      </div>
+      <div className="p-2 value" style={{ display: "flex", alignItems: "center", marginLeft: 12 }}>
+        <label htmlFor="connector-curvature" style={{ marginRight: 6 }}>Curvature:</label>
+        <input
+          id="connector-curvature"
+          type="number"
+          min={0}
+          max={200}
+          step={1}
+          value={curvature}
+          onChange={e => setCurvature(e.target.value)}
+          style={{ width: 60 }}
+          title="The amount of connector's curvature"
+        />
+      </div>
+      <div className="p-2 value" style={{ display: "flex", alignItems: "center", marginLeft: 12 }}>
+        <label htmlFor="connector-spacing" style={{ marginRight: 6 }}>Spacing:</label>
+        <input
+          id="connector-spacing"
+          type="number"
+          min={0}
+          max={200}
+          step={1}
+          value={spacing}
+          onChange={e => setSpacing(e.target.value)}
+          style={{ width: 60 }}
+          title="The amount of connector's spacing"
+        />
+      </div>
+      <div className="p-2 value" style={{ display: "flex", alignItems: "center", marginLeft: 12 }}>
+        <label htmlFor="connector-length" style={{ marginRight: 6 }}>Length:</label>
+        <input
+          id="connector-length"
+          type="number"
+          min={-200}
+          max={200}
+          step={1}
+          value={length}
+          onChange={e => setLength(e.target.value)}
+          style={{ width: 60 }}
+          title="The length of the connector (0 = auto)"
+        />
       </div>
     </div>
   );

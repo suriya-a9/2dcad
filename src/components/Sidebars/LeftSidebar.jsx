@@ -179,14 +179,15 @@ const LeftSidebar = () => {
               data-tooltip-id="tool-left"
             />
           </div>
-          {/* <div
+          <div
             className="p-2 left-icon"
+            onClick={() => handleToolSelect("Connector")}
           >
             <FaArrowTrendDown
               data-tooltip-content="Connector Tool"
               data-tooltip-id="tool-left"
             />
-          </div> */}
+          </div>
           <div
             className="p-2 left-icon"
             onClick={() => handleToolSelect("Text")}

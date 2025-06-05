@@ -208,7 +208,12 @@ const Panel = React.forwardRef(({
   const meshMode = useSelector(state => state.tool.meshMode || "mesh-gradient");
   const [meshStart, setMeshStart] = useState(null);
   const [meshPreview, setMeshPreview] = useState(null);
-
+  const connectorMode = useSelector(state => state.tool.connectorMode);
+  const connectorOrthogonal = useSelector(state => state.tool.connectorOrthogonal);
+  const [connectorDrag, setConnectorDrag] = useState(null);
+  const [connectorPreview, setConnectorPreview] = useState(null);
+  const connectorLength = useSelector(state => state.tool.connectorLength ?? 0);
+  const spacing = useSelector(state => state.tool.connectorSpacing ?? 0);
   function addGuidesAtLine(x1, y1, x2, y2) {
     setGuides(prev => [
       ...prev,
@@ -738,6 +743,20 @@ const Panel = React.forwardRef(({
 
         dispatch(clearSelection());
       }
+    }
+    if (selectedTool === "Connector" && clickedShape && clickedShape.attrs && clickedShape.attrs.id) {
+      const shape = shapes.find(s => s.id === clickedShape.attrs.id);
+      if (shape) {
+        const pointer = getAdjustedPointerPosition(e.target.getStage(), position, scale);
+        let startOffset = { x: pointer.x - shape.x, y: pointer.y - shape.y };
+        setConnectorDrag({
+          startId: shape.id,
+          startPos: { x: pointer.x, y: pointer.y },
+          startOffset,
+          currentPos: { x: pointer.x, y: pointer.y }
+        });
+      }
+      return;
     }
     if (selectedTool === "Mesh" && clickedShape && clickedShape.attrs && clickedShape.attrs.id) {
       const shape = shapes.find(s => s.id === clickedShape.attrs.id);
@@ -1871,7 +1890,10 @@ const Panel = React.forwardRef(({
         end: { x: pos.x - shape.x, y: pos.y - shape.y }
       }));
     }
-
+    if (selectedTool === "Connector" && connectorDrag) {
+      const pointer = getAdjustedPointerPosition(e.target.getStage(), position, scale);
+      setConnectorDrag(drag => drag ? { ...drag, currentPos: { x: pointer.x, y: pointer.y } } : null);
+    }
     if (isDrawingRef.current && selectedTool === "Eraser") {
       const lastLine = eraserLines[eraserLines.length - 1];
       let lastX = x, lastY = y;
@@ -2480,7 +2502,7 @@ const Panel = React.forwardRef(({
   const handleModeCompletion = () => {
     dispatch(setStrokeToPathMode(false));
   };
-  const handleMouseUp = () => {
+  const handleMouseUp = (e) => {
     if (isDrawingRef.current && selectedTool === "Eraser" && eraserMode === "cut") {
       isDrawingRef.current = false;
       if (eraserLines.length > 0) {
@@ -2560,6 +2582,26 @@ const Panel = React.forwardRef(({
       setMeshPreview(null);
       setNewShape(null);
       return;
+    }
+    if (selectedTool === "Connector" && connectorDrag) {
+      const pointer = getAdjustedPointerPosition(e.target.getStage(), position, scale);
+
+      const endShape = shapes.find(s =>
+        s.id !== connectorDrag.startId &&
+        isPointerInsideShape(s, pointer)
+      );
+      if (endShape) {
+        let endOffset = { x: pointer.x - endShape.x, y: pointer.y - endShape.y };
+        dispatch(addShape({
+          id: `connector-${Date.now()}`,
+          type: "Connector",
+          startId: connectorDrag.startId,
+          endId: endShape.id,
+          startOffset: connectorDrag.startOffset,
+          endOffset
+        }));
+      }
+      setConnectorDrag(null);
     }
     if (selectedTool === "Gradient" && gradientDrag && selectedShapeId) {
       const shape = shapes.find(s => s.id === selectedShapeId);
@@ -3485,6 +3527,50 @@ const Panel = React.forwardRef(({
       return inside;
     }
 
+    if (shape.type === "Star") {
+
+      const numPoints = (shape.corners || 5) * 2;
+      const pts = [];
+      const rotation = -Math.PI / 2;
+      for (let i = 0; i < numPoints; i++) {
+        const angle = (Math.PI * 2 * i) / numPoints + rotation;
+        const radius = i % 2 === 0 ? shape.outerRadius : shape.innerRadius;
+        pts.push({ x: shape.x + radius * Math.cos(angle), y: shape.y + radius * Math.sin(angle) });
+      }
+
+      let inside = false;
+      for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+        if (
+          (pts[i].y > pointer.y) !== (pts[j].y > pointer.y) &&
+          pointer.x < ((pts[j].x - pts[i].x) * (pointer.y - pts[i].y)) / (pts[j].y - pts[i].y) + pts[i].x
+        ) {
+          inside = !inside;
+        }
+      }
+      return inside;
+    }
+    if ((shape.type === "Pencil" || shape.type === "Calligraphy") && Array.isArray(shape.points)) {
+      for (let i = 1; i < shape.points.length; i++) {
+        const p0 = shape.points[i - 1];
+        const p1 = shape.points[i];
+
+        const x0 = (Array.isArray(p0) ? p0[0] : p0.x) + (shape.x || 0);
+        const y0 = (Array.isArray(p0) ? p0[1] : p0.y) + (shape.y || 0);
+        const x1 = (Array.isArray(p1) ? p1[0] : p1.x) + (shape.x || 0);
+        const y1 = (Array.isArray(p1) ? p1[1] : p1.y) + (shape.y || 0);
+
+        const dx = x1 - x0;
+        const dy = y1 - y0;
+        const len2 = dx * dx + dy * dy;
+        let t = ((pointer.x - x0) * dx + (pointer.y - y0) * dy) / (len2 || 1);
+        t = Math.max(0, Math.min(1, t));
+        const projX = x0 + t * dx;
+        const projY = y0 + t * dy;
+        const dist = Math.hypot(pointer.x - projX, pointer.y - projY);
+        if (dist < 6) return true;
+      }
+      return false;
+    }
     return false;
   }
   const handleShapeBuilder = (pointerPosition) => {
@@ -4287,7 +4373,18 @@ const Panel = React.forwardRef(({
                     closed={isShapeClosed}
                   />
                 )}
-
+                {selectedTool === "Connector" && connectorDrag && (
+                  <Line
+                    points={[
+                      connectorDrag.startPos.x, connectorDrag.startPos.y,
+                      connectorDrag.currentPos.x, connectorDrag.currentPos.y
+                    ]}
+                    stroke="red"
+                    strokeWidth={2}
+                    dash={[6, 4]}
+                    listening={false}
+                  />
+                )}
                 {selectedTool === "Bezier" && bezierOption == "Paraxial Line Segments" && (
                   <Path
                     data={getBezierPath()}
@@ -4672,7 +4769,7 @@ const Panel = React.forwardRef(({
                             rotation={shape.rotation || 0}
                             scaleX={shape.scaleX || 1}
                             scaleY={shape.scaleY || 1}
-                            draggable={selectedTool !== "Node" && selectedTool !== "Mesh"}
+                            draggable={selectedTool !== "Node" && selectedTool !== "Mesh" && selectedTool !== "Connector"}
                             onDragMove={handleDragMove}
                             onDragEnd={(e) => handleDragEnd(e, shape.id)}
                             onTransformEnd={(e) => handleResizeEnd(e, shape.id)}
@@ -4971,7 +5068,7 @@ const Panel = React.forwardRef(({
                           rotation={shape.rotation || 0}
                           closed={false}
                           dash={[10, 10]}
-                          draggable={selectedTool !== "Node"}
+                          draggable={selectedTool !== "Node" && selectedTool !== "Connector"}
                           onDragMove={handleDragMove}
                           onDragEnd={(e) => {
                             const { x, y } = e.target.position();
@@ -4999,7 +5096,7 @@ const Panel = React.forwardRef(({
                           strokeWidth={shape.strokeWidth || 1}
                           rotation={shape.rotation || 0}
                           closed={true}
-                          draggable={selectedTool !== "Node"}
+                          draggable={selectedTool !== "Node" && selectedTool !== "Connector"}
                           onDragMove={handleDragMove}
                           onDragEnd={(e) => {
                             const { x, y } = e.target.position();
@@ -5027,7 +5124,7 @@ const Panel = React.forwardRef(({
                           strokeWidth={shape.strokeWidth || 1}
                           rotation={shape.rotation || 0}
                           closed={true}
-                          draggable={selectedTool !== "Node"}
+                          draggable={selectedTool !== "Node" && selectedTool !== "Connector"}
                           onDragMove={handleDragMove}
                           onDragEnd={(e) => {
                             const { x, y } = e.target.position();
@@ -5077,7 +5174,7 @@ const Panel = React.forwardRef(({
                           rotation={shape.rotation || 0}
                           scaleX={shape.horizontalRadius / shape.radius || 1}
                           scaleY={shape.verticalRadius / shape.radius || 1}
-                          draggable={selectedTool !== "Node"}
+                          draggable={selectedTool !== "Node" && selectedTool !== "Connector"}
                           onDragMove={handleDragMove}
                           skewX={shape.skewX || 0}
                           closed={false}
@@ -5196,7 +5293,7 @@ const Panel = React.forwardRef(({
                           strokeRadialGradientEndPoint={shape.stroke?.type === "radial-gradient" ? { x: shape.stroke.center.x, y: shape.stroke.center.y + shape.stroke.radius } : undefined}
                           strokeRadialGradientColorStops={shape.stroke?.type === "radial-gradient" ? shape.stroke.colors.flatMap(stop => [stop.pos, stop.color]) : undefined}
                           strokeWidth={shape.strokeWidth || 1}
-                          draggable={selectedTool !== "Node"}
+                          draggable={selectedTool !== "Node" && selectedTool !== "Connector"}
                           onDragMove={handleDragMove}
                           skewX={shape.skewX || 0}
                           skewY={shape.skewY || 0}
@@ -5289,7 +5386,7 @@ const Panel = React.forwardRef(({
                           scaleX={shape.scaleX || 1}
                           scaleY={shape.scaleY || 1}
                           closed
-                          draggable={selectedTool !== "Node"}
+                          draggable={selectedTool !== "Node" && selectedTool !== "Connector"}
                           onDragMove={handleDragMove}
                           skewX={shape.skewX || 0}
                           skewY={shape.skewY || 0}
@@ -5371,7 +5468,7 @@ const Panel = React.forwardRef(({
                         dash={getDashArray(shape.strokeStyle)}
                         scaleX={shape.scaleX || 1}
                         scaleY={shape.scaleY || 1}
-                        draggable
+                        draggable={selectedTool !== "Node" && selectedTool !== "Connector"}
                         onClick={(e) => {
                           e.cancelBubble = true;
                           handleShapeClick(shape);
@@ -5495,7 +5592,7 @@ const Panel = React.forwardRef(({
                           lineJoin="round"
                           lineCap="round"
                           closed={shape.closed || false}
-                          draggable={selectedTool !== "Node"}
+                          draggable={selectedTool !== "Node" && selectedTool !== "Connector"}
                           dash={getDashArray(shape.strokeStyle)}
                           rotation={shape.rotation || 0}
                           onDragMove={handleDragMove}
@@ -5877,6 +5974,99 @@ const Panel = React.forwardRef(({
                           />
                         )}
                       </React.Fragment>
+                    );
+                  } else if (shape.type === "Connector") {
+
+                    const startShape = shapes.find(s => s.id === shape.startId);
+                    const endShape = shapes.find(s => s.id === shape.endId);
+                    if (!startShape || !endShape) return null;
+                    const rawStartX = startShape.x + (shape.startOffset?.x ?? 0);
+                    const rawStartY = startShape.y + (shape.startOffset?.y ?? 0);
+                    const rawEndX = endShape.x + (shape.endOffset?.x ?? 0);
+                    const rawEndY = endShape.y + (shape.endOffset?.y ?? 0);
+
+
+                    const dx = rawEndX - rawStartX;
+                    const dy = rawEndY - rawStartY;
+                    const totalLen = Math.sqrt(dx * dx + dy * dy) || 1;
+
+
+                    let startX = rawStartX + (dx / totalLen) * spacing;
+                    let startY = rawStartY + (dy / totalLen) * spacing;
+                    let endX = rawEndX - (dx / totalLen) * spacing;
+                    let endY = rawEndY - (dy / totalLen) * spacing;
+
+                    const availableLen = Math.sqrt((endX - startX) ** 2 + (endY - startY) ** 2);
+
+
+                    const minLen = 2;
+
+                    if (connectorLength !== 0) {
+                      let desiredLen = connectorLength;
+                      if (connectorLength < 0) {
+
+                        desiredLen = Math.max(minLen, availableLen + connectorLength);
+                      }
+                      if (desiredLen < availableLen) {
+
+                        const midX = (startX + endX) / 2;
+                        const midY = (startY + endY) / 2;
+                        const half = desiredLen / 2;
+                        const dirX = (endX - startX) / availableLen;
+                        const dirY = (endY - startY) / availableLen;
+                        startX = midX - dirX * half;
+                        startY = midY - dirY * half;
+                        endX = midX + dirX * half;
+                        endY = midY + dirY * half;
+                      } else if (desiredLen > availableLen) {
+
+                        const extra = (desiredLen - availableLen) / 2;
+                        const dirX = (endX - startX) / availableLen;
+                        const dirY = (endY - startY) / availableLen;
+                        startX = startX - dirX * extra;
+                        startY = startY - dirY * extra;
+                        endX = endX + dirX * extra;
+                        endY = endY + dirY * extra;
+                      }
+                    }
+
+                    let points = [startX, startY, endX, endY];
+                    if (connectorMode === "avoid") {
+                      const offset = 20;
+                      points = [
+                        startX, startY,
+                        startX, startY - offset,
+                        endX, endY - offset,
+                        endX, endY
+                      ];
+                    }
+
+                    if (connectorOrthogonal && points.length === 4) {
+                      points = [
+                        startX, startY,
+                        endX, startY,
+                        endX, endY
+                      ];
+                    }
+
+                    return (
+                      <Line
+                        ref={node => {
+                          if (node) shapeRefs.current[shape.id] = node;
+                          else delete shapeRefs.current[shape.id];
+                        }}
+                        key={shape.id}
+                        id={shape.id}
+                        points={points}
+                        stroke="black"
+                        strokeWidth={2}
+                        lineCap="round"
+                        lineJoin="round"
+                        onClick={e => {
+                          e.cancelBubble = true;
+                          dispatch(selectShape(shape.id));
+                        }}
+                      />
                     );
                   } else if (shape.type === "Text") {
                     const isSelected = selectedShapeIds.includes(shape.id);

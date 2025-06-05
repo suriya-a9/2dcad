@@ -118,6 +118,11 @@ const toolSlice = createSlice({
     ],
     currentPageIndex: 0,
     pageMargin: { top: 0, right: 40, bottom: 40, left: 40 },
+    connectorMode: "avoid",
+    connectorOrthogonal: false,
+    connectorCurvature: 0,
+    connectorSpacing: 0,
+    connectorLength: 0,
   },
 
   reducers: {
@@ -328,7 +333,7 @@ const toolSlice = createSlice({
       selectedLayer.shapes.push(...action.payload);
     },
     setZoomLevel: (state, action) => {
-      state.zoomLevel = action.payload; // Set zoom level
+      state.zoomLevel = action.payload;
     },
     zoomIn: (state) => {
       state.zoomLevel = Math.min(state.zoomLevel + 0.1, 3);
@@ -2339,7 +2344,7 @@ const toolSlice = createSlice({
       flat[nodeIdx].y = y;
     },
     setGradientTarget: (state, action) => {
-      console.log("setGradientTarget Reducer Triggered:", action.payload); // Debugging
+      console.log("setGradientTarget Reducer Triggered:", action.payload);
       state.gradientTarget = action.payload;
     },
     selectPage: (state, action) => {
@@ -2366,6 +2371,21 @@ const toolSlice = createSlice({
       const [moved] = state.pages.splice(from, 1);
       state.pages.splice(to, 0, moved);
       state.currentPageIndex = to;
+    },
+    setConnectorMode: (state, action) => {
+      state.connectorMode = action.payload;
+    },
+    setConnectorOrthogonal: (state, action) => {
+      state.connectorOrthogonal = action.payload;
+    },
+    setConnectorCurvature: (state, action) => {
+      state.connectorCurvature = action.payload;
+    },
+    setConnectorSpacing(state, action) {
+      state.connectorSpacing = action.payload;
+    },
+    setConnectorLength(state, action) {
+      state.connectorLength = action.payload;
     },
   },
 
@@ -2542,6 +2562,11 @@ export const {
   renamePage,
   setPageMargin,
   movePage,
+  setConnectorMode,
+  setConnectorOrthogonal,
+  setConnectorCurvature,
+  setConnectorSpacing,
+  setConnectorLength
 } = toolSlice.actions;
 
 export default toolSlice.reducer;

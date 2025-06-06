@@ -9,16 +9,18 @@ import { FaBezierCurve, FaProjectDiagram, FaDrawPolygon, FaPlus, FaLink, FaUnlin
 import { RxCheckCircled } from "react-icons/rx";
 import { RxCrossCircled } from "react-icons/rx";
 import { MdRoundedCorner, MdOutlineVerticalAlignTop, MdOutlineAltRoute } from "react-icons/md";
-import { FaMousePointer, FaStepForward, FaArrowsAltH, FaEyeSlash, FaLayerGroup } from "react-icons/fa";
+import { FaMousePointer, FaStepForward, FaArrowsAltH, FaEyeSlash, FaLayerGroup, FaBullseye, FaCompressAlt, FaRandom, FaSyncAlt, FaArrowCircleUp, FaCompress, FaPaintBrush, FaPalette } from "react-icons/fa";
 import { AiOutlineVerticalAlignBottom } from "react-icons/ai";
 import { VscDebugReverseContinue } from "react-icons/vsc";
-import { FaSearchPlus, FaUndo, FaRedo, FaEdit, FaCheck, FaTimes, FaArrowLeft, FaArrowRight } from "react-icons/fa";
+import { FaSearchPlus, FaUndo, FaRedo, FaEdit, FaCheck, FaTimes, FaArrowLeft, FaArrowRight, FaArrowsAlt } from "react-icons/fa";
 import { GiStraightPipe } from "react-icons/gi";
 import { PiPath } from "react-icons/pi";
 import { FaObjectGroup, FaObjectUngroup, FaExpand, FaRegFile, FaRegDotCircle, FaBan, FaVectorSquare } from "react-icons/fa";
 import { MdGridOn, MdOutlineGradient, MdOutlineFormatColorFill, MdOutlineBorderColor } from "react-icons/md";
 import { setSelectedTool } from "../../Redux/Slice/toolSlice";
+import { GiPerspectiveDiceSixFacesRandom, GiPaintBrush, GiJigsawBox } from "react-icons/gi";
 import { EditorState, ContentState } from "draft-js";
+import { MdCenterFocusStrong } from "react-icons/md";
 import {
   updateShapePosition,
   selecteAllShapes,
@@ -116,7 +118,9 @@ import {
   renamePage,
   setPageMargin,
   setConnectorSpacing,
-  setConnectorLength 
+  setConnectorLength,
+  setTweakRadius,
+  setTweakForce
 } from "../../Redux/Slice/toolSlice";
 import {
   TbDeselect,
@@ -1452,6 +1456,8 @@ const Topbar = ({
             <PaintBucketTopbar />
           ) : selectedTool === "Pages" ? (
             <PagesTopbar />
+          ) : selectedTool === "Tweak" ? (
+            <TweakTopbar />
           ) : selectedTool === "Zoom" ? (
             <ZoomTopbar
               zoomLevel={zoomLevel}
@@ -2517,6 +2523,72 @@ function CalligraphyTopbar() {
           </div>
         )
       }
+    </div>
+  );
+}
+function TweakTopbar() {
+  const dispatch = useDispatch();
+  const tweakMode = useSelector(state => state.tool.tweakMode || "move");
+  const tweakRadius = useSelector(state => state.tool.tweakRadius || 40);
+  const setTweakMode = (mode) => dispatch({ type: "tool/setTweakMode", payload: mode });
+  const tweakForce = useSelector(state => state.tool.tweakForce || 1);
+  const tweakModes = [
+    { key: "move", label: "Move objects", icon: <FaArrowsAlt /> },
+    { key: "moveToCursor", label: "Move to center of cursor", icon: <FaBullseye /> },
+    { key: "shrink", label: "Shrink objects", icon: <FaCompressAlt /> },
+    { key: "randomMove", label: "Move in random directions", icon: <FaRandom /> },
+    { key: "rotate", label: "Rotate objects", icon: <FaSyncAlt /> },
+    { key: "duplicate", label: "Duplicate objects", icon: <FaClone /> },
+    { key: "push", label: "Push", icon: <FaArrowCircleUp /> },
+    { key: "shrinkInset", label: "Shrink inset", icon: <FaCompress /> },
+    { key: "roughen", label: "Roughen parts", icon: <GiJigsawBox /> },
+    { key: "paint", label: "Paint the tool", icon: <GiPaintBrush /> },
+    { key: "jitterColor", label: "Jitter the colors", icon: <FaPalette /> },
+  ];
+
+  return (
+    <div className="d-flex flex-row mb-3 top-icons" style={{ alignItems: "center", color: "white" }}>
+      {tweakModes.map(mode => (
+        <div
+          key={mode.key}
+          className={`p-2 top-icon${tweakMode === mode.key ? " active" : ""}`}
+          title={mode.label}
+          style={{
+            background: tweakMode === mode.key ? "white" : "none",
+            borderRadius: 4,
+            cursor: "pointer"
+          }}
+          onClick={() => setTweakMode(mode.key)}
+        >
+          {mode.icon}
+        </div>
+      ))}
+      <div className="p-2 value" style={{ display: "flex", alignItems: "center", marginLeft: 12 }}>
+        <label htmlFor="tweak-radius">Width:&nbsp;</label>
+        <input
+          id="tweak-radius"
+          type="number"
+          min={10}
+          max={500}
+          value={tweakRadius}
+          onChange={e => dispatch(setTweakRadius(Number(e.target.value)))}
+          style={{ width: 60 }}
+        />
+        <span style={{ marginLeft: 4 }}>px</span>
+      </div>
+      <div className="p-2 value" style={{ display: "flex", alignItems: "center", marginLeft: 12 }}>
+        <label htmlFor="tweak-force">Force:&nbsp;</label>
+        <input
+          id="tweak-force"
+          type="number"
+          min={0.01}
+          max={10}
+          step={0.01}
+          value={tweakForce}
+          onChange={e => dispatch(setTweakForce(Number(e.target.value)))}
+          style={{ width: 60 }}
+        />
+      </div>
     </div>
   );
 }
@@ -3753,7 +3825,8 @@ function ConnectorTopbar() {
   const curvature = useSelector(state => state.tool.connectorCurvature ?? 0);
   const spacing = useSelector(state => state.tool.connectorSpacing ?? 0);
   const length = useSelector(state => state.tool.connectorLength ?? 0);
-
+  const lineStyle = useSelector(state => state.tool.connectorLineStyle || "solid");
+  const noOverlap = useSelector(state => state.tool.connectorNoOverlap);
   const setMode = (mode) => {
     dispatch({ type: "tool/setConnectorMode", payload: mode });
   };
@@ -3768,6 +3841,12 @@ function ConnectorTopbar() {
   };
   const setLength = (value) => {
     dispatch(setConnectorLength(Number(value)));
+  };
+  const setLineStyle = (value) => {
+    dispatch({ type: "tool/setConnectorLineStyle", payload: value });
+  };
+  const setNoOverlap = (value) => {
+    dispatch({ type: "tool/setConnectorNoOverlap", payload: value });
   };
   return (
     <div className="d-flex flex-row mb-3 top-icons" style={{ alignItems: "center", color: "white" }}>
@@ -3833,6 +3912,33 @@ function ConnectorTopbar() {
           style={{ width: 60 }}
           title="The length of the connector (0 = auto)"
         />
+      </div>
+      <div className="p-2 value" style={{ display: "flex", alignItems: "center", marginLeft: 12 }}>
+        <label htmlFor="connector-line-style" style={{ marginRight: 6 }}>Line Style:</label>
+        <select
+          id="connector-line-style"
+          value={lineStyle}
+          onChange={e => setLineStyle(e.target.value)}
+          style={{ width: 80 }}
+          title="Connector line style"
+        >
+          <option value="solid">Line</option>
+          <option value="dashed">Dashed</option>
+          <option value="dotted">Dotted</option>
+        </select>
+      </div>
+      <div
+        className="p-2 top-icon"
+        style={{
+          background: noOverlap ? "#007bff" : "none",
+          borderRadius: 4,
+          border: noOverlap ? "2px solid #007bff" : "1px solid #888",
+          cursor: "pointer"
+        }}
+        onClick={() => setNoOverlap(!noOverlap)}
+        title="Do not allow overlapping connectors"
+      >
+        <FaObjectUngroup size={22} />
       </div>
     </div>
   );

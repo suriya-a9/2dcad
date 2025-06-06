@@ -1,6 +1,7 @@
 import { createSlice } from "@reduxjs/toolkit";
 import { shapes } from "konva/lib/Shape";
 import { generateSpiralPath } from "../../components/Panel/Panel"
+import { act } from "react";
 
 
 const toolSlice = createSlice({
@@ -118,11 +119,16 @@ const toolSlice = createSlice({
     ],
     currentPageIndex: 0,
     pageMargin: { top: 0, right: 40, bottom: 40, left: 40 },
-    connectorMode: "avoid",
-    connectorOrthogonal: false,
+    connectorMode: "ignore",
+    connectorOrthogonal: true,
     connectorCurvature: 0,
     connectorSpacing: 0,
     connectorLength: 0,
+    connectorLineStyle: "solid",
+    connectorNoOverlap: false,
+    tweakMode: "move",
+    tweakRadius: 40,
+    tweakForce: 1,
   },
 
   reducers: {
@@ -2387,6 +2393,21 @@ const toolSlice = createSlice({
     setConnectorLength(state, action) {
       state.connectorLength = action.payload;
     },
+    setConnectorLineStyle(state, action) {
+      state.connectorLineStyle = action.payload;
+    },
+    setConnectorNoOverlap(state, action) {
+      state.connectorNoOverlap = action.payload;
+    },
+    setTweakMode(state, action) {
+      state.tweakMode = action.payload;
+    },
+    setTweakRadius(state, action) {
+      state.tweakRadius = action.payload;
+    },
+    setTweakForce(state, action) {
+      state.tweakForce = action.payload;
+    },
   },
 
 });
@@ -2566,7 +2587,12 @@ export const {
   setConnectorOrthogonal,
   setConnectorCurvature,
   setConnectorSpacing,
-  setConnectorLength
+  setConnectorLength,
+  setConnectorLineStyle,
+  setConnectorNoOverlap,
+  setTweakMode,
+  setTweakRadius,
+  setTweakForce
 } = toolSlice.actions;
 
 export default toolSlice.reducer;

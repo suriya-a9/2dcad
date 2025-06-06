@@ -217,14 +217,15 @@ const LeftSidebar = () => {
               data-tooltip-id="tool-left"
             />
           </div>
-          {/* <div
+          <div
             className="p-2 left-icon"
+            onClick={() => handleToolSelect("Tweak")}
           >
             <GiColombia
               data-tooltip-content="Tweak Tool"
               data-tooltip-id="tool-left"
             />
-          </div> */}
+          </div>
           <div
             className="p-2 left-icon"
             onClick={() => handleToolSelect("Spray")}

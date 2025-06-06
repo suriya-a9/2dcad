@@ -112,7 +112,120 @@ const toolCursors = {
   Star: <FaRegStar size={20} color="black" />,
   Polygon: <BiPolygon size={20} color="black" />,
 };
+function lineIntersectsRect(x1, y1, x2, y2, rect) {
 
+  const { x, y, width, height } = rect;
+  function between(a, b1, b2) {
+    return (a >= Math.min(b1, b2) && a <= Math.max(b1, b2));
+  }
+
+  const edges = [
+    [x, y, x + width, y],
+    [x + width, y, x + width, y + height],
+    [x + width, y + height, x, y + height],
+    [x, y + height, x, y],
+  ];
+  for (const [ex1, ey1, ex2, ey2] of edges) {
+
+    const denom = (x1 - x2) * (ey1 - ey2) - (y1 - y2) * (ex1 - ex2);
+    if (denom === 0) continue;
+    const t = ((x1 - ex1) * (ey1 - ey2) - (y1 - ey1) * (ex1 - ex2)) / denom;
+    const u = -((x1 - x2) * (y1 - ey1) - (y1 - y2) * (x1 - ex1)) / denom;
+    if (t >= 0 && t <= 1 && u >= 0 && u <= 1) return true;
+  }
+  return false;
+}
+function findGridPath(start, end, obstacles, gridSize = 20, maxTries = 500) {
+
+  function snap(p) {
+    return {
+      x: Math.round(p.x / gridSize) * gridSize,
+      y: Math.round(p.y / gridSize) * gridSize,
+    };
+  }
+  function isBlocked(x, y) {
+    return obstacles.some(obs => {
+      if (obs.type === "Rectangle") {
+        return (
+          x >= obs.x - gridSize / 2 &&
+          x <= obs.x + obs.width + gridSize / 2 &&
+          y >= obs.y - gridSize / 2 &&
+          y <= obs.y + obs.height + gridSize / 2
+        );
+      }
+      if (obs.type === "Circle") {
+        const dx = x - obs.x;
+        const dy = y - obs.y;
+        return Math.sqrt(dx * dx + dy * dy) <= obs.radius + gridSize / 2;
+      }
+      if (obs.type === "Star") {
+
+        const dx = x - obs.x;
+        const dy = y - obs.y;
+        return Math.sqrt(dx * dx + dy * dy) <= (obs.outerRadius || obs.radius || 0) + gridSize / 2;
+      }
+      if (obs.type === "Polygon" && Array.isArray(obs.points)) {
+
+        let inside = false;
+        const pts = obs.points.map(p =>
+          Array.isArray(p) ? { x: p[0] + (obs.x || 0), y: p[1] + (obs.y || 0) } : { x: p.x + (obs.x || 0), y: p.y + (obs.y || 0) }
+        );
+        for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+          if (
+            (pts[i].y > y) !== (pts[j].y > y) &&
+            x < ((pts[j].x - pts[i].x) * (y - pts[i].y)) / (pts[j].y - pts[i].y) + pts[i].x
+          ) {
+            inside = !inside;
+          }
+        }
+        return inside;
+      }
+      return false;
+    });
+  }
+  const startNode = snap(start);
+  const endNode = snap(end);
+  const open = [startNode];
+  const cameFrom = {};
+  const cost = {};
+  const key = (p) => `${p.x},${p.y}`;
+  cost[key(startNode)] = 0;
+  let tries = 0;
+  while (open.length && tries++ < maxTries) {
+    open.sort((a, b) =>
+      (cost[key(a)] + Math.abs(a.x - endNode.x) + Math.abs(a.y - endNode.y)) -
+      (cost[key(b)] + Math.abs(b.x - endNode.x) + Math.abs(b.y - endNode.y))
+    );
+    const current = open.shift();
+    if (current.x === endNode.x && current.y === endNode.y) {
+      const path = [];
+      let cur = current;
+      let c = key(cur);
+      while (cameFrom[c]) {
+        path.push(cur);
+        cur = cameFrom[c];
+        c = key(cur);
+      }
+      path.push(startNode);
+      path.reverse();
+      return path.map(p => [p.x, p.y]).flat();
+    }
+    for (const [dx, dy] of [[1, 0], [0, 1], [-1, 0], [0, -1]]) {
+      const nx = current.x + dx * gridSize;
+      const ny = current.y + dy * gridSize;
+      if (isBlocked(nx, ny)) continue;
+      const neighbor = { x: nx, y: ny };
+      const nKey = key(neighbor);
+      const newCost = cost[key(current)] + 1;
+      if (cost[nKey] === undefined || newCost < cost[nKey]) {
+        cost[nKey] = newCost;
+        cameFrom[nKey] = current;
+        open.push(neighbor);
+      }
+    }
+  }
+  return [start.x, start.y, end.x, end.y];
+}
 const Panel = React.forwardRef(({
   textValue,
   isSidebarOpen,
@@ -214,6 +327,11 @@ const Panel = React.forwardRef(({
   const [connectorPreview, setConnectorPreview] = useState(null);
   const connectorLength = useSelector(state => state.tool.connectorLength ?? 0);
   const spacing = useSelector(state => state.tool.connectorSpacing ?? 0);
+  const connectorLineStyle = useSelector(state => state.tool.connectorLineStyle || "solid");
+  const connectorNoOverlap = useSelector(state => state.tool.connectorNoOverlap);
+  const tweakMode = useSelector(state => state.tool.tweakMode);
+  const tweakRadius = useSelector(state => state.tool.tweakRadius || 40);
+  const tweakForce = useSelector(state => state.tool.tweakForce || 1);
   function addGuidesAtLine(x1, y1, x2, y2) {
     setGuides(prev => [
       ...prev,
@@ -1893,6 +2011,19 @@ const Panel = React.forwardRef(({
     if (selectedTool === "Connector" && connectorDrag) {
       const pointer = getAdjustedPointerPosition(e.target.getStage(), position, scale);
       setConnectorDrag(drag => drag ? { ...drag, currentPos: { x: pointer.x, y: pointer.y } } : null);
+    }
+    if (selectedTool === "Tweak" && isMouseDown) {
+
+      const radius = 100;
+      const affectedShapes = shapes.filter(shape => {
+        if (shape.x !== undefined && shape.y !== undefined) {
+          const dx = x - shape.x;
+          const dy = y - shape.y;
+          return Math.sqrt(dx * dx + dy * dy) < radius;
+        }
+        return false;
+      });
+      handleTweakAction({ x, y }, affectedShapes);
     }
     if (isDrawingRef.current && selectedTool === "Eraser") {
       const lastLine = eraserLines[eraserLines.length - 1];
@@ -4291,6 +4422,204 @@ const Panel = React.forwardRef(({
     zoomToSelectedShape,
     zoomToDrawing,
   }));
+
+  function handleTweakAction(point, affectedShapes) {
+    switch (tweakMode) {
+      case "move":
+
+        affectedShapes.forEach(shape => {
+
+          const dx = point.x - shape.x;
+          const dy = point.y - shape.y;
+
+          dispatch(updateShapePosition({
+            id: shape.id,
+            x: shape.x + dx * 0.1 * tweakForce,
+            y: shape.y + dy * 0.1 * tweakForce,
+          }));
+        });
+        break;
+      case "moveToCursor":
+
+        affectedShapes.forEach(shape => {
+          dispatch(updateShapePosition({
+            id: shape.id,
+            x: point.x,
+            y: point.y,
+          }));
+        });
+        break;
+      // case "shrink":
+      //   affectedShapes.forEach(shape => {
+      //     if (shape.type === "Rectangle") {
+      //       dispatch(updateShapePosition({
+      //         id: shape.id,
+      //         width: Math.max(1, shape.width * 0.95),
+      //         height: Math.max(1, shape.height * 0.95),
+      //       }));
+      //     } else if (shape.type === "Circle") {
+      //       dispatch(updateShapePosition({
+      //         id: shape.id,
+      //         radius: Math.max(1, shape.radius * 0.95),
+      //       }));
+      //     } else if (shape.type === "Star") {
+      //       dispatch(updateShapePosition({
+      //         id: shape.id,
+      //         outerRadius: Math.max(1, shape.outerRadius * 0.95),
+      //         innerRadius: Math.max(1, shape.innerRadius * 0.95),
+      //       }));
+      //     } else if (shape.type === "Polygon") {
+      //       dispatch(updateShapePosition({
+      //         id: shape.id,
+      //         radius: Math.max(1, (shape.radius || 1) * 0.95),
+      //         points: shape.points.map(p => ({
+      //           x: p.x * 0.95,
+      //           y: p.y * 0.95,
+      //         })),
+      //       }));
+      //     } else if (shape.type === "Pencil" || shape.type === "Calligraphy") {
+
+      //       const cx = shape.points.reduce((sum, p) => sum + (p.x ?? p[0]), 0) / shape.points.length;
+      //       const cy = shape.points.reduce((sum, p) => sum + (p.y ?? p[1]), 0) / shape.points.length;
+      //       const newPoints = shape.points.map(p => {
+      //         const x = (p.x ?? p[0]) - cx;
+      //         const y = (p.y ?? p[1]) - cy;
+      //         return {
+      //           ...(p.x !== undefined ? p : { x: p[0], y: p[1] }),
+      //           x: cx + x * 0.95,
+      //           y: cy + y * 0.95,
+      //         };
+      //       });
+      //       dispatch(updateShapePosition({
+      //         id: shape.id,
+      //         points: newPoints,
+      //       }));
+      //     } else {
+
+      //       dispatch(updateShapePosition({
+      //         id: shape.id,
+      //         scaleX: (shape.scaleX || 1) * 0.95,
+      //         scaleY: (shape.scaleY || 1) * 0.95,
+      //       }));
+      //     }
+      //   });
+      //   break;
+      // case "randomMove":
+
+      //   if (!window._tweakRandomDirs) window._tweakRandomDirs = {};
+      //   affectedShapes.forEach(shape => {
+      //     if (!window._tweakRandomDirs[shape.id]) {
+
+      //       const angle = Math.random() * 2 * Math.PI;
+      //       window._tweakRandomDirs[shape.id] = {
+      //         dx: Math.cos(angle),
+      //         dy: Math.sin(angle),
+      //       };
+      //     }
+      //     const { dx, dy } = window._tweakRandomDirs[shape.id];
+      //     dispatch(updateShapePosition({
+      //       id: shape.id,
+      //       x: shape.x + dx * 3 * tweakForce,
+      //       y: shape.y + dy * 3 * tweakForce,
+      //     }));
+      //   });
+      //   break;
+      // case "rotate":
+
+      //   affectedShapes.forEach(shape => {
+      //     dispatch(updateShapePosition({
+      //       id: shape.id,
+      //       rotation: (shape.rotation || 0) + 10 * tweakForce,
+      //     }));
+      //   });
+      //   break;
+      // case "duplicate":
+      //   affectedShapes.forEach(shape => {
+
+      //     const newShape = {
+      //       ...shape,
+      //       id: `${shape.id}-copy-${Date.now()}-${Math.floor(Math.random() * 10000)}`,
+      //       x: (shape.x || 0) + 10,
+      //       y: (shape.y || 0) + 10,
+      //     };
+      //     dispatch(addShape(newShape));
+      //   });
+      //   break;
+      // case "push":
+
+      //   affectedShapes.forEach(shape => {
+      //     const dx = shape.x - point.x;
+      //     const dy = shape.y - point.y;
+      //     const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+      //     dispatch(updateShapePosition({
+      //       id: shape.id,
+      //       x: shape.x + (dx / dist) * 10 * tweakForce,
+      //       y: shape.y + (dy / dist) * 10 * tweakForce,
+      //     }));
+      //   });
+      //   break;
+      // case "shrinkInset":
+
+
+      //   affectedShapes.forEach(shape => {
+      //     dispatch(updateShapePosition({
+      //       id: shape.id,
+      //       scaleX: (shape.scaleX || 1) * 0.98,
+      //       scaleY: (shape.scaleY || 1) * 0.98,
+      //     }));
+      //   });
+      //   break;
+      // case "roughen":
+
+      //   affectedShapes.forEach(shape => {
+      //     if (shape.points) {
+      //       const newPoints = shape.points.map(pt => ({
+      //         x: pt.x + (Math.random() - 0.5) * 2 * tweakForce,
+      //         y: pt.y + (Math.random() - 0.5) * 2 * tweakForce,
+      //       }));
+      //       dispatch(updateShapePosition({
+      //         id: shape.id,
+      //         points: newPoints,
+      //       }));
+      //     }
+      //   });
+      //   break;
+      // case "paint":
+
+      //   affectedShapes.forEach(shape => {
+      //     dispatch(updateShapePosition({
+      //       id: shape.id,
+      //       fill: fillColor || "#000",
+      //       stroke: fillColor || "#000",
+      //     }));
+      //   });
+      //   break;
+      // case "jitterColor":
+
+      //   affectedShapes.forEach(shape => {
+
+      //     if (shape.fill && typeof shape.fill === "string" && shape.fill.startsWith("#")) {
+      //       let color = shape.fill.replace("#", "");
+      //       let r = Math.max(0, Math.min(255, parseInt(color.substring(0, 2), 16) + Math.floor(Math.random() * 20 - 10)));
+      //       let g = Math.max(0, Math.min(255, parseInt(color.substring(2, 4), 16) + Math.floor(Math.random() * 20 - 10)));
+      //       let b = Math.max(0, Math.min(255, parseInt(color.substring(4, 6), 16) + Math.floor(Math.random() * 20 - 10)));
+      //       let newColor = `#${r.toString(16).padStart(2, "0")}${g.toString(16).padStart(2, "0")}${b.toString(16).padStart(2, "0")}`;
+      //       dispatch(updateShapePosition({
+      //         id: shape.id,
+      //         fill: newColor,
+      //       }));
+      //     }
+      //   });
+      //   break;
+      default:
+        break;
+    }
+  }
+  useEffect(() => {
+    if (selectedTool !== "Tweak" && window._tweakRandomDirs) {
+      window._tweakRandomDirs = {};
+    }
+  }, [selectedTool]);
   return (
     <>
       {/* {selectedTool === "Dropper" && (
@@ -5984,7 +6313,16 @@ const Panel = React.forwardRef(({
                     const rawStartY = startShape.y + (shape.startOffset?.y ?? 0);
                     const rawEndX = endShape.x + (shape.endOffset?.x ?? 0);
                     const rawEndY = endShape.y + (shape.endOffset?.y ?? 0);
-
+                    let dash = [];
+                    let lineCap = "round";
+                    if (connectorLineStyle === "dashed") {
+                      dash = [12, 8];
+                      lineCap = "butt";
+                    }
+                    if (connectorLineStyle === "dotted") {
+                      dash = [0.1, 8];
+                      lineCap = "round";
+                    }
 
                     const dx = rawEndX - rawStartX;
                     const dy = rawEndY - rawStartY;
@@ -6031,6 +6369,20 @@ const Panel = React.forwardRef(({
                     }
 
                     let points = [startX, startY, endX, endY];
+
+                    if (connectorNoOverlap) {
+                      const obstacles = shapes.filter(s =>
+                        ["Rectangle", "Circle", "Star", "Polygon"].includes(s.type) &&
+                        s.id !== shape.startId &&
+                        s.id !== shape.endId
+                      );
+                      points = findGridPath(
+                        { x: startX, y: startY },
+                        { x: endX, y: endY },
+                        obstacles
+                      );
+                    }
+
                     if (connectorMode === "avoid") {
                       const offset = 20;
                       points = [
@@ -6060,7 +6412,8 @@ const Panel = React.forwardRef(({
                         points={points}
                         stroke="black"
                         strokeWidth={2}
-                        lineCap="round"
+                        lineCap={lineCap}
+                        dash={dash}
                         lineJoin="round"
                         onClick={e => {
                           e.cancelBubble = true;
@@ -7138,8 +7491,25 @@ const Panel = React.forwardRef(({
                 }
               </Layer>
             </Stage>
+            {selectedTool === "Tweak" && isCustomCursorVisible && (
+              <div
+                style={{
+                  position: "absolute",
+                  pointerEvents: "none",
+                  zIndex: 2000,
+                  left: `${(cursorPosition.x * scale) + position.x - tweakRadius * scale}px`,
+                  top: `${(cursorPosition.y * scale) + position.y - tweakRadius * scale}px`,
+                  width: `${tweakRadius * 2 * scale}px`,
+                  height: `${tweakRadius * 2 * scale}px`,
+                  border: "2px solid #007bff",
+                  borderRadius: "50%",
+                  background: "rgba(0,128,255,0.10)",
+                  boxShadow: "0 0 8px 2px rgba(0,128,255,0.15)",
+                  transition: "left 0.04s, top 0.04s, width 0.04s, height 0.04s",
+                }}
+              />
+            )}
           </div>
-
         </div>
       </div>
       {colorPicker.visible && (

@@ -1,0 +1,162 @@
+// case "shrink":
+//   affectedShapes.forEach(shape => {
+//     if (shape.type === "Rectangle") {
+//       dispatch(updateShapePosition({
+//         id: shape.id,
+//         width: Math.max(1, shape.width * 0.95),
+//         height: Math.max(1, shape.height * 0.95),
+//       }));
+//     } else if (shape.type === "Circle") {
+//       dispatch(updateShapePosition({
+//         id: shape.id,
+//         radius: Math.max(1, shape.radius * 0.95),
+//       }));
+//     } else if (shape.type === "Star") {
+//       dispatch(updateShapePosition({
+//         id: shape.id,
+//         outerRadius: Math.max(1, shape.outerRadius * 0.95),
+//         innerRadius: Math.max(1, shape.innerRadius * 0.95),
+//       }));
+//     } else if (shape.type === "Polygon") {
+//       dispatch(updateShapePosition({
+//         id: shape.id,
+//         radius: Math.max(1, (shape.radius || 1) * 0.95),
+//         points: shape.points.map(p => ({
+//           x: p.x * 0.95,
+//           y: p.y * 0.95,
+//         })),
+//       }));
+//     } else if (shape.type === "Pencil" || shape.type === "Calligraphy") {
+
+//       const cx = shape.points.reduce((sum, p) => sum + (p.x ?? p[0]), 0) / shape.points.length;
+//       const cy = shape.points.reduce((sum, p) => sum + (p.y ?? p[1]), 0) / shape.points.length;
+//       const newPoints = shape.points.map(p => {
+//         const x = (p.x ?? p[0]) - cx;
+//         const y = (p.y ?? p[1]) - cy;
+//         return {
+//           ...(p.x !== undefined ? p : { x: p[0], y: p[1] }),
+//           x: cx + x * 0.95,
+//           y: cy + y * 0.95,
+//         };
+//       });
+//       dispatch(updateShapePosition({
+//         id: shape.id,
+//         points: newPoints,
+//       }));
+//     } else {
+
+//       dispatch(updateShapePosition({
+//         id: shape.id,
+//         scaleX: (shape.scaleX || 1) * 0.95,
+//         scaleY: (shape.scaleY || 1) * 0.95,
+//       }));
+//     }
+//   });
+//   break;
+// case "randomMove":
+
+//   if (!window._tweakRandomDirs) window._tweakRandomDirs = {};
+//   affectedShapes.forEach(shape => {
+//     if (!window._tweakRandomDirs[shape.id]) {
+
+//       const angle = Math.random() * 2 * Math.PI;
+//       window._tweakRandomDirs[shape.id] = {
+//         dx: Math.cos(angle),
+//         dy: Math.sin(angle),
+//       };
+//     }
+//     const { dx, dy } = window._tweakRandomDirs[shape.id];
+//     dispatch(updateShapePosition({
+//       id: shape.id,
+//       x: shape.x + dx * 3 * tweakForce,
+//       y: shape.y + dy * 3 * tweakForce,
+//     }));
+//   });
+//   break;
+// case "rotate":
+
+//   affectedShapes.forEach(shape => {
+//     dispatch(updateShapePosition({
+//       id: shape.id,
+//       rotation: (shape.rotation || 0) + 10 * tweakForce,
+//     }));
+//   });
+//   break;
+// case "duplicate":
+//   affectedShapes.forEach(shape => {
+
+//     const newShape = {
+//       ...shape,
+//       id: `${shape.id}-copy-${Date.now()}-${Math.floor(Math.random() * 10000)}`,
+//       x: (shape.x || 0) + 10,
+//       y: (shape.y || 0) + 10,
+//     };
+//     dispatch(addShape(newShape));
+//   });
+//   break;
+// case "push":
+
+//   affectedShapes.forEach(shape => {
+//     const dx = shape.x - point.x;
+//     const dy = shape.y - point.y;
+//     const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+//     dispatch(updateShapePosition({
+//       id: shape.id,
+//       x: shape.x + (dx / dist) * 10 * tweakForce,
+//       y: shape.y + (dy / dist) * 10 * tweakForce,
+//     }));
+//   });
+//   break;
+// case "shrinkInset":
+
+
+//   affectedShapes.forEach(shape => {
+//     dispatch(updateShapePosition({
+//       id: shape.id,
+//       scaleX: (shape.scaleX || 1) * 0.98,
+//       scaleY: (shape.scaleY || 1) * 0.98,
+//     }));
+//   });
+//   break;
+// case "roughen":
+
+//   affectedShapes.forEach(shape => {
+//     if (shape.points) {
+//       const newPoints = shape.points.map(pt => ({
+//         x: pt.x + (Math.random() - 0.5) * 2 * tweakForce,
+//         y: pt.y + (Math.random() - 0.5) * 2 * tweakForce,
+//       }));
+//       dispatch(updateShapePosition({
+//         id: shape.id,
+//         points: newPoints,
+//       }));
+//     }
+//   });
+//   break;
+// case "paint":
+
+//   affectedShapes.forEach(shape => {
+//     dispatch(updateShapePosition({
+//       id: shape.id,
+//       fill: fillColor || "#000",
+//       stroke: fillColor || "#000",
+//     }));
+//   });
+//   break;
+// case "jitterColor":
+
+//   affectedShapes.forEach(shape => {
+
+//     if (shape.fill && typeof shape.fill === "string" && shape.fill.startsWith("#")) {
+//       let color = shape.fill.replace("#", "");
+//       let r = Math.max(0, Math.min(255, parseInt(color.substring(0, 2), 16) + Math.floor(Math.random() * 20 - 10)));
+//       let g = Math.max(0, Math.min(255, parseInt(color.substring(2, 4), 16) + Math.floor(Math.random() * 20 - 10)));
+//       let b = Math.max(0, Math.min(255, parseInt(color.substring(4, 6), 16) + Math.floor(Math.random() * 20 - 10)));
+//       let newColor = `#${r.toString(16).padStart(2, "0")}${g.toString(16).padStart(2, "0")}${b.toString(16).padStart(2, "0")}`;
+//       dispatch(updateShapePosition({
+//         id: shape.id,
+//         fill: newColor,
+//       }));
+//     }
+//   });
+//   break;

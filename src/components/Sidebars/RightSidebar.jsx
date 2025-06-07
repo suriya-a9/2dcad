@@ -154,8 +154,10 @@ const RightSidebar = ({
   };
 
   const handleDelete = () => {
-    if (selectedShapeId) {
-      dispatch(deleteShape());
+    if (selectedShapeIds && selectedShapeIds.length > 0) {
+      selectedShapeIds.forEach(id => dispatch(deleteShape(id)));
+    } else if (selectedShapeId) {
+      dispatch(deleteShape(selectedShapeId));
     } else if (selectedLayerIndex !== null) {
       dispatch(deleteLayer());
     }

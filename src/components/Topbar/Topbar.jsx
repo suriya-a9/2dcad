@@ -1836,8 +1836,8 @@ function DefaultTopbar() {
             type="number"
             name="width"
             id="W"
-            step={0.01}
-            placeholder="0.00"
+            step={1}
+            placeholder="0"
             value={
               selectedShape.width
                 ? convertFromPx(selectedShape.width, unit).toFixed(2)
@@ -1866,8 +1866,8 @@ function DefaultTopbar() {
             type="number"
             name="height"
             id="H"
-            step={0.01}
-            placeholder="0.00"
+            step={1}
+            placeholder="0"
             value={
               selectedShape.height
                 ? convertFromPx(selectedShape.height, unit).toFixed(2)
@@ -4136,16 +4136,12 @@ function PencilTopbar() {
   const pressureMax = useSelector((state) => state.tool.pressureMax);
   const [caps, setCaps] = useState("round");
   useEffect(() => {
-    if (pencilMode === "Spiro Path" && pencilSmoothing !== 50) {
+    if (pencilMode === "Spiro Path") {
       dispatch(setPencilSmoothing(50));
-    }
-    if (pencilMode === "Bezier Path" && pencilSmoothing !== 0) {
+    } else if (pencilMode === "Bezier Path" || pencilMode === "BSpline Path") {
       dispatch(setPencilSmoothing(0));
     }
-    if (pencilMode === "BSpline Path" && pencilSmoothing !== 0) {
-      dispatch(setPencilSmoothing(0));
-    }
-  }, [pencilMode, dispatch, pencilSmoothing]);
+  }, [pencilMode, dispatch]);
   const handleOptionSelect = (option) => {
     dispatch(setPencilOption(option));
   };

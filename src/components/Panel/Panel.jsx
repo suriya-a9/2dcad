@@ -586,6 +586,22 @@ const Panel = React.forwardRef(({
               y: shapeData.radius * Math.sin(angle),
             };
           });
+        } else if (baseShape.type === "Pencil") {
+          shapeData.points = baseShape.points.map(p =>
+            Array.isArray(p)
+              ? [p[0] + dx, p[1] + dy]
+              : { x: p.x + dx, y: p.y + dy }
+          );
+          shapeData.x = px;
+          shapeData.y = py;
+        } else if (baseShape.type === "Calligraphy") {
+          shapeData.points = baseShape.points.map(p => ({
+            ...p,
+            x: p.x + dx,
+            y: p.y + dy
+          }));
+          shapeData.x = px;
+          shapeData.y = py;
         }
 
         shapesInPath.push(shapeData);
@@ -627,7 +643,26 @@ const Panel = React.forwardRef(({
         y: py,
         rotation: sprayRotation,
       };
+      const dx = px - (baseShape.x || 0);
+      const dy = py - (baseShape.y || 0);
 
+      if (baseShape.type === "Pencil") {
+        shapeData.points = baseShape.points.map(p =>
+          Array.isArray(p)
+            ? [p[0] + dx, p[1] + dy]
+            : { x: p.x + dx, y: p.y + dy }
+        );
+        shapeData.x = px;
+        shapeData.y = py;
+      } else if (baseShape.type === "Calligraphy") {
+        shapeData.points = baseShape.points.map(p => ({
+          ...p,
+          x: p.x + dx,
+          y: p.y + dy
+        }));
+        shapeData.x = px;
+        shapeData.y = py;
+      }
       if (baseShape.type === "Rectangle") {
         shapeData.width = baseShape.width * randomScale;
         shapeData.height = baseShape.height * randomScale;
@@ -756,7 +791,9 @@ const Panel = React.forwardRef(({
       console.log("Node Tool: Selecting shape with ID:", shapeId);
 
 
-      dispatch(selectShape(shapeId));
+      if (!selectedShapeIds.includes(shapeId)) {
+        dispatch(selectShape(shapeId));
+      }
 
       const shape = shapes.find((shape) => shape.id === shapeId);
       if (shape) {
@@ -766,15 +803,14 @@ const Panel = React.forwardRef(({
 
         dispatch(setControlPoints(controlPoints));
       }
-    } else if (e.target === e.target.getStage()) {
-
-      dispatch(clearSelection());
     }
     console.log("Clicked Shape:", clickedShape);
 
     const clickedOnEmpty = e.target === e.target.getStage();
     if (clickedOnEmpty) {
-      dispatch(clearSelection());
+      if (selectedTool !== "Node") {
+        dispatch(clearSelection());
+      }
     } else if (selectedTool === "Node" && clickedShape && clickedShape.attrs && clickedShape.attrs.id) {
       dispatch(selectShape(clickedShape.attrs.id));
 
@@ -832,21 +868,28 @@ const Panel = React.forwardRef(({
         console.log("Generated Control Points:", nodes);
         dispatch(setControlPoints(nodes));
       }
-    } else if (e.target === e.target.getStage()) {
-
-      dispatch(clearSelection());
     } else if (selectedTool === "Select") {
       if (clickedShape && clickedShape.attrs && clickedShape.attrs.id) {
         console.log("Select Tool: Selecting shape with ID:", clickedShape.attrs.id);
         dispatch(selectShape(clickedShape.attrs.id));
       } else {
         console.log("No shape selected, clearing selection.");
-        dispatch(clearSelection());
+        if (e.target === stage) {
+          if (selectedTool !== "Node") {
+            dispatch(clearSelection());
+          }
+        }
       }
       return;
     }
 
-
+    if (selectedTool === "Spiral" && clickedShape && clickedShape.attrs && clickedShape.attrs.id) {
+      const shape = shapes.find((shape) => shape.id === clickedShape.attrs.id);
+      if (shape && shape.type === "Spiral") {
+        dispatch(selectShape(shape.id));
+        return;
+      }
+    }
     if (selectedTool === "Node") {
       if (clickedShape && clickedShape.attrs && clickedShape.attrs.id) {
         const shapeId = clickedShape.attrs.id;
@@ -857,9 +900,6 @@ const Panel = React.forwardRef(({
 
 
         dispatch(clearControlPoints());
-      } else if (e.target === e.target.getStage()) {
-
-        dispatch(clearSelection());
       }
     }
     if (selectedTool === "Connector" && clickedShape && clickedShape.attrs && clickedShape.attrs.id) {
@@ -1189,7 +1229,11 @@ const Panel = React.forwardRef(({
         dispatch(selectShape(clickedShape.attrs.id));
       } else {
         console.log("Shape Builder Tool: No shape selected.");
-        dispatch(clearSelection());
+        if (e.target === stage) {
+          if (selectedTool !== "Node") {
+            dispatch(clearSelection());
+          }
+        }
       }
       handleShapeBuilder(pointerPosition);
       return;
@@ -1242,7 +1286,9 @@ const Panel = React.forwardRef(({
     console.log("clicked eraser mode", eraserMode)
 
     if (e.target === stage) {
-      dispatch(clearSelection());
+      if (selectedTool !== "Node") {
+        dispatch(clearSelection());
+      }
     }
 
     if (selectedTool === "Select") {
@@ -1256,7 +1302,9 @@ const Panel = React.forwardRef(({
         dispatch(selectShape(clickedShape.attrs.id));
       } else {
         console.log("No shape selected, clearing selection.");
-        dispatch(clearSelection());
+        if (selectedTool !== "Node") {
+          dispatch(clearSelection());
+        }
       }
       return;
     } else if (selectedTool === "Node" && clickedShape && clickedShape.attrs && clickedShape.attrs.id) {
@@ -3736,7 +3784,9 @@ const Panel = React.forwardRef(({
     } else if (overlappingShapes.length === 1) {
       dispatch(selectShape(overlappingShapes[0].id));
     } else {
-      dispatch(clearSelection());
+      if (selectedTool !== "Node") {
+        dispatch(clearSelection());
+      }
     }
   };
   function shapeToPolygon(shape) {
@@ -4449,168 +4499,168 @@ const Panel = React.forwardRef(({
           }));
         });
         break;
-      // case "shrink":
-      //   affectedShapes.forEach(shape => {
-      //     if (shape.type === "Rectangle") {
-      //       dispatch(updateShapePosition({
-      //         id: shape.id,
-      //         width: Math.max(1, shape.width * 0.95),
-      //         height: Math.max(1, shape.height * 0.95),
-      //       }));
-      //     } else if (shape.type === "Circle") {
-      //       dispatch(updateShapePosition({
-      //         id: shape.id,
-      //         radius: Math.max(1, shape.radius * 0.95),
-      //       }));
-      //     } else if (shape.type === "Star") {
-      //       dispatch(updateShapePosition({
-      //         id: shape.id,
-      //         outerRadius: Math.max(1, shape.outerRadius * 0.95),
-      //         innerRadius: Math.max(1, shape.innerRadius * 0.95),
-      //       }));
-      //     } else if (shape.type === "Polygon") {
-      //       dispatch(updateShapePosition({
-      //         id: shape.id,
-      //         radius: Math.max(1, (shape.radius || 1) * 0.95),
-      //         points: shape.points.map(p => ({
-      //           x: p.x * 0.95,
-      //           y: p.y * 0.95,
-      //         })),
-      //       }));
-      //     } else if (shape.type === "Pencil" || shape.type === "Calligraphy") {
+      case "shrink":
+        affectedShapes.forEach(shape => {
+          if (shape.type === "Rectangle") {
+            dispatch(updateShapePosition({
+              id: shape.id,
+              width: Math.max(1, shape.width * 0.95),
+              height: Math.max(1, shape.height * 0.95),
+            }));
+          } else if (shape.type === "Circle") {
+            dispatch(updateShapePosition({
+              id: shape.id,
+              radius: Math.max(1, shape.radius * 0.95),
+            }));
+          } else if (shape.type === "Star") {
+            dispatch(updateShapePosition({
+              id: shape.id,
+              outerRadius: Math.max(1, shape.outerRadius * 0.95),
+              innerRadius: Math.max(1, shape.innerRadius * 0.95),
+            }));
+          } else if (shape.type === "Polygon") {
+            dispatch(updateShapePosition({
+              id: shape.id,
+              radius: Math.max(1, (shape.radius || 1) * 0.95),
+              points: shape.points.map(p => ({
+                x: p.x * 0.95,
+                y: p.y * 0.95,
+              })),
+            }));
+          } else if (shape.type === "Pencil" || shape.type === "Calligraphy") {
 
-      //       const cx = shape.points.reduce((sum, p) => sum + (p.x ?? p[0]), 0) / shape.points.length;
-      //       const cy = shape.points.reduce((sum, p) => sum + (p.y ?? p[1]), 0) / shape.points.length;
-      //       const newPoints = shape.points.map(p => {
-      //         const x = (p.x ?? p[0]) - cx;
-      //         const y = (p.y ?? p[1]) - cy;
-      //         return {
-      //           ...(p.x !== undefined ? p : { x: p[0], y: p[1] }),
-      //           x: cx + x * 0.95,
-      //           y: cy + y * 0.95,
-      //         };
-      //       });
-      //       dispatch(updateShapePosition({
-      //         id: shape.id,
-      //         points: newPoints,
-      //       }));
-      //     } else {
+            const cx = shape.points.reduce((sum, p) => sum + (p.x ?? p[0]), 0) / shape.points.length;
+            const cy = shape.points.reduce((sum, p) => sum + (p.y ?? p[1]), 0) / shape.points.length;
+            const newPoints = shape.points.map(p => {
+              const x = (p.x ?? p[0]) - cx;
+              const y = (p.y ?? p[1]) - cy;
+              return {
+                ...(p.x !== undefined ? p : { x: p[0], y: p[1] }),
+                x: cx + x * 0.95,
+                y: cy + y * 0.95,
+              };
+            });
+            dispatch(updateShapePosition({
+              id: shape.id,
+              points: newPoints,
+            }));
+          } else {
 
-      //       dispatch(updateShapePosition({
-      //         id: shape.id,
-      //         scaleX: (shape.scaleX || 1) * 0.95,
-      //         scaleY: (shape.scaleY || 1) * 0.95,
-      //       }));
-      //     }
-      //   });
-      //   break;
-      // case "randomMove":
+            dispatch(updateShapePosition({
+              id: shape.id,
+              scaleX: (shape.scaleX || 1) * 0.95,
+              scaleY: (shape.scaleY || 1) * 0.95,
+            }));
+          }
+        });
+        break;
+      case "randomMove":
 
-      //   if (!window._tweakRandomDirs) window._tweakRandomDirs = {};
-      //   affectedShapes.forEach(shape => {
-      //     if (!window._tweakRandomDirs[shape.id]) {
+        if (!window._tweakRandomDirs) window._tweakRandomDirs = {};
+        affectedShapes.forEach(shape => {
+          if (!window._tweakRandomDirs[shape.id]) {
 
-      //       const angle = Math.random() * 2 * Math.PI;
-      //       window._tweakRandomDirs[shape.id] = {
-      //         dx: Math.cos(angle),
-      //         dy: Math.sin(angle),
-      //       };
-      //     }
-      //     const { dx, dy } = window._tweakRandomDirs[shape.id];
-      //     dispatch(updateShapePosition({
-      //       id: shape.id,
-      //       x: shape.x + dx * 3 * tweakForce,
-      //       y: shape.y + dy * 3 * tweakForce,
-      //     }));
-      //   });
-      //   break;
-      // case "rotate":
+            const angle = Math.random() * 2 * Math.PI;
+            window._tweakRandomDirs[shape.id] = {
+              dx: Math.cos(angle),
+              dy: Math.sin(angle),
+            };
+          }
+          const { dx, dy } = window._tweakRandomDirs[shape.id];
+          dispatch(updateShapePosition({
+            id: shape.id,
+            x: shape.x + dx * 3 * tweakForce,
+            y: shape.y + dy * 3 * tweakForce,
+          }));
+        });
+        break;
+      case "rotate":
 
-      //   affectedShapes.forEach(shape => {
-      //     dispatch(updateShapePosition({
-      //       id: shape.id,
-      //       rotation: (shape.rotation || 0) + 10 * tweakForce,
-      //     }));
-      //   });
-      //   break;
-      // case "duplicate":
-      //   affectedShapes.forEach(shape => {
+        affectedShapes.forEach(shape => {
+          dispatch(updateShapePosition({
+            id: shape.id,
+            rotation: (shape.rotation || 0) + 10 * tweakForce,
+          }));
+        });
+        break;
+      case "duplicate":
+        affectedShapes.forEach(shape => {
 
-      //     const newShape = {
-      //       ...shape,
-      //       id: `${shape.id}-copy-${Date.now()}-${Math.floor(Math.random() * 10000)}`,
-      //       x: (shape.x || 0) + 10,
-      //       y: (shape.y || 0) + 10,
-      //     };
-      //     dispatch(addShape(newShape));
-      //   });
-      //   break;
-      // case "push":
+          const newShape = {
+            ...shape,
+            id: `${shape.id}-copy-${Date.now()}-${Math.floor(Math.random() * 10000)}`,
+            x: (shape.x || 0) + 10,
+            y: (shape.y || 0) + 10,
+          };
+          dispatch(addShape(newShape));
+        });
+        break;
+      case "push":
 
-      //   affectedShapes.forEach(shape => {
-      //     const dx = shape.x - point.x;
-      //     const dy = shape.y - point.y;
-      //     const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-      //     dispatch(updateShapePosition({
-      //       id: shape.id,
-      //       x: shape.x + (dx / dist) * 10 * tweakForce,
-      //       y: shape.y + (dy / dist) * 10 * tweakForce,
-      //     }));
-      //   });
-      //   break;
-      // case "shrinkInset":
+        affectedShapes.forEach(shape => {
+          const dx = shape.x - point.x;
+          const dy = shape.y - point.y;
+          const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+          dispatch(updateShapePosition({
+            id: shape.id,
+            x: shape.x + (dx / dist) * 10 * tweakForce,
+            y: shape.y + (dy / dist) * 10 * tweakForce,
+          }));
+        });
+        break;
+      case "shrinkInset":
 
 
-      //   affectedShapes.forEach(shape => {
-      //     dispatch(updateShapePosition({
-      //       id: shape.id,
-      //       scaleX: (shape.scaleX || 1) * 0.98,
-      //       scaleY: (shape.scaleY || 1) * 0.98,
-      //     }));
-      //   });
-      //   break;
-      // case "roughen":
+        affectedShapes.forEach(shape => {
+          dispatch(updateShapePosition({
+            id: shape.id,
+            scaleX: (shape.scaleX || 1) * 0.98,
+            scaleY: (shape.scaleY || 1) * 0.98,
+          }));
+        });
+        break;
+      case "roughen":
 
-      //   affectedShapes.forEach(shape => {
-      //     if (shape.points) {
-      //       const newPoints = shape.points.map(pt => ({
-      //         x: pt.x + (Math.random() - 0.5) * 2 * tweakForce,
-      //         y: pt.y + (Math.random() - 0.5) * 2 * tweakForce,
-      //       }));
-      //       dispatch(updateShapePosition({
-      //         id: shape.id,
-      //         points: newPoints,
-      //       }));
-      //     }
-      //   });
-      //   break;
-      // case "paint":
+        affectedShapes.forEach(shape => {
+          if (shape.points) {
+            const newPoints = shape.points.map(pt => ({
+              x: pt.x + (Math.random() - 0.5) * 2 * tweakForce,
+              y: pt.y + (Math.random() - 0.5) * 2 * tweakForce,
+            }));
+            dispatch(updateShapePosition({
+              id: shape.id,
+              points: newPoints,
+            }));
+          }
+        });
+        break;
+      case "paint":
 
-      //   affectedShapes.forEach(shape => {
-      //     dispatch(updateShapePosition({
-      //       id: shape.id,
-      //       fill: fillColor || "#000",
-      //       stroke: fillColor || "#000",
-      //     }));
-      //   });
-      //   break;
-      // case "jitterColor":
+        affectedShapes.forEach(shape => {
+          dispatch(updateShapePosition({
+            id: shape.id,
+            fill: fillColor || "#000",
+            stroke: fillColor || "#000",
+          }));
+        });
+        break;
+      case "jitterColor":
 
-      //   affectedShapes.forEach(shape => {
+        affectedShapes.forEach(shape => {
 
-      //     if (shape.fill && typeof shape.fill === "string" && shape.fill.startsWith("#")) {
-      //       let color = shape.fill.replace("#", "");
-      //       let r = Math.max(0, Math.min(255, parseInt(color.substring(0, 2), 16) + Math.floor(Math.random() * 20 - 10)));
-      //       let g = Math.max(0, Math.min(255, parseInt(color.substring(2, 4), 16) + Math.floor(Math.random() * 20 - 10)));
-      //       let b = Math.max(0, Math.min(255, parseInt(color.substring(4, 6), 16) + Math.floor(Math.random() * 20 - 10)));
-      //       let newColor = `#${r.toString(16).padStart(2, "0")}${g.toString(16).padStart(2, "0")}${b.toString(16).padStart(2, "0")}`;
-      //       dispatch(updateShapePosition({
-      //         id: shape.id,
-      //         fill: newColor,
-      //       }));
-      //     }
-      //   });
-      //   break;
+          if (shape.fill && typeof shape.fill === "string" && shape.fill.startsWith("#")) {
+            let color = shape.fill.replace("#", "");
+            let r = Math.max(0, Math.min(255, parseInt(color.substring(0, 2), 16) + Math.floor(Math.random() * 20 - 10)));
+            let g = Math.max(0, Math.min(255, parseInt(color.substring(2, 4), 16) + Math.floor(Math.random() * 20 - 10)));
+            let b = Math.max(0, Math.min(255, parseInt(color.substring(4, 6), 16) + Math.floor(Math.random() * 20 - 10)));
+            let newColor = `#${r.toString(16).padStart(2, "0")}${g.toString(16).padStart(2, "0")}${b.toString(16).padStart(2, "0")}`;
+            dispatch(updateShapePosition({
+              id: shape.id,
+              fill: newColor,
+            }));
+          }
+        });
+        break;
       default:
         break;
     }
@@ -4803,7 +4853,9 @@ const Panel = React.forwardRef(({
                         draggable
                         onClick={(e) => {
                           e.cancelBubble = true;
-                          dispatch(selectShape(shape.id));
+                          if (!selectedShapeIds.includes(shape.id)) {
+                            dispatch(selectShape(shape.id));
+                          }
                         }}
                         onDragEnd={(e) => {
                           const { x, y } = e.target.position();
@@ -5130,7 +5182,9 @@ const Panel = React.forwardRef(({
                                   dispatch(deleteShape(shape.id));
                                 } else {
 
-                                  dispatch(selectShape(shape.id));
+                                  if (!selectedShapeIds.includes(shape.id)) {
+                                    dispatch(selectShape(shape.id));
+                                  }
                                 }
                               }
                             }}
@@ -5158,7 +5212,7 @@ const Panel = React.forwardRef(({
                             skewEnabled={true}
                           />
                         )}
-                        {isSelected && selectedTool === "Rectangle" && (
+                        {/* {isSelected && selectedTool === "Rectangle" && (
                           <>
                             <Circle
                               x={shape.x + shape.width / 2}
@@ -5223,7 +5277,7 @@ const Panel = React.forwardRef(({
                               }}
                             />
                           </>
-                        )}
+                        )} */}
                       </React.Fragment>
                     );
                   } else if (shape.type === "Bezier") {
@@ -5247,7 +5301,9 @@ const Panel = React.forwardRef(({
                           dash={getDashArray(shape.strokeStyle)}
                           onClick={(e) => {
                             e.cancelBubble = true;
-                            dispatch(selectShape(shape.id));
+                            if (!selectedShapeIds.includes(shape.id)) {
+                              dispatch(selectShape(shape.id));
+                            }
                           }}
                           onMouseDown={(e) => {
                             e.cancelBubble = true;
@@ -5308,7 +5364,9 @@ const Panel = React.forwardRef(({
                               );
                             } else {
 
-                              dispatch(selectShape(shape.id));
+                              if (!selectedShapeIds.includes(shape.id)) {
+                                dispatch(selectShape(shape.id));
+                              }
                             }
                           }}
                           onMouseDown={(e) => {
@@ -5366,7 +5424,9 @@ const Panel = React.forwardRef(({
                             );
                           } else {
 
-                            dispatch(selectShape(shape.id));
+                            if (!selectedShapeIds.includes(shape.id)) {
+                              dispatch(selectShape(shape.id));
+                            }
                           }
                         }}
                         onDragEnd={(e) => {
@@ -5503,7 +5563,7 @@ const Panel = React.forwardRef(({
                           rotation={shape.rotation || 0}
                           scaleX={shape.horizontalRadius / shape.radius || 1}
                           scaleY={shape.verticalRadius / shape.radius || 1}
-                          draggable={selectedTool !== "Node" && selectedTool !== "Connector"}
+                          draggable={selectedTool !== "Node" && selectedTool !== "Connector" && selectedTool !== "Gradient"}
                           onDragMove={handleDragMove}
                           skewX={shape.skewX || 0}
                           closed={false}
@@ -5534,7 +5594,9 @@ const Panel = React.forwardRef(({
                                 dispatch(deleteShape(shape.id));
                               } else {
 
-                                dispatch(selectShape(shape.id));
+                                if (!selectedShapeIds.includes(shape.id)) {
+                                  dispatch(selectShape(shape.id));
+                                }
                               }
                             }
                           }}
@@ -5622,7 +5684,7 @@ const Panel = React.forwardRef(({
                           strokeRadialGradientEndPoint={shape.stroke?.type === "radial-gradient" ? { x: shape.stroke.center.x, y: shape.stroke.center.y + shape.stroke.radius } : undefined}
                           strokeRadialGradientColorStops={shape.stroke?.type === "radial-gradient" ? shape.stroke.colors.flatMap(stop => [stop.pos, stop.color]) : undefined}
                           strokeWidth={shape.strokeWidth || 1}
-                          draggable={selectedTool !== "Node" && selectedTool !== "Connector"}
+                          draggable={selectedTool !== "Node" && selectedTool !== "Connector" && selectedTool !== "Gradient"}
                           onDragMove={handleDragMove}
                           skewX={shape.skewX || 0}
                           skewY={shape.skewY || 0}
@@ -5653,7 +5715,9 @@ const Panel = React.forwardRef(({
                                 dispatch(deleteShape(shape.id));
                               } else {
 
-                                dispatch(selectShape(shape.id));
+                                if (!selectedShapeIds.includes(shape.id)) {
+                                  dispatch(selectShape(shape.id));
+                                }
                               }
                             }
                           }}
@@ -5715,7 +5779,7 @@ const Panel = React.forwardRef(({
                           scaleX={shape.scaleX || 1}
                           scaleY={shape.scaleY || 1}
                           closed
-                          draggable={selectedTool !== "Node" && selectedTool !== "Connector"}
+                          draggable={selectedTool !== "Node" && selectedTool !== "Connector" && selectedTool !== "Gradient"}
                           onDragMove={handleDragMove}
                           skewX={shape.skewX || 0}
                           skewY={shape.skewY || 0}
@@ -5745,7 +5809,9 @@ const Panel = React.forwardRef(({
                                 dispatch(deleteShape(shape.id));
                               } else {
 
-                                dispatch(selectShape(shape.id));
+                                if (!selectedShapeIds.includes(shape.id)) {
+                                  dispatch(selectShape(shape.id));
+                                }
                               }
                             }
                           }}
@@ -5818,7 +5884,9 @@ const Panel = React.forwardRef(({
                               dispatch(deleteShape(shape.id));
                             } else {
 
-                              dispatch(selectShape(shape.id));
+                              if (!selectedShapeIds.includes(shape.id)) {
+                                dispatch(selectShape(shape.id));
+                              }
                             }
                           }
                         }}
@@ -5921,11 +5989,12 @@ const Panel = React.forwardRef(({
                           lineJoin="round"
                           lineCap="round"
                           closed={shape.closed || false}
-                          draggable={selectedTool !== "Node" && selectedTool !== "Connector"}
+                          draggable={selectedTool !== "Node" && selectedTool !== "Connector" && selectedTool === "Select"}
                           dash={getDashArray(shape.strokeStyle)}
                           rotation={shape.rotation || 0}
                           onDragMove={handleDragMove}
                           scaleX={shape.scaleX || 1}
+                          listening={true}
                           scaleY={shape.scaleY || 1}
                           skewX={shape.skewX || 0}
                           skewY={shape.skewY || 0}
@@ -5955,7 +6024,9 @@ const Panel = React.forwardRef(({
                                 dispatch(deleteShape(shape.id));
                               } else {
 
-                                dispatch(selectShape(shape.id));
+                                if (!selectedShapeIds.includes(shape.id)) {
+                                  dispatch(selectShape(shape.id));
+                                }
                               }
                             }
                           }}
@@ -6064,15 +6135,15 @@ const Panel = React.forwardRef(({
                           lineJoin="round"
                           lineCap="round"
                           closed={false}
-                          draggable={selectedTool !== "Node"}
+                          draggable={selectedTool === "Select"}
                           dash={getDashArray(shape.strokeStyle)}
-                          listening="false"
+                          listening={true}
                           onDragMove={handleDragMove}
                           rotation={shape.rotation || 0}
                           scaleX={shape.scaleX || 1}
                           scaleY={shape.scaleY || 1}
-                          offsetX={shape.width / 2}
-                          offsetY={shape.height / 2}
+                          offsetX={shape.width ? shape.width / 2 : 0}
+                          offsetY={shape.height ? shape.height / 2 : 0}
                           skewX={shape.skewX || 0}
                           skewY={shape.skewY || 0}
                           onMouseEnter={() => {
@@ -6101,7 +6172,9 @@ const Panel = React.forwardRef(({
                                 dispatch(deleteShape(shape.id));
                               } else {
 
-                                dispatch(selectShape(shape.id));
+                                if (!selectedShapeIds.includes(shape.id)) {
+                                  dispatch(selectShape(shape.id));
+                                }
                               }
                             }
                           }}
@@ -6257,10 +6330,14 @@ const Panel = React.forwardRef(({
                             else delete shapeRefs.current[shape.id];
                           }}
                           id={shape.id}
+                          x={shape.x}
+                          y={shape.y}
                           data={shape.path}
                           stroke={shape.stroke || "black"}
                           strokeWidth={shape.strokeWidth || 2}
                           fill="transparent"
+                          skewX={shape.skewX || 0}
+                          skewY={shape.skewY || 0}
                           draggable={selectedShapeId === shape.id}
                           dash={getDashArray(shape.strokeStyle)}
                           rotation={shape.rotation || 0}
@@ -6282,7 +6359,9 @@ const Panel = React.forwardRef(({
                               );
                             } else {
 
-                              dispatch(selectShape(shape.id));
+                              if (!selectedShapeIds.includes(shape.id)) {
+                                dispatch(selectShape(shape.id));
+                              }
                             }
                           }}
                           onDragEnd={(e) => {
@@ -6417,7 +6496,9 @@ const Panel = React.forwardRef(({
                         lineJoin="round"
                         onClick={e => {
                           e.cancelBubble = true;
-                          dispatch(selectShape(shape.id));
+                          if (!selectedShapeIds.includes(shape.id)) {
+                            dispatch(selectShape(shape.id));
+                          }
                         }}
                       />
                     );
@@ -6638,7 +6719,9 @@ const Panel = React.forwardRef(({
                             );
                           } else {
 
-                            dispatch(selectShape(shape.id));
+                            if (!selectedShapeIds.includes(shape.id)) {
+                              dispatch(selectShape(shape.id));
+                            }
                           }
                         }}
                         onDragEnd={(e) => {

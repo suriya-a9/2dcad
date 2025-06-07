@@ -290,6 +290,9 @@ const toolSlice = createSlice({
     },
 
     addShape: (state, action) => {
+      if (state.history.length === 0) {
+        state.history.push(JSON.parse(JSON.stringify(state)));
+      }
       const newShape = action.payload;
 
       if (newShape.type === "Rectangle") {
@@ -2592,7 +2595,7 @@ export const {
   setConnectorNoOverlap,
   setTweakMode,
   setTweakRadius,
-  setTweakForce
+  setTweakForce,
 } = toolSlice.actions;
 
 export default toolSlice.reducer;

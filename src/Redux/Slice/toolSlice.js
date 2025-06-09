@@ -7,7 +7,7 @@ import { act } from "react";
 const toolSlice = createSlice({
   name: "tool",
   initialState: {
-    selectedTool: null,
+    selectedTool: "Select",
     isStrokeToPathMode: false,
     layers: [{ name: "Layer 1", shapes: [], visible: true }],
     strokeColor: "#000000",
@@ -129,6 +129,7 @@ const toolSlice = createSlice({
     tweakMode: "move",
     tweakRadius: 40,
     tweakForce: 1,
+    tweakFidelity: 50,
   },
 
   reducers: {
@@ -2201,6 +2202,13 @@ const toolSlice = createSlice({
       selectedLayer.shapes = selectedLayer.shapes.filter(
         (shape) => !action.payload.includes(shape.id)
       );
+
+      state.shapes = state.shapes.filter(
+        (shape) => !action.payload.includes(shape.id)
+      );
+
+      state.selectedShapeIds = [];
+      state.selectedShapeId = null;
     },
     setCalligraphyAngle: (state, action) => {
       state.calligraphyAngle = action.payload;
@@ -2411,6 +2419,9 @@ const toolSlice = createSlice({
     setTweakForce(state, action) {
       state.tweakForce = action.payload;
     },
+    setTweakFidelity(state, action) {
+      state.tweakFidelity = action.payload;
+    }
   },
 
 });
@@ -2596,6 +2607,7 @@ export const {
   setTweakMode,
   setTweakRadius,
   setTweakForce,
+  setTweakFidelity,
 } = toolSlice.actions;
 
 export default toolSlice.reducer;

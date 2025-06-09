@@ -120,7 +120,8 @@ import {
   setConnectorSpacing,
   setConnectorLength,
   setTweakRadius,
-  setTweakForce
+  setTweakForce,
+  setTweakFidelity,
 } from "../../Redux/Slice/toolSlice";
 import {
   TbDeselect,
@@ -2532,6 +2533,7 @@ function TweakTopbar() {
   const tweakRadius = useSelector(state => state.tool.tweakRadius || 40);
   const setTweakMode = (mode) => dispatch({ type: "tool/setTweakMode", payload: mode });
   const tweakForce = useSelector(state => state.tool.tweakForce || 1);
+  const tweakFidelity = useSelector(state => state.tool.tweakFidelity || 50);
   const tweakModes = [
     { key: "move", label: "Move objects", icon: <FaArrowsAlt /> },
     { key: "moveToCursor", label: "Move to center of cursor", icon: <FaBullseye /> },
@@ -2581,11 +2583,24 @@ function TweakTopbar() {
         <input
           id="tweak-force"
           type="number"
-          min={0.01}
-          max={10}
-          step={0.01}
+          min={1}
+          max={100}
+          step={1}
           value={tweakForce}
           onChange={e => dispatch(setTweakForce(Number(e.target.value)))}
+          style={{ width: 60 }}
+        />
+      </div>
+      <div className="p-2 value" style={{ display: "flex", alignItems: "center", marginLeft: 12 }}>
+        <label htmlFor="tweak-Fidelity">Fidelity:&nbsp;</label>
+        <input
+          id="tweak-Fidelity"
+          type="number"
+          min={0}
+          max={100}
+          step={1}
+          value={tweakFidelity}
+          onChange={e => dispatch(setTweakFidelity(Number(e.target.value)))}
           style={{ width: 60 }}
         />
       </div>

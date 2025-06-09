@@ -332,6 +332,7 @@ const Panel = React.forwardRef(({
   const tweakMode = useSelector(state => state.tool.tweakMode);
   const tweakRadius = useSelector(state => state.tool.tweakRadius || 40);
   const tweakForce = useSelector(state => state.tool.tweakForce || 1);
+  const tweakFidelity = useSelector(state => state.tool.tweakFidelity || 50);
   function addGuidesAtLine(x1, y1, x2, y2) {
     setGuides(prev => [
       ...prev,
@@ -3250,28 +3251,40 @@ const Panel = React.forwardRef(({
 
   const handleResizeEnd = (e, shapeId) => {
     const node = e.target;
-
-
-    const width = node.width() * node.scaleX();
-    const height = node.height() * node.scaleY();
-    const { x, y } = node.position();
-    const skewX = node.skewX();
-    const skewY = node.skewY();
-
+    const scaleX = node.scaleX();
+    const scaleY = node.scaleY();
 
     node.scale({ x: 1, y: 1 });
 
+    const shape = shapes.find(s => s.id === shapeId);
+    if (shape?.type === "Circle") {
+      const averageScale = (scaleX + scaleY) / 2;
+      const newRadius = Math.max(1, shape.radius * averageScale);
 
-    dispatch(updateShapePosition({
-      id: shapeId,
-      x,
-      y,
-      width,
-      height,
-      skewX,
-      skewY,
-    }));
+      dispatch(updateShapePosition({
+        id: shapeId,
+        x: node.x(),
+        y: node.y(),
+        radius: newRadius,
+        skewX: node.skewX(),
+        skewY: node.skewY(),
+      }));
+    } else {
+      const newWidth = node.width() * scaleX;
+      const newHeight = node.height() * scaleY;
+
+      dispatch(updateShapePosition({
+        id: shapeId,
+        x: node.x(),
+        y: node.y(),
+        width: newWidth,
+        height: newHeight,
+        skewX: node.skewX(),
+        skewY: node.skewY(),
+      }));
+    }
   };
+
   const handleDoubleClick = () => {
     if (newShape && newShape.type === "Bezier") {
       dispatch(addShape(newShape));
@@ -4474,11 +4487,11 @@ const Panel = React.forwardRef(({
   }));
 
   function handleTweakAction(point, affectedShapes) {
+    const fidelity = Math.max(0, Math.min(100, tweakFidelity));
     switch (tweakMode) {
       case "move":
-
         affectedShapes.forEach(shape => {
-
+          if (Math.random() > fidelity / 100) return;
           const dx = point.x - shape.x;
           const dy = point.y - shape.y;
 
@@ -4492,6 +4505,7 @@ const Panel = React.forwardRef(({
       case "moveToCursor":
 
         affectedShapes.forEach(shape => {
+          if (Math.random() > fidelity / 100) return;
           dispatch(updateShapePosition({
             id: shape.id,
             x: point.x,
@@ -4501,6 +4515,7 @@ const Panel = React.forwardRef(({
         break;
       case "shrink":
         affectedShapes.forEach(shape => {
+          if (Math.random() > fidelity / 100) return;
           if (shape.type === "Rectangle") {
             dispatch(updateShapePosition({
               id: shape.id,
@@ -4558,6 +4573,7 @@ const Panel = React.forwardRef(({
 
         if (!window._tweakRandomDirs) window._tweakRandomDirs = {};
         affectedShapes.forEach(shape => {
+          if (Math.random() > fidelity / 100) return;
           if (!window._tweakRandomDirs[shape.id]) {
 
             const angle = Math.random() * 2 * Math.PI;
@@ -4577,6 +4593,7 @@ const Panel = React.forwardRef(({
       case "rotate":
 
         affectedShapes.forEach(shape => {
+          if (Math.random() > fidelity / 100) return;
           dispatch(updateShapePosition({
             id: shape.id,
             rotation: (shape.rotation || 0) + 10 * tweakForce,
@@ -4585,7 +4602,7 @@ const Panel = React.forwardRef(({
         break;
       case "duplicate":
         affectedShapes.forEach(shape => {
-
+          if (Math.random() > fidelity / 100) return;
           const newShape = {
             ...shape,
             id: `${shape.id}-copy-${Date.now()}-${Math.floor(Math.random() * 10000)}`,
@@ -4598,6 +4615,7 @@ const Panel = React.forwardRef(({
       case "push":
 
         affectedShapes.forEach(shape => {
+          if (Math.random() > fidelity / 100) return;
           const dx = shape.x - point.x;
           const dy = shape.y - point.y;
           const dist = Math.sqrt(dx * dx + dy * dy) || 1;
@@ -4612,6 +4630,7 @@ const Panel = React.forwardRef(({
 
 
         affectedShapes.forEach(shape => {
+          if (Math.random() > fidelity / 100) return;
           dispatch(updateShapePosition({
             id: shape.id,
             scaleX: (shape.scaleX || 1) * 0.98,
@@ -4622,6 +4641,7 @@ const Panel = React.forwardRef(({
       case "roughen":
 
         affectedShapes.forEach(shape => {
+          if (Math.random() > fidelity / 100) return;
           if (shape.points) {
             const newPoints = shape.points.map(pt => ({
               x: pt.x + (Math.random() - 0.5) * 2 * tweakForce,
@@ -4637,6 +4657,7 @@ const Panel = React.forwardRef(({
       case "paint":
 
         affectedShapes.forEach(shape => {
+          if (Math.random() > fidelity / 100) return;
           dispatch(updateShapePosition({
             id: shape.id,
             fill: fillColor || "#000",
@@ -4647,7 +4668,7 @@ const Panel = React.forwardRef(({
       case "jitterColor":
 
         affectedShapes.forEach(shape => {
-
+          if (Math.random() > fidelity / 100) return;
           if (shape.fill && typeof shape.fill === "string" && shape.fill.startsWith("#")) {
             let color = shape.fill.replace("#", "");
             let r = Math.max(0, Math.min(255, parseInt(color.substring(0, 2), 16) + Math.floor(Math.random() * 20 - 10)));
@@ -5740,6 +5761,7 @@ const Panel = React.forwardRef(({
                       </React.Fragment>
                     );
                   } else if (shape.type === "Polygon") {
+                    if (!shape.points || shape.points.length === 0) return null;
                     const isSelected = selectedShapeIds.includes(shape.id);
                     return (
                       <React.Fragment key={shape.id}>
@@ -6330,8 +6352,8 @@ const Panel = React.forwardRef(({
                             else delete shapeRefs.current[shape.id];
                           }}
                           id={shape.id}
-                          x={shape.x}
-                          y={shape.y}
+                          x={0}
+                          y={0}
                           data={shape.path}
                           stroke={shape.stroke || "black"}
                           strokeWidth={shape.strokeWidth || 2}
@@ -6886,10 +6908,10 @@ const Panel = React.forwardRef(({
                 )}
                 {newShape && newShape.type === "Spiral" && (
                   <Path
-                    x={newShape.x}
-                    y={newShape.y}
+                    x={0}
+                    y={0}
                     data={newShape.path}
-
+                    stroke={newShape.stroke}
                     strokeWidth={newShape.strokeWidth}
                     fill="transparent"
                   />
@@ -7574,24 +7596,6 @@ const Panel = React.forwardRef(({
                 }
               </Layer>
             </Stage>
-            {selectedTool === "Tweak" && isCustomCursorVisible && (
-              <div
-                style={{
-                  position: "absolute",
-                  pointerEvents: "none",
-                  zIndex: 2000,
-                  left: `${(cursorPosition.x * scale) + position.x - tweakRadius * scale}px`,
-                  top: `${(cursorPosition.y * scale) + position.y - tweakRadius * scale}px`,
-                  width: `${tweakRadius * 2 * scale}px`,
-                  height: `${tweakRadius * 2 * scale}px`,
-                  border: "2px solid #007bff",
-                  borderRadius: "50%",
-                  background: "rgba(0,128,255,0.10)",
-                  boxShadow: "0 0 8px 2px rgba(0,128,255,0.15)",
-                  transition: "left 0.04s, top 0.04s, width 0.04s, height 0.04s",
-                }}
-              />
-            )}
           </div>
         </div>
       </div>

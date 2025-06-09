@@ -30,3 +30,11 @@
         left: 2% !important;
     }
 }
+
+.ruler.vertical {
+    cursor: move;
+}
+
+.ruler.horizontal {
+    cursor: move;
+}

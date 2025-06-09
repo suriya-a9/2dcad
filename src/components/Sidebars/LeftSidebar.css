@@ -21,6 +21,11 @@
   background-color: gray;
 }
 
+.selected-tool {
+  background: gray !important;
+  border-radius: 6px;
+}
+
 .cursor-select {
   cursor: url('../../assets/arrow.png'), auto;
 }

@@ -36,7 +36,7 @@ const LeftSidebar = () => {
       <div className="d-flex mb-3" style={{ flexDirection: 'row !important' }}>
         <div className="left-icons">
           <div
-            className="p-2 left-icon"
+            className={`p-2 left-icon${selectedTool === "Select" ? " selected-tool" : ""}`}
             onClick={() => handleToolSelect("Select")}
           >
             <GrSelect
@@ -45,7 +45,7 @@ const LeftSidebar = () => {
             />
           </div>
           <div
-            className="p-2 left-icon"
+            className={`p-2 left-icon${selectedTool === "Node" ? " selected-tool" : ""}`}
             onClick={() => handleToolSelect("Node")}
           >
             <AiOutlineNodeIndex
@@ -54,7 +54,7 @@ const LeftSidebar = () => {
             />
           </div>
           <div
-            className="p-2 left-icon"
+            className={`p-2 left-icon${selectedTool === "ShapeBuilder" ? " selected-tool" : ""}`}
             onClick={() => handleToolSelect("ShapeBuilder")}
           >
             <CgPathDivide
@@ -63,7 +63,7 @@ const LeftSidebar = () => {
             />
           </div>
           <div
-            className="p-2 left-icon"
+            className={`p-2 left-icon${selectedTool === "Rectangle" ? " selected-tool" : ""}`}
             onClick={() => handleToolSelect("Rectangle")}
           >
             <FaRegSquare
@@ -72,7 +72,7 @@ const LeftSidebar = () => {
             />
           </div>
           <div
-            className="p-2 left-icon"
+            className={`p-2 left-icon${selectedTool === "Circle" ? " selected-tool" : ""}`}
             onClick={() => handleToolSelect("Circle")}
           >
             <FaRegCircle
@@ -81,7 +81,7 @@ const LeftSidebar = () => {
             />
           </div>
           <div
-            className="p-2 left-icon"
+            className={`p-2 left-icon${selectedTool === "Star" ? " selected-tool" : ""}`}
             onClick={() => handleToolSelect("Star")}
           >
             <FaRegStar
@@ -90,7 +90,7 @@ const LeftSidebar = () => {
             />
           </div>
           <div
-            className="p-2 left-icon"
+            className={`p-2 left-icon${selectedTool === "Polygon" ? " selected-tool" : ""}`}
             onClick={() => handleToolSelect("Polygon")}
           >
             <BiPolygon
@@ -99,7 +99,7 @@ const LeftSidebar = () => {
             />
           </div>
           {/* <div
-            className="p-2 left-icon"
+            className={`p-2 left-icon${selectedTool === "Select" ? " selected-tool" : ""}`}
           >
             <LuBox
               data-tooltip-content="3D Box Tool"
@@ -107,7 +107,7 @@ const LeftSidebar = () => {
             />
           </div> */}
           <div
-            className="p-2 left-icon"
+            className={`p-2 left-icon${selectedTool === "Spiral" ? " selected-tool" : ""}`}
             onClick={() => handleToolSelect("Spiral")}
           >
             <TiSpiral
@@ -116,7 +116,7 @@ const LeftSidebar = () => {
             />
           </div>
           {/* <div
-            className="p-2 left-icon"
+            className={`p-2 left-icon${selectedTool === "Pen" ? " selected-tool" : ""}`}
             onClick={() => handleToolSelect("Pen")}
           >
             <BsVectorPen
@@ -125,7 +125,7 @@ const LeftSidebar = () => {
             />
           </div> */}
           <div
-            className="p-2 left-icon"
+            className={`p-2 left-icon${selectedTool === "Bezier" ? " selected-tool" : ""}`}
             onClick={() => handleToolSelect("Bezier")}
           >
             <BsVectorPen
@@ -134,7 +134,7 @@ const LeftSidebar = () => {
             />
           </div>
           <div
-            className="p-2 left-icon"
+            className={`p-2 left-icon${selectedTool === "Pencil" ? " selected-tool" : ""}`}
             onClick={() => handleToolSelect("Pencil")}
           >
             <BsPencil
@@ -143,7 +143,7 @@ const LeftSidebar = () => {
             />
           </div>
           <div
-            className="p-2 left-icon"
+            className={`p-2 left-icon${selectedTool === "Calligraphy" ? " selected-tool" : ""}`}
             onClick={() => handleToolSelect("Calligraphy")}
           >
             <PiPaintBrush
@@ -152,7 +152,7 @@ const LeftSidebar = () => {
             />
           </div>
           <div
-            className="p-2 left-icon"
+            className={`p-2 left-icon${selectedTool === "Dropper" ? " selected-tool" : ""}`}
             onClick={() => handleToolSelect("Dropper")}
           >
             <BiSolidEyedropper
@@ -161,7 +161,7 @@ const LeftSidebar = () => {
             />
           </div>
           <div
-            className="p-2 left-icon"
+            className={`p-2 left-icon${selectedTool === "PaintBucket" ? " selected-tool" : ""}`}
             onClick={() => handleToolSelect("PaintBucket")}
           >
             <BsPaintBucket
@@ -171,7 +171,7 @@ const LeftSidebar = () => {
           </div>
           {/* <div className="p-2 right-icon"> <input type="color" name="" id="" style={{ inlineSize: "20px", blockSize: "20px" }} /> </div> */}
           <div
-            className="p-2 left-icon"
+            className={`p-2 left-icon${selectedTool === "Eraser" ? " selected-tool" : ""}`}
             onClick={() => handleToolSelect("Eraser")}
           >
             <BiSolidEraser
@@ -180,7 +180,7 @@ const LeftSidebar = () => {
             />
           </div>
           <div
-            className="p-2 left-icon"
+            className={`p-2 left-icon${selectedTool === "Connector" ? " selected-tool" : ""}`}
             onClick={() => handleToolSelect("Connector")}
           >
             <FaArrowTrendDown
@@ -189,19 +189,19 @@ const LeftSidebar = () => {
             />
           </div>
           <div
-            className="p-2 left-icon"
+            className={`p-2 left-icon${selectedTool === "Text" ? " selected-tool" : ""}`}
             onClick={() => handleToolSelect("Text")}
           >
             <IoText data-tooltip-content="Text" data-tooltip-id="tool-left" />
           </div>
           <div
-            className="p-2 left-icon"
+            className={`p-2 left-icon${selectedTool === "Gradient" ? " selected-tool" : ""}`}
             onClick={() => handleToolSelect("Gradient")}
           >
             <MdGradient data-tooltip-content="Gradient" data-tooltip-id="tool-left" />
           </div>
           {/* <div
-            className="p-2 left-icon"
+            className={`p-2 left-icon${selectedTool === "Select" ? " selected-tool" : ""}`}
           >
             <MdGradient
               data-tooltip-content="Gradient Tool"
@@ -209,7 +209,7 @@ const LeftSidebar = () => {
             />
           </div> */}
           <div
-            className="p-2 left-icon"
+            className={`p-2 left-icon${selectedTool === "Mesh" ? " selected-tool" : ""}`}
             onClick={() => handleToolSelect("Mesh")}
           >
             <LuCircuitBoard
@@ -218,7 +218,7 @@ const LeftSidebar = () => {
             />
           </div>
           <div
-            className="p-2 left-icon"
+            className={`p-2 left-icon${selectedTool === "Tweak" ? " selected-tool" : ""}`}
             onClick={() => handleToolSelect("Tweak")}
           >
             <GiColombia
@@ -227,25 +227,25 @@ const LeftSidebar = () => {
             />
           </div>
           <div
-            className="p-2 left-icon"
+            className={`p-2 left-icon${selectedTool === "Spray" ? " selected-tool" : ""}`}
             onClick={() => handleToolSelect("Spray")}
           >
             <GiSpray data-tooltip-content="Spray" data-tooltip-id="tool-left" />
           </div>
           <div
-            className="p-2 left-icon"
+            className={`p-2 left-icon${selectedTool === "Measurement" ? " selected-tool" : ""}`}
             onClick={() => handleToolSelect("Measurement")}
           >
             <LiaRulerVerticalSolid data-tooltip-content="Measure Tool" data-tooltip-id="tool-left" />
           </div>
           <div
-            className="p-2 left-icon"
+            className={`p-2 left-icon${selectedTool === "Zoom" ? " selected-tool" : ""}`}
             onClick={() => handleToolSelect("Zoom")}
           >
             <FaMagnifyingGlass data-tooltip-content="Zoom Tool" data-tooltip-id="tool-left" />
           </div>
           <div
-            className="p-2 left-icon"
+            className={`p-2 left-icon${selectedTool === "Pages" ? " selected-tool" : ""}`}
             onClick={() => handleToolSelect("Pages")}
           >
             <ImCopy data-tooltip-content="Pages Tool" data-tooltip-id="tool-left" />

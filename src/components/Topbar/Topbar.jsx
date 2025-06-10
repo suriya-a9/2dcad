@@ -422,7 +422,51 @@ const Topbar = ({
       );
     }
   };
+  const handleObjectToPath = () => {
+    if (!selectedShapeId) return;
+    const shape = shapes.find(s => s.id === selectedShapeId);
+    if (!shape) return;
 
+    let nodes = [];
+    if (shape.type === "rectangle") {
+
+      const x = shape.x ?? 0;
+      const y = shape.y ?? 0;
+      const w = shape.width ?? 40;
+      const h = shape.height ?? 40;
+      nodes = [
+        { x: x, y: y },
+        { x: x + w, y: y },
+        { x: x + w, y: y + h },
+        { x: x, y: y + h },
+        { x: x, y: y }
+      ];
+    } else if (shape.type === "circle" || shape.type === "ellipse") {
+
+      const cx = (shape.x ?? 0) + (shape.width ?? shape.radius ?? 40) / 2;
+      const cy = (shape.y ?? 0) + (shape.height ?? shape.radius ?? 40) / 2;
+      const rx = (shape.width ?? shape.radius ?? 40) / 2;
+      const ry = (shape.height ?? shape.radius ?? 40) / 2;
+      const points = 8;
+      for (let i = 0; i < points; i++) {
+        const angle = (2 * Math.PI * i) / points;
+        nodes.push({
+          x: cx + rx * Math.cos(angle),
+          y: cy + ry * Math.sin(angle)
+        });
+      }
+      nodes.push(nodes[0]);
+    } else {
+
+      return;
+    }
+
+    dispatch(updateShapePosition({
+      id: selectedShapeId,
+      type: "path",
+      nodes
+    }));
+  };
   const EditOptions = [
     { id: 1, label: "Undo...", onClick: handleUndo },
     { id: 2, label: "Redo...", onClick: handlRedo },
@@ -857,7 +901,7 @@ const Topbar = ({
   ];
 
   const PathOptions = [
-    { label: "Object to Path" },
+    { label: "Object to Path", onClick: handleObjectToPath },
     { label: "Stroke to Path" },
     { label: "Trace Bitemap..." },
     "divider",

@@ -50,6 +50,7 @@ import {
   deselectAllShapes,
   moveShapeIntoGroup,
   selectAllShapesInGroup,
+  duplicateShape,
 } from "../../Redux/Slice/toolSlice";
 import {
   FaAlignLeft, FaAlignCenter, FaAlignRight, FaAlignJustify,
@@ -83,6 +84,8 @@ const RightSidebar = ({
   setActiveTab,
   isSidebarOpen,
   handleSave,
+  onZoomIn,
+  onZoomOut,
   handleDownloadPdf,
   selectedGroupId,
   setSelectedGroupId,
@@ -589,12 +592,21 @@ const RightSidebar = ({
       angleStart = (paramAngleStart * Math.PI) / 180;
       angleEnd = (paramAngleEnd * Math.PI) / 180;
     } else {
-
-      const refShape = arrangeOn === "first" ? selectedShapes[0] : selectedShapes[selectedShapes.length - 1];
-      cx = (refShape.x ?? 0) + (refShape.width ?? 40) / 2;
-      cy = (refShape.y ?? 0) + (refShape.height ?? 40) / 2;
-      rx = (refShape.width ?? 40) / 2;
-      ry = (refShape.height ?? 40) / 2;
+      const refShapes = arrangeOn === "first"
+        ? selectedShapes
+        : [...selectedShapes].reverse();
+      const refShape = refShapes.find(s => {
+        const t = (s.type || "").toLowerCase();
+        return t === "circle" || t === "ellipse" || t === "arc";
+      });
+      if (!refShape) {
+        window.alert("No circle shape");
+        return;
+      }
+      cx = (refShape.x ?? 0) + (refShape.width ?? refShape.radius ?? 40) / 2;
+      cy = (refShape.y ?? 0) + (refShape.height ?? refShape.radius ?? 40) / 2;
+      rx = (refShape.width ?? refShape.radius ?? 40) / 2;
+      ry = (refShape.height ?? refShape.radius ?? 40) / 2;
       angleStart = 0;
       angleEnd = 2 * Math.PI;
     }
@@ -627,6 +639,22 @@ const RightSidebar = ({
         });
       }
     });
+  };
+  const handleClone = () => {
+    if (selectedShapeIds && selectedShapeIds.length > 0) {
+      selectedShapeIds.forEach(id => {
+        dispatch({ type: "tool/cloneShape", payload: { id } });
+      });
+    }
+  };
+
+
+  const handleUnlinkClone = () => {
+    if (selectedShapeIds && selectedShapeIds.length > 0) {
+      selectedShapeIds.forEach(id => {
+        dispatch({ type: "tool/unlinkClone", payload: { id } });
+      });
+    }
   };
   const handleOpenFillStrokeDialog = () => {
     setIsFillStrokeDialogOpen(true);
@@ -872,13 +900,13 @@ const RightSidebar = ({
               data-tooltip-id="tool-right"
             />
           </div>
-          <div className="p-2 right-icon" onClick={() => dispatch(zoomIn())}>
+          <div className="p-2 right-icon" onClick={onZoomIn}>
             <LuZoomIn
               data-tooltip-content="Zoom In"
               data-tooltip-id="tool-right"
             />
           </div>
-          <div className="p-2 right-icon" onClick={() => dispatch(zoomOut())}>
+          <div className="p-2 right-icon" onClick={onZoomOut}>
             <LuZoomOut
               data-tooltip-content="Zoom Out"
               data-tooltip-id="tool-right"
@@ -897,41 +925,46 @@ const RightSidebar = ({
 
         {showPropertiesIcons && (
           <div className="d-flex bg-black right-bottom-icons">
-            {/* <div className="p-2 right-icon">
+            <div className="p-2 right-icon">
               <HiDuplicate
+                onClick={() => dispatch(duplicateShape())}
                 data-tooltip-content="Duplicate"
                 data-tooltip-id="tool-top"
                 x
               />
-            </div> */}
-            {/* <div className="p-2 right-icon">
+            </div>
+            <div className="p-2 right-icon" onClick={handleClone}>
               <LuFileLock
                 data-tooltip-content="Clone"
                 data-tooltip-id="tool-top"
-                x
               />
-            </div> */}
-            {/* <div className="p-2 right-icon">
+            </div>
+            <div className="p-2 right-icon" onClick={handleUnlinkClone}>
               <FaClone
                 data-tooltip-content="Unlink Clone"
                 data-tooltip-id="tool-top"
-                x
               />
-            </div> */}
-            {/* <div className="p-2 right-icon">
+            </div>
+            <div className="p-2 right-icon" onClick={() => {
+              if (selectedShapeIds && selectedShapeIds.length > 1) {
+                dispatch({ type: "tool/groupShapes", payload: { ids: selectedShapeIds } });
+              }
+            }}>
               <FaObjectGroup
                 data-tooltip-content="Group"
                 data-tooltip-id="tool-top"
-                x
               />
-            </div> */}
-            {/* <div className="p-2 right-icon">
+            </div>
+            <div className="p-2 right-icon" onClick={() => {
+              if (selectedShapeIds && selectedShapeIds.length > 0) {
+                dispatch({ type: "tool/ungroupShapes", payload: { ids: selectedShapeIds } });
+              }
+            }}>
               <FaObjectUngroup
                 data-tooltip-content="Ungroup"
                 data-tooltip-id="tool-top"
-                x
               />
-            </div> */}
+            </div>
             <div className="p-2 right-icon">
               <PiPaintBrushFill
                 data-tooltip-content="Fill & Stroke"

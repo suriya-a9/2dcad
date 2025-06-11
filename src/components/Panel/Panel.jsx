@@ -226,6 +226,29 @@ function findGridPath(start, end, obstacles, gridSize = 20, maxTries = 500) {
   }
   return [start.x, start.y, end.x, end.y];
 }
+function CanvasImage({ shape, ...props }) {
+  const [img, setImg] = useState(null);
+
+  useEffect(() => {
+    const image = new window.Image();
+    image.src = shape.url;
+    image.onload = () => setImg(image);
+  }, [shape.url]);
+
+  return (
+    <Image
+      {...props}
+      image={img}
+      x={shape.x}
+      y={shape.y}
+      width={shape.width}
+      height={shape.height}
+      draggable={props.draggable}
+      onClick={props.onClick}
+      onDragEnd={props.onDragEnd}
+    />
+  );
+}
 const Panel = React.forwardRef(({
   textValue,
   isSidebarOpen,
@@ -5413,28 +5436,20 @@ const Panel = React.forwardRef(({
                     );
                   }
                   else if (shape.type === "Image") {
-                    const img = new window.Image();
-                    img.src = shape.url;
                     return (
-                      <Image
+                      <CanvasImage
                         ref={(node) => {
                           if (node) shapeRefs.current[shape.id] = node;
                           else delete shapeRefs.current[shape.id];
                         }}
                         key={shape.id}
                         id={shape.id}
-                        x={shape.x}
-                        y={shape.y}
-                        width={shape.width}
-                        height={shape.height}
-                        image={img}
+                        shape={shape}
                         draggable={selectedShapeId === shape.id}
                         dash={getDashArray(shape.strokeStyle)}
                         onClick={(e) => {
                           e.cancelBubble = true;
-
                           if (e.evt.ctrlKey && selectedShape) {
-
                             dispatch(
                               selectNodePoint({
                                 shapeId: selectedShape.id,
@@ -5444,7 +5459,6 @@ const Panel = React.forwardRef(({
                               })
                             );
                           } else {
-
                             if (!selectedShapeIds.includes(shape.id)) {
                               dispatch(selectShape(shape.id));
                             }
@@ -5627,9 +5641,9 @@ const Panel = React.forwardRef(({
                             dispatch(updateShapePosition({ id: shape.id, x, y }));
                           }}
                         />
-                        {isSelected && selectedTool !== "Node" && (
+                        {isSelected && selectedTool !== "Node" && shapeRefs.current[shape.id] && (
                           <Transformer
-                            nodes={[layerRef.current.findOne(`#${shape.id}`)]}
+                            nodes={[shapeRefs.current[shape.id]]}
                             boundBoxFunc={(oldBox, newBox) => {
                               if (newBox.width < 5 || newBox.height < 5) {
                                 return oldBox;
@@ -5747,9 +5761,9 @@ const Panel = React.forwardRef(({
                             dispatch(updateShapePosition({ id: shape.id, x, y }));
                           }}
                         />
-                        {isSelected && selectedTool !== "Node" && (
+                        {isSelected && selectedTool !== "Node" && shapeRefs.current[shape.id] && (
                           <Transformer
-                            nodes={[layerRef.current.findOne(`#${shape.id}`)]}
+                            nodes={[shapeRefs.current[shape.id]]}
                             boundBoxFunc={(oldBox, newBox) => {
                               if (newBox.width < 5 || newBox.height < 5) {
                                 return oldBox;
@@ -5842,9 +5856,9 @@ const Panel = React.forwardRef(({
                             dispatch(updateShapePosition({ id: shape.id, x, y }));
                           }}
                         />
-                        {isSelected && selectedTool !== "Node" && (
+                        {isSelected && selectedTool !== "Node" && shapeRefs.current[shape.id] && (
                           <Transformer
-                            nodes={[layerRef.current.findOne(`#${shape.id}`)]}
+                            nodes={[shapeRefs.current[shape.id]]}
                             boundBoxFunc={(oldBox, newBox) => {
                               if (newBox.width < 5 || newBox.height < 5) {
                                 return oldBox;
@@ -6057,9 +6071,9 @@ const Panel = React.forwardRef(({
                             dispatch(updateShapePosition({ id: shape.id, x, y }));
                           }}
                         />
-                        {isSelected && selectedTool !== "Node" && (
+                        {isSelected && selectedTool !== "Node" && shapeRefs.current[shape.id] && (
                           <Transformer
-                            nodes={[layerRef.current.findOne(`#${shape.id}`)]}
+                            nodes={[shapeRefs.current[shape.id]]}
                             boundBoxFunc={(oldBox, newBox) => {
                               if (newBox.width < 5 || newBox.height < 5) {
                                 return oldBox;
@@ -6205,9 +6219,9 @@ const Panel = React.forwardRef(({
                             dispatch(updateShapePosition({ id: shape.id, x, y }));
                           }}
                         />
-                        {isSelected && selectedTool !== "Node" && (
+                        {isSelected && selectedTool !== "Node" && shapeRefs.current[shape.id] && (
                           <Transformer
-                            nodes={[layerRef.current.findOne(`#${shape.id}`)]}
+                            nodes={[shapeRefs.current[shape.id]]}
                             boundBoxFunc={(oldBox, newBox) => {
                               if (newBox.width < 5 || newBox.height < 5) {
                                 return oldBox;
@@ -6392,9 +6406,9 @@ const Panel = React.forwardRef(({
                           }}
 
                         />
-                        {isSelected && selectedTool !== "Node" && (
+                        {isSelected && selectedTool !== "Node" && shapeRefs.current[shape.id] && (
                           <Transformer
-                            nodes={[layerRef.current.findOne(`#${shape.id}`)]}
+                            nodes={[shapeRefs.current[shape.id]]}
                             boundBoxFunc={(oldBox, newBox) => {
                               if (newBox.width < 5 || newBox.height < 5) {
                                 return oldBox;
@@ -6570,9 +6584,9 @@ const Panel = React.forwardRef(({
                               width={fontSize}
                             />
                           ))}
-                          {isSelected && selectedTool !== "Node" && (
+                          {isSelected && selectedTool !== "Node" && shapeRefs.current[shape.id] && (
                             <Transformer
-                              nodes={[layerRef.current.findOne(`#${shape.id}`)]}
+                              nodes={[shapeRefs.current[shape.id]]}
                               boundBoxFunc={(oldBox, newBox) => {
                                 if (newBox.width < 5 || newBox.height < 5) {
                                   return oldBox;

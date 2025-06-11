@@ -345,12 +345,8 @@ const toolSlice = createSlice({
     setZoomLevel: (state, action) => {
       state.zoomLevel = action.payload;
     },
-    zoomIn: (state) => {
-      state.zoomLevel = Math.min(state.zoomLevel + 0.1, 3);
-    },
-    zoomOut: (state) => {
-      state.zoomLevel = Math.max(state.zoomLevel - 0.1, 0.5);
-    },
+    zoomIn: (state) => { state.zoomLevel = Math.min(state.zoomLevel * 1.25, 16); },
+    zoomOut: (state) => { state.zoomLevel = Math.max(state.zoomLevel / 1.25, 0.05); },
     copy: (state) => {
       const selectedLayer = state.layers[state.selectedLayerIndex];
       const selectedShapes = selectedLayer.shapes.filter(shape =>
@@ -782,11 +778,17 @@ const toolSlice = createSlice({
       );
 
       if (shapeToDuplicate) {
+        const shapeType = shapeToDuplicate.type.toLowerCase();
+        const shapeCount = selectedLayer.shapes.filter(
+          (shape) => shape.type.toLowerCase() === shapeType
+        ).length;
+
         const newShape = {
           ...shapeToDuplicate,
           id: `shape-${Date.now()}`,
-          x: shapeToDuplicate.x + 10,
-          y: shapeToDuplicate.y + 10,
+          x: (shapeToDuplicate.x || 0) + 10,
+          y: (shapeToDuplicate.y || 0) + 10,
+          name: `${shapeType} ${shapeCount + 1}`,
         };
         selectedLayer.shapes.push(newShape);
       }
@@ -834,24 +836,31 @@ const toolSlice = createSlice({
       }
     },
     ungroupShapes: (state, action) => {
-      const { groupId } = action.payload;
+      const { ids } = action.payload;
       const selectedLayer = state.layers[state.selectedLayerIndex];
 
-      const groupShapeIndex = selectedLayer.shapes.findIndex(
-        (shape) => shape.id === groupId
-      );
 
-      if (groupShapeIndex !== -1) {
-        const groupShape = selectedLayer.shapes[groupShapeIndex];
+      ids.forEach(groupId => {
+        const groupShapeIndex = selectedLayer.shapes.findIndex(
+          (shape) => shape.id === groupId && shape.type === "Group"
+        );
 
-        selectedLayer.shapes.splice(groupShapeIndex, 1);
+        if (groupShapeIndex !== -1) {
+          const groupShape = selectedLayer.shapes[groupShapeIndex];
 
-        groupShape.shapes.forEach((shape) => {
-          selectedLayer.shapes.push({ ...shape });
-        });
 
-        state.selectedShapeIds = [];
-      }
+          selectedLayer.shapes.splice(groupShapeIndex, 1);
+
+
+          groupShape.shapes.forEach((shape) => {
+            const child = { ...shape };
+            delete child.groupId;
+            selectedLayer.shapes.push(child);
+          });
+        }
+      });
+
+      state.selectedShapeIds = [];
     },
     deleteShape: (state, action) => {
       const selectedLayer = state.layers[state.selectedLayerIndex];
@@ -2421,7 +2430,40 @@ const toolSlice = createSlice({
     },
     setTweakFidelity(state, action) {
       state.tweakFidelity = action.payload;
-    }
+    },
+    cloneShape: (state, action) => {
+      const { id } = action.payload;
+      const selectedLayer = state.layers[state.selectedLayerIndex];
+      const shape = selectedLayer.shapes.find(s => s.id === id);
+      if (!shape) return;
+
+
+      const shapeClone = JSON.parse(JSON.stringify(shape));
+
+      const newShape = {
+        ...shapeClone,
+        id: `shape-${Date.now()}-${Math.random()}`,
+        x: (shape.x || 0) + 10,
+        y: (shape.y || 0) + 10,
+        name: (shape.name || shape.type || "Shape") + " (clone)",
+        isClone: true,
+      };
+
+      selectedLayer.shapes.push(newShape);
+      state.selectedShapeIds = [newShape.id];
+    },
+    unlinkClone: (state, action) => {
+      const { id } = action.payload;
+      const selectedLayer = state.layers[state.selectedLayerIndex];
+      const shape = selectedLayer.shapes.find(s => s.id === id);
+      if (shape && shape.isClone) {
+        delete shape.isClone;
+
+        if (shape.name && shape.name.endsWith(" (clone)")) {
+          shape.name = shape.name.replace(/ \(clone\)$/, "");
+        }
+      }
+    },
   },
 
 });
@@ -2608,6 +2650,8 @@ export const {
   setTweakRadius,
   setTweakForce,
   setTweakFidelity,
+  cloneShape,
+  unlinkClone,
 } = toolSlice.actions;
 
 export default toolSlice.reducer;

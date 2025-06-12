@@ -1410,12 +1410,12 @@ const RightSidebar = ({
                 <button onClick={() => setIsAlignPanelOpen(false)} style={{ marginTop: 8 }}>Close</button>
               </div>
             )}
-            {/* <div className="p-2 right-icon">
+            <div className="p-2 right-icon">
               <RiFileSettingsLine
                 data-tooltip-content="Document Properties"
                 data-tooltip-id="tool-top"
               />
-            </div> */}
+            </div>
             {/* <div className="p-2 right-icon">
               <FaTools
                 data-tooltip-content="Preferences"

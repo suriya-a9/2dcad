@@ -5,7 +5,7 @@ import { setFontSize, setFontFamily, setAlignment, setFontStyle, clearPoints, ha
 import { setBezierOption } from "../../Redux/Slice/toolSlice";
 import { BsVectorPen } from "react-icons/bs";
 import { TbBrandSnapseed } from "react-icons/tb";
-import { FaBezierCurve, FaProjectDiagram, FaDrawPolygon, FaPlus, FaLink, FaUnlink } from "react-icons/fa";
+import { FaBezierCurve, FaProjectDiagram, FaDrawPolygon, FaPlus, FaLink, FaUnlink, FaCut } from "react-icons/fa";
 import { RxCheckCircled } from "react-icons/rx";
 import { RxCrossCircled } from "react-icons/rx";
 import { MdRoundedCorner, MdOutlineVerticalAlignTop, MdOutlineAltRoute } from "react-icons/md";
@@ -122,6 +122,8 @@ import {
   setTweakRadius,
   setTweakForce,
   setTweakFidelity,
+  clearSelectedNodePoints,
+  breakPathAtSelectedNode,
 } from "../../Redux/Slice/toolSlice";
 import {
   TbDeselect,
@@ -4099,6 +4101,12 @@ function NodeTopbar() {
     dispatch(joinSelectedEndNodesWithSegment());
   };
 
+  const handleDeleteNode = () => {
+    dispatch(clearSelectedNodePoints());
+  };
+  const handleBreakPathAtNode = () => {
+    dispatch({ type: "tool/breakPathAtSelectedNode" });
+  }
   const handleSeparatePaths = () => {
     console.log("Separate Selected Paths clicked");
     dispatch({ type: "SEPARATE_SELECTED_PATHS" });
@@ -4178,6 +4186,12 @@ function NodeTopbar() {
       </div>
       <div className="p-2 top-icon" onClick={handleStrokePath}>
         <PiPath size={20} title="Make Strokr to Path" />
+      </div>
+      <div className="p-2 top-icon" onClick={handleDeleteNode}>
+        <FaTimes size={20} title="Delete Node" />
+      </div>
+      <div className="p-2 top-icon" onClick={handleBreakPathAtNode}>
+        <FaCut size={20} title="Break paths at selected node" />
       </div>
     </div>
   );

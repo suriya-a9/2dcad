@@ -135,6 +135,33 @@ const toolSlice = createSlice({
   reducers: {
 
     clearSelectedNodePoints: (state) => {
+      const layer = state.layers[state.selectedLayerIndex];
+      if (!layer) return;
+
+      const nodesByShape = {};
+      state.selectedNodePoints.forEach(({ shapeId, index }) => {
+        if (!nodesByShape[shapeId]) nodesByShape[shapeId] = [];
+        nodesByShape[shapeId].push(index);
+      });
+
+      Object.entries(nodesByShape).forEach(([shapeId, indices]) => {
+        const shape = layer.shapes.find(s => s.id === shapeId);
+        if (shape && Array.isArray(shape.points)) {
+
+          indices.sort((a, b) => b - a).forEach(idx => {
+            if (idx >= 0 && idx < shape.points.length) {
+              shape.points.splice(idx, 1);
+            }
+          });
+          shape.points = [...shape.points];
+
+          if (state.selectedShapeId === shapeId) {
+            state.controlPoints = [...shape.points];
+          }
+        }
+      });
+
+      layer.shapes = [...layer.shapes];
       state.selectedNodePoints = [];
     },
 
@@ -1453,157 +1480,165 @@ const toolSlice = createSlice({
       }
     },
     joinSelectedNodePoints: (state) => {
-      if (state.selectedNodePoints.length === 2) {
-        const [firstNode, secondNode] = state.selectedNodePoints;
-
-        const layer = state.layers[state.selectedLayerIndex];
-        if (!layer) {
-          console.error("No layer selected.");
-          return;
-        }
-
-        const firstShape = layer.shapes.find((shape) => shape.id === firstNode.shapeId);
-        const secondShape = layer.shapes.find((shape) => shape.id === secondNode.shapeId);
-
-        if (!firstShape || !secondShape) {
-          console.error("One or both shapes not found.");
-          return;
-        }
-
-        if (firstShape.type === "Polygon" && secondShape.type === "Polygon") {
-
-          const mergedPoints = [
-            ...firstShape.points,
-            ...secondShape.points.map((point) => ({
-              x: point.x + (secondShape.x - firstShape.x),
-              y: point.y + (secondShape.y - firstShape.y),
-            })),
-          ];
-          firstShape.points = mergedPoints;
-        } else if (firstShape.type === "Rectangle" && secondShape.type === "Rectangle") {
-
-          const x1 = Math.min(firstShape.x, secondShape.x);
-          const y1 = Math.min(firstShape.y, secondShape.y);
-          const x2 = Math.max(firstShape.x + firstShape.width, secondShape.x + secondShape.width);
-          const y2 = Math.max(firstShape.y + firstShape.height, secondShape.y + secondShape.height);
-
-          firstShape.x = x1;
-          firstShape.y = y1;
-          firstShape.width = x2 - x1;
-          firstShape.height = y2 - y1;
-        } else if (firstShape.type === "Circle" && secondShape.type === "Circle") {
-
-          const x1 = Math.min(firstShape.x - firstShape.radius, secondShape.x - secondShape.radius);
-          const y1 = Math.min(firstShape.y - firstShape.radius, secondShape.y - secondShape.radius);
-          const x2 = Math.max(firstShape.x + firstShape.radius, secondShape.x + secondShape.radius);
-          const y2 = Math.max(firstShape.y + firstShape.radius, secondShape.y + secondShape.radius);
-
-          firstShape.x = (x1 + x2) / 2;
-          firstShape.y = (y1 + y2) / 2;
-          firstShape.radius = Math.max((x2 - x1) / 2, (y2 - y1) / 2);
-        } else if (firstShape.type === "Star" && secondShape.type === "Star") {
-
-          const x1 = Math.min(firstShape.x - firstShape.outerRadius, secondShape.x - secondShape.outerRadius);
-          const y1 = Math.min(firstShape.y - firstShape.outerRadius, secondShape.y - secondShape.outerRadius);
-          const x2 = Math.max(firstShape.x + firstShape.outerRadius, secondShape.x + secondShape.outerRadius);
-          const y2 = Math.max(firstShape.y + firstShape.outerRadius, secondShape.y + secondShape.outerRadius);
-
-          firstShape.x = (x1 + x2) / 2;
-          firstShape.y = (y1 + y2) / 2;
-          firstShape.outerRadius = Math.max((x2 - x1) / 2, (y2 - y1) / 2);
-          firstShape.innerRadius = firstShape.outerRadius / 2;
-        } else if (firstShape.type === "Calligraphy" && secondShape.type === "Calligraphy") {
-          const firstPoint = firstShape.points[firstNode.index];
-          const secondPoint = secondShape.points[secondNode.index];
-
-
-          const adjustedSecondPoint = [
-            secondPoint[0] + (secondShape.x - firstShape.x),
-            secondPoint[1] + (secondShape.y - firstShape.y),
-          ];
-
-
-          const connectingPath = [
-            [firstPoint[0], firstPoint[1]],
-            [adjustedSecondPoint[0], adjustedSecondPoint[1]],
-          ];
-
-
-          const firstShapeBefore = firstShape.points.slice(0, firstNode.index + 1);
-          const firstShapeAfter = firstShape.points.slice(firstNode.index + 1);
-
-          const secondShapeBefore = secondShape.points.slice(0, secondNode.index + 1);
-          const secondShapeAfter = secondShape.points.slice(secondNode.index + 1);
-
-
-          const reshapedPoints = [
-            ...firstShapeBefore,
-            ...connectingPath,
-            ...secondShapeAfter,
-            ...secondShapeBefore,
-            ...firstShapeAfter,
-          ];
-
-
-          firstShape.points = reshapedPoints;
-
-
-          layer.shapes = layer.shapes.filter((shape) => shape.id !== secondShape.id);
-
-          console.log("Calligraphy shapes connected successfully!");
-        } else if (firstShape.type === "Pencil" && secondShape.type === "Pencil") {
-          const firstPoint = firstShape.points[firstNode.index];
-          const secondPoint = secondShape.points[secondNode.index];
-
-
-          const adjustedSecondPoint = [
-            secondPoint[0] + (secondShape.x - firstShape.x),
-            secondPoint[1] + (secondShape.y - firstShape.y),
-          ];
-
-
-          const connectingPath = [
-            [firstPoint[0], firstPoint[1]],
-            [adjustedSecondPoint[0], adjustedSecondPoint[1]],
-          ];
-
-
-          const firstShapeBefore = firstShape.points.slice(0, firstNode.index + 1);
-          const firstShapeAfter = firstShape.points.slice(firstNode.index + 1);
-
-          const secondShapeBefore = secondShape.points.slice(0, secondNode.index + 1);
-          const secondShapeAfter = secondShape.points.slice(secondNode.index + 1);
-
-
-          const reshapedPoints = [
-            ...firstShapeBefore,
-            ...connectingPath,
-            ...secondShapeAfter,
-            ...secondShapeBefore,
-            ...firstShapeAfter,
-          ];
-
-
-          firstShape.points = reshapedPoints;
-
-
-          layer.shapes = layer.shapes.filter((shape) => shape.id !== secondShape.id);
-
-          console.log("Pencil shapes connected successfully!");
-        } else {
-          console.error("Joining is not supported for these shape types.");
-          return;
-        }
-
-
-        layer.shapes = layer.shapes.filter((shape) => shape.id !== secondShape.id);
-
-        console.log("Shapes joined successfully!");
-
-
-        state.selectedNodePoints = [];
-      } else {
+      if (state.selectedNodePoints.length !== 2) {
         console.error("You must select exactly two nodes to join them.");
+        return;
+      }
+
+      const [nodeA, nodeB] = state.selectedNodePoints;
+      const layer = state.layers[state.selectedLayerIndex];
+      if (!layer) return;
+
+      const shapeA = layer.shapes.find(s => s.id === nodeA.shapeId);
+      const shapeB = layer.shapes.find(s => s.id === nodeB.shapeId);
+
+      if (!shapeA || !Array.isArray(shapeA.points) || !shapeB || !Array.isArray(shapeB.points)) {
+        console.error("Shape(s) not found or has no points array.");
+        return;
+      }
+
+      if (nodeA.shapeId === nodeB.shapeId) {
+        const idxA = nodeA.index;
+        const idxB = nodeB.index;
+
+        if (shapeA.type === "Pencil") {
+          if (
+            Math.abs(idxA - idxB) === 1 ||
+            Math.abs(idxA - idxB) === shapeA.points.length - 1
+          ) {
+            shapeA.points.push([...shapeA.points[idxA]]);
+            state.controlPoints = [...shapeA.points];
+            state.selectedNodePoints = [];
+            return;
+          }
+          const [startIdx, endIdx] = idxA < idxB ? [idxA, idxB] : [idxB, idxA];
+          const newPoints = [
+            ...shapeA.points.slice(startIdx, endIdx + 1),
+            [...shapeA.points[startIdx]],
+          ];
+          shapeA.points = newPoints;
+          state.controlPoints = [...newPoints];
+          state.selectedNodePoints = [];
+          return;
+        }
+
+        if (
+          Math.abs(idxA - idxB) === 1 ||
+          Math.abs(idxA - idxB) === shapeA.points.length - 1
+        ) {
+          shapeA.points.push({ ...shapeA.points[idxA] });
+          state.controlPoints = [...shapeA.points];
+          state.selectedNodePoints = [];
+          return;
+        }
+
+        const [startIdx, endIdx] = idxA < idxB ? [idxA, idxB] : [idxB, idxA];
+        const newPoints = [
+          ...shapeA.points.slice(startIdx, endIdx + 1),
+          { ...shapeA.points[startIdx] },
+        ];
+        shapeA.points = newPoints;
+        state.controlPoints = [...newPoints];
+        state.selectedNodePoints = [];
+        return;
+      }
+
+      if (shapeA.type === "Pencil" && shapeB.type === "Pencil") {
+
+        const pointsA = [
+          ...shapeA.points.slice(nodeA.index),
+          ...shapeA.points.slice(0, nodeA.index + 1)
+        ];
+        const pointsB = [
+          ...shapeB.points.slice(nodeB.index),
+          ...shapeB.points.slice(0, nodeB.index + 1)
+        ];
+
+        if (
+          pointsA[pointsA.length - 1][0] === pointsB[0][0] &&
+          pointsA[pointsA.length - 1][1] === pointsB[0][1]
+        ) {
+          pointsB.shift();
+        }
+        shapeA.points = [...pointsA, ...pointsB];
+        layer.shapes = layer.shapes.filter(s => s.id !== shapeB.id);
+        state.controlPoints = [...shapeA.points];
+        state.selectedNodePoints = [];
+        return;
+      }
+
+      const pointsA = [
+        ...shapeA.points.slice(nodeA.index),
+        ...shapeA.points.slice(0, nodeA.index + 1)
+      ];
+      const pointsB = [
+        ...shapeB.points.slice(nodeB.index),
+        ...shapeB.points.slice(0, nodeB.index + 1)
+      ];
+
+      if (
+        pointsA[pointsA.length - 1].x === pointsB[0].x &&
+        pointsA[pointsA.length - 1].y === pointsB[0].y
+      ) {
+        pointsB.shift();
+      }
+      shapeA.points = [...pointsA, ...pointsB];
+      layer.shapes = layer.shapes.filter(s => s.id !== shapeB.id);
+      state.controlPoints = [...shapeA.points];
+      state.selectedNodePoints = [];
+    },
+    breakPathAtSelectedNode: (state) => {
+      if (state.selectedNodePoints.length !== 1) {
+        console.error("Select a single node to break the path.");
+        return;
+      }
+      const { shapeId, index } = state.selectedNodePoints[0];
+      const layer = state.layers[state.selectedLayerIndex];
+      const shape = layer.shapes.find(s => s.id === shapeId);
+      if (!shape || !Array.isArray(shape.points)) return;
+
+
+      if (shape.type === "Pencil" && shape.points.length > 2) {
+        const part1 = shape.points.slice(0, index + 1);
+        const part2 = shape.points.slice(index);
+
+        const { id, isSelected, selected, ...rest } = shape;
+        const newShape = {
+          ...rest,
+          id: `shape-${Date.now()}-${Math.random()}`,
+          points: part2,
+        };
+
+        shape.points = part1;
+        layer.shapes.push(newShape);
+
+        state.selectedShapeId = null;
+        state.selectedShapeIds = [];
+        state.selectedNodePoints = [];
+        state.controlPoints = [];
+        return;
+      }
+
+
+      if (shape.type === "Calligraphy" && shape.points.length > 2) {
+        const part1 = shape.points.slice(0, index + 1);
+        const part2 = shape.points.slice(index);
+
+        const { id, isSelected, selected, ...rest } = shape;
+        const newShape = {
+          ...rest,
+          id: `shape-${Date.now()}-${Math.random()}`,
+          points: part2,
+        };
+
+        shape.points = part1;
+        layer.shapes.push(newShape);
+
+        state.selectedShapeId = null;
+        state.selectedShapeIds = [];
+        state.selectedNodePoints = [];
+        state.controlPoints = [];
+        return;
       }
     },
     selectNodePoint: (state, action) => {
@@ -1638,67 +1673,23 @@ const toolSlice = createSlice({
 
       state.selectedNodePoints.forEach((node) => {
         const shape = layer.shapes.find((shape) => shape.id === node.shapeId);
+        if (!shape || !Array.isArray(shape.points)) return;
 
-        if (!shape) {
-          console.error(`Shape with ID ${node.shapeId} not found.`);
-          return;
+        const pt = shape.points[node.index];
+
+
+        if (Array.isArray(pt) && pt.length >= 2) {
+          shape.points[node.index] = [pt[0], pt[1]];
         }
 
-        if (Array.isArray(shape.points)) {
-          if (shape.type === "Pencil") {
-            if (Array.isArray(shape.points[node.index]) && shape.points[node.index].length === 2) {
+        else if (pt && typeof pt === "object" && pt.x !== undefined && pt.y !== undefined) {
 
-              shape.points[node.index] = [
-                shape.points[node.index][0] + 5,
-                shape.points[node.index][1] + 5,
-              ];
-              console.log(
-                `Node at index ${node.index} in Pencil shape ${node.shapeId} has been updated to [${shape.points[node.index][0]}, ${shape.points[node.index][1]}].`
-              );
-            } else {
-              console.error(`Invalid point structure at index ${node.index} in Pencil shape.`);
-            }
-          } else {
-            const point = shape.points[node.index];
-            if (point && typeof point === "object") {
-
-              shape.points[node.index] = {
-                x: point.x + 5,
-                y: point.y + 5,
-              };
-              console.log(
-                `Node at index ${node.index} in shape ${node.shapeId} has been updated to {x: ${point.x + 20}, y: ${point.y + 20}}.`
-              );
-            } else {
-              console.error(`Invalid point structure at index ${node.index} in shape ${node.shapeId}.`);
-            }
-          }
-
-
-          if (shape.type === "Rectangle") {
-            const xs = shape.points.map((p) => p.x);
-            const ys = shape.points.map((p) => p.y);
-
-            shape.x = Math.min(...xs);
-            shape.y = Math.min(...ys);
-            shape.width = Math.max(...xs) - shape.x;
-            shape.height = Math.max(...ys) - shape.y;
-          } else if (shape.type === "Polygon" || shape.type === "Pencil") {
-            const xs = shape.points.map((p) => (Array.isArray(p) ? p[0] : p.x));
-            const ys = shape.points.map((p) => (Array.isArray(p) ? p[1] : p.y));
-
-            shape.x = Math.min(...xs);
-            shape.y = Math.min(...ys);
-          }
-        } else {
-          console.error(`Shape with ID ${node.shapeId} does not have a valid points array.`);
+          shape.points[node.index] = { x: pt.x, y: pt.y };
         }
       });
 
 
       layer.shapes = [...layer.shapes];
-
-      console.log("The selected node point has been updated with x and y increased by 20px.");
     },
     makeSelectedNodesSmooth: (state) => {
       if (state.selectedNodePoints.length === 0) {
@@ -2652,6 +2643,8 @@ export const {
   setTweakFidelity,
   cloneShape,
   unlinkClone,
+  clearSelectedNodePoints,
+  breakPathAtSelectedNode,
 } = toolSlice.actions;
 
 export default toolSlice.reducer;

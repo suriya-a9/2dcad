@@ -66,6 +66,7 @@ import {
   selecteAllShapes,
   undo,
   cut,
+  copy,
   zoomIn,
   zoomOut,
   paste,
@@ -226,7 +227,7 @@ function findGridPath(start, end, obstacles, gridSize = 20, maxTries = 500) {
   }
   return [start.x, start.y, end.x, end.y];
 }
-function CanvasImage({ shape, ...props }) {
+const CanvasImage = React.forwardRef(({ shape, ...props }, ref) => {
   const [img, setImg] = useState(null);
 
   useEffect(() => {
@@ -237,6 +238,7 @@ function CanvasImage({ shape, ...props }) {
 
   return (
     <Image
+      ref={ref}
       {...props}
       image={img}
       x={shape.x}
@@ -248,7 +250,7 @@ function CanvasImage({ shape, ...props }) {
       onDragEnd={props.onDragEnd}
     />
   );
-}
+});
 const Panel = React.forwardRef(({
   textValue,
   isSidebarOpen,
@@ -3409,6 +3411,9 @@ const Panel = React.forwardRef(({
       ) {
         dispatch(removeShapes(selectedShapeIds));
       }
+      if (e.ctrlKey && e.key === "c") {
+        dispatch(copy());
+      }
       if (e.ctrlKey && e.key === "x") {
         dispatch(cut());
       }
@@ -5236,7 +5241,8 @@ const Panel = React.forwardRef(({
                         )}
                         {isSelected && shapeRefs.current[shape.id] && selectedTool !== "Node" && (
                           <Transformer
-                            nodes={[shapeRefs.current[shape.id]]}
+                            ref={transformerRef}
+                            nodes={selectedShapeIds.map(id => shapeRefs.current[id]).filter(Boolean)}
                             boundBoxFunc={(oldBox, newBox) => {
                               if (newBox.width < 5 || newBox.height < 5) {
                                 return oldBox;
@@ -5361,15 +5367,27 @@ const Panel = React.forwardRef(({
                             dispatch(updateShapePosition({ id: shape.id, x, y }));
                           }}
                         />
-                        {isSelected && (
+                        {isSelected && shapeRefs.current[shape.id] && selectedTool !== "Node" && (
                           <Transformer
-                            nodes={[layerRef.current.findOne(`#${shape.id}`)]}
+                            ref={transformerRef}
+                            nodes={selectedShapeIds.map(id => shapeRefs.current[id]).filter(Boolean)}
                             boundBoxFunc={(oldBox, newBox) => {
                               if (newBox.width < 5 || newBox.height < 5) {
                                 return oldBox;
                               }
                               return newBox;
                             }}
+                            enabledAnchors={[
+                              "top-left",
+                              "top-center",
+                              "top-right",
+                              "middle-left",
+                              "middle-right",
+                              "bottom-left",
+                              "bottom-center",
+                              "bottom-right",
+                            ]}
+                            skewEnabled={true}
                           />
                         )}
                       </React.Fragment>
@@ -5421,54 +5439,80 @@ const Panel = React.forwardRef(({
                             dispatch(updateShapePosition({ id: shape.id, x, y }));
                           }}
                         />
-                        {isSelected && selectedTool !== "Node" && (
+                        {isSelected && shapeRefs.current[shape.id] && selectedTool !== "Node" && (
                           <Transformer
-                            nodes={[layerRef.current.findOne(`#${shape.id}`)]}
+                            ref={transformerRef}
+                            nodes={selectedShapeIds.map(id => shapeRefs.current[id]).filter(Boolean)}
                             boundBoxFunc={(oldBox, newBox) => {
                               if (newBox.width < 5 || newBox.height < 5) {
                                 return oldBox;
                               }
                               return newBox;
                             }}
+                            enabledAnchors={[
+                              "top-left",
+                              "top-center",
+                              "top-right",
+                              "middle-left",
+                              "middle-right",
+                              "bottom-left",
+                              "bottom-center",
+                              "bottom-right",
+                            ]}
+                            skewEnabled={true}
                           />
                         )}
                       </React.Fragment>
                     );
                   }
                   else if (shape.type === "Image") {
+                    const isSelected = selectedShapeIds.includes(shape.id);
                     return (
-                      <CanvasImage
-                        ref={(node) => {
-                          if (node) shapeRefs.current[shape.id] = node;
-                          else delete shapeRefs.current[shape.id];
-                        }}
-                        key={shape.id}
-                        id={shape.id}
-                        shape={shape}
-                        draggable={selectedShapeId === shape.id}
-                        dash={getDashArray(shape.strokeStyle)}
-                        onClick={(e) => {
-                          e.cancelBubble = true;
-                          if (e.evt.ctrlKey && selectedShape) {
-                            dispatch(
-                              selectNodePoint({
-                                shapeId: selectedShape.id,
-                                index,
-                                x: point.x,
-                                y: point.y,
-                              })
-                            );
-                          } else {
+                      <React.Fragment key={shape.id}>
+                        <CanvasImage
+                          ref={node => {
+                            if (node) shapeRefs.current[shape.id] = node;
+                            else delete shapeRefs.current[shape.id];
+                          }}
+                          id={shape.id}
+                          shape={shape}
+                          draggable={selectedTool === "Select"}
+                          dash={getDashArray(shape.strokeStyle)}
+                          onClick={e => {
+                            e.cancelBubble = true;
                             if (!selectedShapeIds.includes(shape.id)) {
                               dispatch(selectShape(shape.id));
                             }
-                          }
-                        }}
-                        onDragEnd={(e) => {
-                          const { x, y } = e.target.position();
-                          dispatch(updateShapePosition({ id: shape.id, x, y }));
-                        }}
-                      />
+                          }}
+                          onDragEnd={e => {
+                            const { x, y } = e.target.position();
+                            dispatch(updateShapePosition({ id: shape.id, x, y }));
+                          }}
+                        />
+                        {isSelected && shapeRefs.current[shape.id] && selectedTool !== "Node" && (
+                          <Transformer
+                            ref={transformerRef}
+                            nodes={selectedShapeIds.map(id => shapeRefs.current[id]).filter(Boolean)}
+                            boundBoxFunc={(oldBox, newBox) => {
+                              if (newBox.width < 5 || newBox.height < 5) {
+                                return oldBox;
+                              }
+                              return newBox;
+                            }}
+                            enabledAnchors={[
+                              "top-left",
+                              "top-center",
+                              "top-right",
+                              "middle-left",
+                              "middle-right",
+                              "bottom-left",
+                              "bottom-center",
+                              "bottom-right",
+                            ]}
+                            skewEnabled={true}
+                          />
+                        )}
+                      </React.Fragment>
                     );
                   } else if (shape.type === "Circle") {
                     const isSelected = selectedShapeIds.includes(shape.id);
@@ -5641,15 +5685,27 @@ const Panel = React.forwardRef(({
                             dispatch(updateShapePosition({ id: shape.id, x, y }));
                           }}
                         />
-                        {isSelected && selectedTool !== "Node" && shapeRefs.current[shape.id] && (
+                        {isSelected && shapeRefs.current[shape.id] && selectedTool !== "Node" && (
                           <Transformer
-                            nodes={[shapeRefs.current[shape.id]]}
+                            ref={transformerRef}
+                            nodes={selectedShapeIds.map(id => shapeRefs.current[id]).filter(Boolean)}
                             boundBoxFunc={(oldBox, newBox) => {
                               if (newBox.width < 5 || newBox.height < 5) {
                                 return oldBox;
                               }
                               return newBox;
                             }}
+                            enabledAnchors={[
+                              "top-left",
+                              "top-center",
+                              "top-right",
+                              "middle-left",
+                              "middle-right",
+                              "bottom-left",
+                              "bottom-center",
+                              "bottom-right",
+                            ]}
+                            skewEnabled={true}
                           />
                         )}
                         {selectedTool === "Node" && shape.points.map((point, index) => (
@@ -5761,15 +5817,27 @@ const Panel = React.forwardRef(({
                             dispatch(updateShapePosition({ id: shape.id, x, y }));
                           }}
                         />
-                        {isSelected && selectedTool !== "Node" && shapeRefs.current[shape.id] && (
+                        {isSelected && shapeRefs.current[shape.id] && selectedTool !== "Node" && (
                           <Transformer
-                            nodes={[shapeRefs.current[shape.id]]}
+                            ref={transformerRef}
+                            nodes={selectedShapeIds.map(id => shapeRefs.current[id]).filter(Boolean)}
                             boundBoxFunc={(oldBox, newBox) => {
                               if (newBox.width < 5 || newBox.height < 5) {
                                 return oldBox;
                               }
                               return newBox;
                             }}
+                            enabledAnchors={[
+                              "top-left",
+                              "top-center",
+                              "top-right",
+                              "middle-left",
+                              "middle-right",
+                              "bottom-left",
+                              "bottom-center",
+                              "bottom-right",
+                            ]}
+                            skewEnabled={true}
                           />
                         )}
                       </React.Fragment>
@@ -5856,15 +5924,27 @@ const Panel = React.forwardRef(({
                             dispatch(updateShapePosition({ id: shape.id, x, y }));
                           }}
                         />
-                        {isSelected && selectedTool !== "Node" && shapeRefs.current[shape.id] && (
+                        {isSelected && shapeRefs.current[shape.id] && selectedTool !== "Node" && (
                           <Transformer
-                            nodes={[shapeRefs.current[shape.id]]}
+                            ref={transformerRef}
+                            nodes={selectedShapeIds.map(id => shapeRefs.current[id]).filter(Boolean)}
                             boundBoxFunc={(oldBox, newBox) => {
                               if (newBox.width < 5 || newBox.height < 5) {
                                 return oldBox;
                               }
                               return newBox;
                             }}
+                            enabledAnchors={[
+                              "top-left",
+                              "top-center",
+                              "top-right",
+                              "middle-left",
+                              "middle-right",
+                              "bottom-left",
+                              "bottom-center",
+                              "bottom-right",
+                            ]}
+                            skewEnabled={true}
                           />
                         )}
                       </React.Fragment>
@@ -6071,15 +6151,27 @@ const Panel = React.forwardRef(({
                             dispatch(updateShapePosition({ id: shape.id, x, y }));
                           }}
                         />
-                        {isSelected && selectedTool !== "Node" && shapeRefs.current[shape.id] && (
+                        {isSelected && shapeRefs.current[shape.id] && selectedTool !== "Node" && (
                           <Transformer
-                            nodes={[shapeRefs.current[shape.id]]}
+                            ref={transformerRef}
+                            nodes={selectedShapeIds.map(id => shapeRefs.current[id]).filter(Boolean)}
                             boundBoxFunc={(oldBox, newBox) => {
                               if (newBox.width < 5 || newBox.height < 5) {
                                 return oldBox;
                               }
                               return newBox;
                             }}
+                            enabledAnchors={[
+                              "top-left",
+                              "top-center",
+                              "top-right",
+                              "middle-left",
+                              "middle-right",
+                              "bottom-left",
+                              "bottom-center",
+                              "bottom-right",
+                            ]}
+                            skewEnabled={true}
                           />
                         )}
                       </React.Fragment>
@@ -6219,15 +6311,27 @@ const Panel = React.forwardRef(({
                             dispatch(updateShapePosition({ id: shape.id, x, y }));
                           }}
                         />
-                        {isSelected && selectedTool !== "Node" && shapeRefs.current[shape.id] && (
+                        {isSelected && shapeRefs.current[shape.id] && selectedTool !== "Node" && (
                           <Transformer
-                            nodes={[shapeRefs.current[shape.id]]}
+                            ref={transformerRef}
+                            nodes={selectedShapeIds.map(id => shapeRefs.current[id]).filter(Boolean)}
                             boundBoxFunc={(oldBox, newBox) => {
                               if (newBox.width < 5 || newBox.height < 5) {
                                 return oldBox;
                               }
                               return newBox;
                             }}
+                            enabledAnchors={[
+                              "top-left",
+                              "top-center",
+                              "top-right",
+                              "middle-left",
+                              "middle-right",
+                              "bottom-left",
+                              "bottom-center",
+                              "bottom-right",
+                            ]}
+                            skewEnabled={true}
                           />
                         )}
                       </React.Fragment>
@@ -6289,72 +6393,170 @@ const Panel = React.forwardRef(({
                       </Group>
                     );
                   } else if (shape.type === "Tracing") {
-                    return (
-                      <Group key={shape.id} id={shape.id}>
-                        {Array.isArray(shape.points) &&
-                          shape.points.map((point, index) => {
-                            if (!Array.isArray(point.shapes)) return null;
-
-                            return point.shapes.map((subShape, shapeIndex) => (
-                              <Circle
-                                ref={(node) => {
-                                  if (node) shapeRefs.current[shape.id] = node;
-                                  else delete shapeRefs.current[shape.id];
-                                }}
-                                key={`${index}-${shapeIndex}`}
-                                id={`${shape.id}`}
-                                x={subShape.x}
-                                y={subShape.y}
-                                radius={subShape.radius}
-                                fill={shape.stroke || "black"}
-                                onDragMove={handleDragMove}
-                              />
-                            ));
-                          })}
-                      </Group>
-                    );
-                  } else if (shape.type === "Splotchy") {
-                    return (
-                      <Group key={shape.id}>
-                        {shape.points.map((point, index) => {
-                          if (index === 0) return null;
-
-                          const prevPoint = shape.points[index - 1];
-
-                          return (
-                            <Line
-                              ref={(node) => {
-                                if (node) shapeRefs.current[shape.id] = node;
-                                else delete shapeRefs.current[shape.id];
-                              }}
-                              key={index}
-                              id={`${shape.id}`}
-                              points={[prevPoint.x, prevPoint.y, point.x, point.y]}
-                              stroke={shape.stroke}
-                              strokeWidth={point.strokeWidth}
-                              opacity={point.opacity}
-                              lineJoin="round"
-                              lineCap="round"
-                              onDragMove={handleDragMove}
-                            />
-                          );
-                        })}
-
-                        {shape.points.map((point, index) => (
-                          <Circle
-                            ref={(node) => {
+                    const isSelected = selectedShapeIds.includes(shape.id);
+                    if (shape.pathData) {
+                      return (
+                        <React.Fragment key={shape.id}>
+                          <Path
+                            ref={node => {
                               if (node) shapeRefs.current[shape.id] = node;
                               else delete shapeRefs.current[shape.id];
                             }}
-                            key={`blotch-${index}`}
-                            x={point.x}
-                            y={point.y}
-                            radius={point.strokeWidth / 2}
-                            fill={shape.stroke}
-                            opacity={point.opacity * 0.8}
+                            id={shape.id}
+                            data={shape.pathData}
+                            x={shape.x}
+                            y={shape.y}
+                            stroke={shape.stroke || "black"}
+                            strokeWidth={shape.strokeWidth || 1}
+                            fill={shape.fill || "none"}
+                            draggable={selectedTool === "Select"}
+                            onDragMove={handleDragMove}
+                            onDragEnd={e => {
+                              const { x, y } = e.target.position();
+                              dispatch(updateShapePosition({ id: shape.id, x, y }));
+                            }}
+                            onClick={e => {
+                              e.cancelBubble = true;
+                              if (!selectedShapeIds.includes(shape.id)) {
+                                dispatch(selectShape(shape.id));
+                              }
+                            }}
                           />
-                        ))}
-                      </Group>
+                          {isSelected && shapeRefs.current[shape.id] && selectedTool !== "Node" && (
+                            <Transformer
+                              ref={transformerRef}
+                              nodes={selectedShapeIds.map(id => shapeRefs.current[id]).filter(Boolean)}
+                              boundBoxFunc={(oldBox, newBox) => {
+                                if (newBox.width < 5 || newBox.height < 5) {
+                                  return oldBox;
+                                }
+                                return newBox;
+                              }}
+                              enabledAnchors={[
+                                "top-left",
+                                "top-center",
+                                "top-right",
+                                "middle-left",
+                                "middle-right",
+                                "bottom-left",
+                                "bottom-center",
+                                "bottom-right",
+                              ]}
+                              skewEnabled={true}
+                            />
+                          )}
+                        </React.Fragment>
+                      );
+                    }
+
+                    if (!shape.points) return null;
+                    const allPoints = [];
+                    shape.points.forEach((point) => {
+                      if (Array.isArray(point.shapes)) {
+                        point.shapes.forEach((subShape) => {
+                          allPoints.push({ x: subShape.x, y: subShape.y, r: subShape.radius });
+                        });
+                      }
+                    });
+
+
+                    if (allPoints.length < 3) {
+                      return (
+                        <Group key={shape.id} id={shape.id}>
+                          {allPoints.map((pt, i) => (
+                            <Circle
+                              key={i}
+                              x={pt.x}
+                              y={pt.y}
+                              radius={pt.r}
+                              fill={shape.stroke || "black"}
+                              opacity={0.7}
+                            />
+                          ))}
+                        </Group>
+                      );
+                    }
+
+
+                    const outer = [];
+                    const inner = [];
+                    for (let i = 0; i < allPoints.length; i++) {
+                      const p = allPoints[i];
+                      const prev = allPoints[i - 1] || allPoints[0];
+                      const dx = p.x - prev.x;
+                      const dy = p.y - prev.y;
+                      const len = Math.hypot(dx, dy) || 1;
+
+                      const nx = -dy / len;
+                      const ny = dx / len;
+                      const r = p.r || 5;
+                      outer.push({ x: p.x + nx * r, y: p.y + ny * r });
+                      inner.push({ x: p.x - nx * r, y: p.y - ny * r });
+                    }
+
+                    const polygon = [...outer, ...inner.reverse()];
+                    const pathData = polygon.map((pt, i) =>
+                      (i === 0 ? `M ${pt.x} ${pt.y}` : `L ${pt.x} ${pt.y}`)
+                    ).join(" ") + " Z";
+
+                    return (
+                      <Path
+                        ref={node => {
+                          if (node) shapeRefs.current[shape.id] = node;
+                          else delete shapeRefs.current[shape.id];
+                        }}
+                        key={shape.id}
+                        id={shape.id}
+                        data={pathData}
+                        fill={shape.stroke || "black"}
+                        opacity={0.7}
+                        stroke={shape.stroke || "black"}
+                        strokeWidth={1}
+                        closed
+                        draggable={selectedTool === "Select"}
+                        onDragMove={handleDragMove}
+                      />
+                    );
+                  } else if (shape.type === "Splotchy") {
+                    const points = shape.points;
+                    if (!points || points.length < 3) return null;
+
+                    const outer = [];
+                    const inner = [];
+                    for (let i = 0; i < points.length; i++) {
+                      const p = points[i];
+                      const prev = points[i - 1] || points[0];
+                      const dx = p.x - prev.x;
+                      const dy = p.y - prev.y;
+                      const len = Math.hypot(dx, dy) || 1;
+                      const nx = -dy / len;
+                      const ny = dx / len;
+                      const r = (p.strokeWidth || 10) / 2;
+                      outer.push({ x: p.x + nx * r, y: p.y + ny * r });
+                      inner.push({ x: p.x - nx * r, y: p.y - ny * r });
+                    }
+                    const polygon = [...outer, ...inner.reverse()];
+                    const pathData = polygon.map((pt, i) =>
+                      (i === 0 ? `M ${pt.x} ${pt.y}` : `L ${pt.x} ${pt.y}`)
+                    ).join(" ") + " Z";
+
+                    return (
+                      <Path
+                        ref={node => {
+                          if (node) shapeRefs.current[shape.id] = node;
+                          else delete shapeRefs.current[shape.id];
+                        }}
+                        key={shape.id}
+                        id={shape.id}
+                        data={pathData}
+                        fill={shape.stroke || "black"}
+                        opacity={0.7}
+                        stroke={shape.stroke || "black"}
+                        strokeWidth={1}
+                        closed
+                        draggable={selectedTool === "Select"}
+                        onDragMove={handleDragMove}
+                      />
                     );
                   } else if (shape.type === "Spiral") {
                     const isSelected = selectedShapeIds.includes(shape.id);
@@ -6406,15 +6608,27 @@ const Panel = React.forwardRef(({
                           }}
 
                         />
-                        {isSelected && selectedTool !== "Node" && shapeRefs.current[shape.id] && (
+                        {isSelected && shapeRefs.current[shape.id] && selectedTool !== "Node" && (
                           <Transformer
-                            nodes={[shapeRefs.current[shape.id]]}
+                            ref={transformerRef}
+                            nodes={selectedShapeIds.map(id => shapeRefs.current[id]).filter(Boolean)}
                             boundBoxFunc={(oldBox, newBox) => {
                               if (newBox.width < 5 || newBox.height < 5) {
                                 return oldBox;
                               }
                               return newBox;
                             }}
+                            enabledAnchors={[
+                              "top-left",
+                              "top-center",
+                              "top-right",
+                              "middle-left",
+                              "middle-right",
+                              "bottom-left",
+                              "bottom-center",
+                              "bottom-right",
+                            ]}
+                            skewEnabled={true}
                           />
                         )}
                       </React.Fragment>
@@ -6584,15 +6798,27 @@ const Panel = React.forwardRef(({
                               width={fontSize}
                             />
                           ))}
-                          {isSelected && selectedTool !== "Node" && shapeRefs.current[shape.id] && (
+                          {isSelected && shapeRefs.current[shape.id] && selectedTool !== "Node" && (
                             <Transformer
-                              nodes={[shapeRefs.current[shape.id]]}
+                              ref={transformerRef}
+                              nodes={selectedShapeIds.map(id => shapeRefs.current[id]).filter(Boolean)}
                               boundBoxFunc={(oldBox, newBox) => {
                                 if (newBox.width < 5 || newBox.height < 5) {
                                   return oldBox;
                                 }
                                 return newBox;
                               }}
+                              enabledAnchors={[
+                                "top-left",
+                                "top-center",
+                                "top-right",
+                                "middle-left",
+                                "middle-right",
+                                "bottom-left",
+                                "bottom-center",
+                                "bottom-right",
+                              ]}
+                              skewEnabled={true}
                             />
                           )}
                         </Group>
@@ -6635,15 +6861,27 @@ const Panel = React.forwardRef(({
                             setTextAreaVisible(true);
                           }}
                         />
-                        {isSelected && selectedTool !== "Node" && (
+                        {isSelected && shapeRefs.current[shape.id] && selectedTool !== "Node" && (
                           <Transformer
-                            nodes={[layerRef.current.findOne(`#${shape.id}`)]}
+                            ref={transformerRef}
+                            nodes={selectedShapeIds.map(id => shapeRefs.current[id]).filter(Boolean)}
                             boundBoxFunc={(oldBox, newBox) => {
                               if (newBox.width < 5 || newBox.height < 5) {
                                 return oldBox;
                               }
                               return newBox;
                             }}
+                            enabledAnchors={[
+                              "top-left",
+                              "top-center",
+                              "top-right",
+                              "middle-left",
+                              "middle-right",
+                              "bottom-left",
+                              "bottom-center",
+                              "bottom-right",
+                            ]}
+                            skewEnabled={true}
                           />
                         )}
                       </React.Fragment>
@@ -6841,7 +7079,7 @@ const Panel = React.forwardRef(({
                   />
                 ))}
 
-                {selectedShape && selectedTool !== "Node" && (
+                {/* {selectedShape && selectedTool !== "Node" && (
                   <Transformer
                     ref={transformerRef}
                     nodes={[layerRef.current?.findOne(`#${selectedShape.id}`)]}
@@ -6855,7 +7093,7 @@ const Panel = React.forwardRef(({
                       e.cancelBubble = true;
                     }}
                   />
-                )}
+                )} */}
 
                 {newShape && newShape.type === "Rectangle" && (
                   <Rect

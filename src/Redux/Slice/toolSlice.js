@@ -408,18 +408,31 @@ const toolSlice = createSlice({
     paste: (state) => {
       const targetLayer = state.layers[state.selectedLayerIndex];
       if (state.clipboadType === "copy" && Array.isArray(state.clipboard)) {
+        let counter = 0;
+        function assignNewIds(shape) {
+          counter += 1;
+          const newId = `shape-${Date.now()}-${Math.random()}-${counter}`;
+          const newShape = {
+            ...JSON.parse(JSON.stringify(shape)),
+            id: newId,
+            x: (shape.x || 0) + 20,
+            y: (shape.y || 0) + 20,
+          };
 
-        const pastedShapes = state.clipboard.map(shape => ({
-          ...JSON.parse(JSON.stringify(shape)),
-          id: `shape-${Date.now()}-${Math.random()}`,
-          x: (shape.x || 0) + 20,
-          y: (shape.y || 0) + 20,
-        }));
+          if (Array.isArray(newShape.shapes)) {
+            newShape.shapes = newShape.shapes.map(assignNewIds);
+          }
+
+          if (newShape.groupId) {
+            newShape.groupId = undefined;
+          }
+          return newShape;
+        }
+        const pastedShapes = state.clipboard.map(assignNewIds);
         targetLayer.shapes.push(...pastedShapes);
         state.selectedShapeIds = pastedShapes.map(s => s.id);
         state.selectedShapeId = pastedShapes.length === 1 ? pastedShapes[0].id : null;
       } else if (state.clipboadType === "cut" && Array.isArray(state.clipboard)) {
-
         targetLayer.shapes.push(...state.clipboard);
         state.selectedShapeIds = state.clipboard.map(s => s.id);
         state.selectedShapeId = state.clipboard.length === 1 ? state.clipboard[0].id : null;
@@ -1671,91 +1684,154 @@ const toolSlice = createSlice({
         return;
       }
 
+
+      const processedShapeIds = new Set();
       state.selectedNodePoints.forEach((node) => {
         const shape = layer.shapes.find((shape) => shape.id === node.shapeId);
-        if (!shape || !Array.isArray(shape.points)) return;
-
-        const pt = shape.points[node.index];
+        if (!shape || !Array.isArray(shape.points) || processedShapeIds.has(shape.id)) return;
 
 
-        if (Array.isArray(pt) && pt.length >= 2) {
-          shape.points[node.index] = [pt[0], pt[1]];
+        if (shape.type === "Pencil") {
+          shape.points = shape.points.map(pt =>
+            Array.isArray(pt) && pt.length >= 2 ? [pt[0], pt[1]] : pt
+          );
         }
 
-        else if (pt && typeof pt === "object" && pt.x !== undefined && pt.y !== undefined) {
-
-          shape.points[node.index] = { x: pt.x, y: pt.y };
+        else if (shape.type === "Calligraphy") {
+          shape.points = shape.points.map(pt =>
+            pt && typeof pt === "object" && pt.x !== undefined && pt.y !== undefined
+              ? { x: pt.x, y: pt.y }
+              : pt
+          );
         }
+        processedShapeIds.add(shape.id);
       });
-
 
       layer.shapes = [...layer.shapes];
     },
     makeSelectedNodesSmooth: (state) => {
-      if (state.selectedNodePoints.length === 0) {
-        console.error("No nodes selected to make smooth.");
-        return;
-      }
+      if (state.selectedNodePoints.length === 0) return;
 
       const layer = state.layers[state.selectedLayerIndex];
-      if (!layer) {
-        console.error("No layer selected.");
-        return;
-      }
+      if (!layer) return;
+
+      state.selectedNodePoints.forEach((node) => {
+        const shape = layer.shapes.find((shape) => shape.id === node.shapeId);
+        if (!shape || !Array.isArray(shape.points)) return;
+
+        let pt = shape.points[node.index];
 
 
-      const updatedShapes = layer.shapes.map((shape) => {
-        const selectedNode = state.selectedNodePoints.find((node) => node.shapeId === shape.id);
-
-        if (!selectedNode) {
-          return shape;
-        }
-
-        if (Array.isArray(shape.points)) {
-          const point = shape.points[selectedNode.index];
-
-          if (point && typeof point === "object") {
-            const prevPoint = shape.points[selectedNode.index - 1] || point;
-            const nextPoint = shape.points[selectedNode.index + 1] || point;
-
-            const radius = 50;
-
-            const angleToPrev = Math.atan2(prevPoint.y - point.y, prevPoint.x - point.x);
-            const angleToNext = Math.atan2(nextPoint.y - point.y, nextPoint.x - point.x);
-
-            const controlPoint1 = {
-              x: point.x + radius * Math.cos(angleToPrev + Math.PI / 2),
-              y: point.y + radius * Math.sin(angleToPrev + Math.PI / 2),
-            };
-
-            const controlPoint2 = {
-              x: point.x + radius * Math.cos(angleToNext - Math.PI / 2),
-              y: point.y + radius * Math.sin(angleToNext - Math.PI / 2),
-            };
-
-
-            const updatedPoints = [...shape.points];
-            updatedPoints[selectedNode.index] = {
-              ...point,
-              controlPoint1,
-              controlPoint2,
-              smooth: true,
-            };
-
-            return {
-              ...shape,
-              points: updatedPoints,
-            };
+        if (Array.isArray(pt) && pt.length >= 2) {
+          function chaikin(points, iterations = 2) {
+            let pts = points;
+            for (let iter = 0; iter < iterations; iter++) {
+              const newPts = [];
+              for (let i = 0; i < pts.length - 1; i++) {
+                const [x0, y0] = pts[i];
+                const [x1, y1] = pts[i + 1];
+                newPts.push(
+                  [0.75 * x0 + 0.25 * x1, 0.75 * y0 + 0.25 * y1],
+                  [0.25 * x0 + 0.75 * x1, 0.25 * y0 + 0.75 * y1]
+                );
+              }
+              newPts.unshift(pts[0]);
+              newPts.push(pts[pts.length - 1]);
+              pts = newPts;
+            }
+            return pts;
           }
+          shape.points = chaikin(shape.points, 3);
+          return;
         }
 
-        return shape;
+
+        if (
+          pt &&
+          typeof pt === "object" &&
+          pt.x !== undefined &&
+          pt.y !== undefined &&
+          shape.type === "Calligraphy"
+        ) {
+          function chaikinObj(points, iterations = 2) {
+            let pts = points;
+            for (let iter = 0; iter < iterations; iter++) {
+              const newPts = [];
+              for (let i = 0; i < pts.length - 1; i++) {
+                const p0 = pts[i];
+                const p1 = pts[i + 1];
+                newPts.push(
+                  {
+                    x: 0.75 * p0.x + 0.25 * p1.x,
+                    y: 0.75 * p0.y + 0.25 * p1.y,
+                  },
+                  {
+                    x: 0.25 * p0.x + 0.75 * p1.x,
+                    y: 0.25 * p0.y + 0.75 * p1.y,
+                  }
+                );
+              }
+              newPts.unshift({ ...pts[0] });
+              newPts.push({ ...pts[pts.length - 1] });
+              pts = newPts;
+            }
+            return pts;
+          }
+          shape.points = chaikinObj(shape.points, 3);
+          return;
+        }
+
+
+        if (pt && typeof pt === "object" && pt.x !== undefined && pt.y !== undefined) {
+          const x = pt.x, y = pt.y;
+          const prevPt = shape.points[node.index - 1] || pt;
+          const nextPt = shape.points[node.index + 1] || pt;
+
+          const prev = Array.isArray(prevPt)
+            ? { x: prevPt[0], y: prevPt[1] }
+            : { x: prevPt.x, y: prevPt.y };
+          const next = Array.isArray(nextPt)
+            ? { x: nextPt[0], y: nextPt[1] }
+            : { x: nextPt.x, y: nextPt.y };
+
+          const toPrev = { x: x - prev.x, y: y - prev.y };
+          const toNext = { x: next.x - x, y: next.y - y };
+
+          let dirX = 0, dirY = 0;
+          if (prev !== pt && next !== pt) {
+            dirX = (toPrev.x / (Math.hypot(toPrev.x, toPrev.y) || 1)) + (toNext.x / (Math.hypot(toNext.x, toNext.y) || 1));
+            dirY = (toPrev.y / (Math.hypot(toPrev.x, toPrev.y) || 1)) + (toNext.y / (Math.hypot(toNext.x, toNext.y) || 1));
+          } else if (next !== pt) {
+            dirX = toNext.x / (Math.hypot(toNext.x, toNext.y) || 1);
+            dirY = toNext.y / (Math.hypot(toNext.x, toNext.y) || 1);
+          } else if (prev !== pt) {
+            dirX = toPrev.x / (Math.hypot(toPrev.x, toPrev.y) || 1);
+            dirY = toPrev.y / (Math.hypot(toPrev.x, toPrev.y) || 1);
+          }
+
+          const dirLen = Math.hypot(dirX, dirY) || 1;
+          const handleLength = 40;
+
+          const controlPoint1 = {
+            x: x - (dirX / dirLen) * handleLength,
+            y: y - (dirY / dirLen) * handleLength,
+          };
+          const controlPoint2 = {
+            x: x + (dirX / dirLen) * handleLength,
+            y: y + (dirY / dirLen) * handleLength,
+          };
+
+          shape.points[node.index] = {
+            x,
+            y,
+            controlPoint1,
+            controlPoint2,
+            smooth: true,
+          };
+        }
       });
 
-
-      layer.shapes = updatedShapes;
-
-      console.log("Selected nodes have been made smooth and circular.");
+      layer.shapes = [...layer.shapes];
     },
     makeSelectedNodesCurve: (state) => {
       if (state.selectedNodePoints.length !== 2) {
@@ -2455,6 +2531,74 @@ const toolSlice = createSlice({
         }
       }
     },
+    makeSelectedNodesSymmetric: (state) => {
+      if (state.selectedNodePoints.length === 0) return;
+      const layer = state.layers[state.selectedLayerIndex];
+      if (!layer) return;
+
+      state.selectedNodePoints.forEach((node) => {
+        const shape = layer.shapes.find((shape) => shape.id === node.shapeId);
+        if (!shape || !Array.isArray(shape.points)) return;
+        let pt = shape.points[node.index];
+
+        if (shape.type === "Calligraphy" && pt && typeof pt === "object" && pt.x !== undefined && pt.y !== undefined) {
+          const defaultLen = 40;
+          shape.points[node.index] = {
+            ...pt,
+            controlPoint1: { x: pt.x - defaultLen, y: pt.y },
+            controlPoint2: { x: pt.x + defaultLen, y: pt.y },
+            symmetric: true,
+          };
+          return;
+        }
+
+
+        if (pt && typeof pt === "object" && pt.x !== undefined && pt.y !== undefined) {
+          let cp1 = pt.controlPoint1;
+          let cp2 = pt.controlPoint2;
+          const defaultLen = 40;
+
+          if (cp1 && cp2) {
+            const dx = cp1.x - pt.x;
+            const dy = cp1.y - pt.y;
+            shape.points[node.index] = {
+              ...pt,
+              controlPoint1: { x: pt.x + dx, y: pt.y + dy },
+              controlPoint2: { x: pt.x - dx, y: pt.y - dy },
+              symmetric: true,
+            };
+          } else if (cp1) {
+            const dx = cp1.x - pt.x;
+            const dy = cp1.y - pt.y;
+            shape.points[node.index] = {
+              ...pt,
+              controlPoint1: { x: pt.x + dx, y: pt.y + dy },
+              controlPoint2: { x: pt.x - dx, y: pt.y - dy },
+              symmetric: true,
+            };
+          } else if (cp2) {
+            const dx = cp2.x - pt.x;
+            const dy = cp2.y - pt.y;
+            shape.points[node.index] = {
+              ...pt,
+              controlPoint1: { x: pt.x - dx, y: pt.y - dy },
+              controlPoint2: { x: pt.x + dx, y: pt.y + dy },
+              symmetric: true,
+            };
+          } else {
+            shape.points[node.index] = {
+              ...pt,
+              controlPoint1: { x: pt.x - defaultLen, y: pt.y },
+              controlPoint2: { x: pt.x + defaultLen, y: pt.y },
+              symmetric: true,
+            };
+          }
+        }
+
+      });
+
+      layer.shapes = [...layer.shapes];
+    },
   },
 
 });
@@ -2645,6 +2789,7 @@ export const {
   unlinkClone,
   clearSelectedNodePoints,
   breakPathAtSelectedNode,
+  makeSelectedNodesSymmetric,
 } = toolSlice.actions;
 
 export default toolSlice.reducer;

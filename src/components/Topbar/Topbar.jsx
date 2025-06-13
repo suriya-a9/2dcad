@@ -124,6 +124,8 @@ import {
   setTweakFidelity,
   clearSelectedNodePoints,
   breakPathAtSelectedNode,
+  makeSelectedNodesSmooth,
+  makeSelectedNodesSymmetric,
 } from "../../Redux/Slice/toolSlice";
 import {
   TbDeselect,
@@ -240,13 +242,13 @@ const Topbar = ({
     }
   };
 
-  const handleUndo = useCallback(() => {
-    dispatch(undo());
-  }, [dispatch]);
+  // const handleUndo = useCallback(() => {
+  //   dispatch(undo());
+  // }, [dispatch]);
 
-  const handlRedo = useCallback(() => {
-    dispatch(redo());
-  }, [dispatch]);
+  // const handlRedo = useCallback(() => {
+  //   dispatch(redo());
+  // }, [dispatch]);
 
   const handleCut = useCallback(() => {
     dispatch(cut());
@@ -469,9 +471,70 @@ const Topbar = ({
       nodes
     }));
   };
+  const handleTraceBitmap = async () => {
+    const selectedShape = shapes.find(s => s.id === selectedShapeId && s.type === "Image");
+    if (!selectedShape) {
+      alert("Please select an image to trace.");
+      return;
+    }
+
+    const img = new window.Image();
+    img.crossOrigin = "Anonymous";
+    img.src = selectedShape.url || selectedShape.src;
+    img.onload = () => {
+      const canvas = document.createElement("canvas");
+      canvas.width = img.width;
+      canvas.height = img.height;
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(img, 0, 0);
+
+      const imageData = ctx.getImageData(0, 0, img.width, img.height);
+      const { data, width, height } = imageData;
+      let pathData = "";
+
+      for (let y = 0; y < height; y++) {
+        let inShape = false;
+        let startX = 0;
+        for (let x = 0; x < width; x++) {
+          const idx = (y * width + x) * 4;
+          const r = data[idx], g = data[idx + 1], b = data[idx + 2];
+          const brightness = (r + g + b) / 3;
+          if (brightness < 128 && !inShape) {
+            inShape = true;
+            startX = x;
+          } else if (brightness >= 128 && inShape) {
+            inShape = false;
+            pathData += `M${startX},${y}H${x} `;
+          }
+        }
+        if (inShape) {
+          pathData += `M${startX},${y}H${width} `;
+        }
+      }
+
+      dispatch({
+        type: "tool/addShape",
+        payload: {
+          type: "Tracing",
+          pathData,
+          x: selectedShape.x || 0,
+          y: selectedShape.y || 0,
+          width: selectedShape.width || img.width,
+          height: selectedShape.height || img.height,
+          stroke: "#000",
+          fill: "none",
+          strokeWidth: 1,
+        }
+      });
+      alert("Tracing complete! Path added.");
+    };
+    img.onerror = () => {
+      alert("Failed to load image for tracing.");
+    };
+  };
   const EditOptions = [
-    { id: 1, label: "Undo...", onClick: handleUndo },
-    { id: 2, label: "Redo...", onClick: handlRedo },
+    { id: 1, label: "Undo...", onClick: () => dispatch(undo()) },
+    { id: 2, label: "Redo...", onClick: () => dispatch(redo()) },
     {
       id: 3,
       label: "Undo History...",
@@ -905,7 +968,7 @@ const Topbar = ({
   const PathOptions = [
     { label: "Object to Path", onClick: handleObjectToPath },
     { label: "Stroke to Path" },
-    { label: "Trace Bitemap..." },
+    { label: "Trace Bitemap...", onClick: handleTraceBitmap },
     "divider",
     { label: "Union", onClick: () => dispatch(handleUnion()) },
     { label: "Difference" },
@@ -4119,7 +4182,7 @@ function NodeTopbar() {
 
   const handleMakeNodesSmooth = () => {
     console.log("Make Selected Nodes Smooth clicked");
-    dispatch({ type: "MAKE_SELECTED_NODES_SMOOTH" });
+    dispatch(makeSelectedNodesSmooth());
   };
 
   const handleCurveLine = () => {
@@ -4141,6 +4204,11 @@ function NodeTopbar() {
   const handleStrokePath = () => {
     dispatch(setStrokeToPathMode(true));
     dispatch(strokePath());
+  };
+
+  const handleMakeNodesSymmetric = () => {
+    console.log("Make Selected Nodes Symmetric clicked");
+    dispatch(makeSelectedNodesSymmetric());
   };
 
   useEffect(() => {
@@ -4192,6 +4260,9 @@ function NodeTopbar() {
       </div>
       <div className="p-2 top-icon" onClick={handleBreakPathAtNode}>
         <FaCut size={20} title="Break paths at selected node" />
+      </div>
+      <div className="p-2 top-icon" onClick={handleMakeNodesSymmetric}>
+        <MdOutlineVerticalAlignTop size={20} title="Mark Selected Nodes Symmetric" />
       </div>
     </div>
   );

@@ -2076,38 +2076,75 @@ const toolSlice = createSlice({
     },
     strokePath: (state) => {
       const layer = state.layers[state.selectedLayerIndex];
-      if (!layer) {
-        console.error("No layer selected.");
-        return;
-      }
+      if (!layer) return;
 
       const shape = layer.shapes.find((shape) => shape.id === state.selectedShapeId);
-      if (!shape) {
-        console.error("Shape not found.");
+      if (!shape) return;
+
+      let points = [];
+      let closed = true;
+      let strokeWidth = shape.strokeWidth || 2;
+
+      if (["Pencil", "Calligraphy", "Polygon"].includes(shape.type) && Array.isArray(shape.points)) {
+        points = shape.points.map(pt =>
+          Array.isArray(pt) ? { x: pt[0], y: pt[1] } : { x: pt.x, y: pt.y }
+        );
+        closed = !!shape.closed;
+      } else if (shape.type === "Circle") {
+
+        const { x, y, radius } = shape;
+        const numPoints = 64;
+        points = Array.from({ length: numPoints }, (_, i) => {
+          const angle = (2 * Math.PI * i) / numPoints;
+          return {
+            x: x + radius * Math.cos(angle),
+            y: y + radius * Math.sin(angle)
+          };
+        });
+        closed = true;
+        strokeWidth = shape.strokeWidth || 2;
+      } else {
+
         return;
       }
 
 
-      const strokeWidth = shape.strokeWidth || 1;
-      const boundingBox = {
-        x: shape.x - strokeWidth / 2,
-        y: shape.y - strokeWidth / 2,
-        width: (shape.width || 0) + strokeWidth,
-        height: (shape.height || 0) + strokeWidth,
-      };
+      function getNormals(pts, closed) {
+        const n = pts.length;
+        return pts.map((pt, i) => {
+          const prev = pts[(i - 1 + n) % n];
+          const next = pts[(i + 1) % n];
+          const dx = next.x - prev.x;
+          const dy = next.y - prev.y;
+          const len = Math.hypot(dx, dy) || 1;
+          return { x: -dy / len, y: dx / len };
+        });
+      }
+      const normals = getNormals(points, closed);
 
 
-      const strokeControlPoints = [
-        { x: boundingBox.x, y: boundingBox.y, position: "top-left" },
-        { x: boundingBox.x + boundingBox.width, y: boundingBox.y, position: "top-right" },
-        { x: boundingBox.x + boundingBox.width, y: boundingBox.y + boundingBox.height, position: "bottom-right" },
-        { x: boundingBox.x, y: boundingBox.y + boundingBox.height, position: "bottom-left" },
-      ];
+      const half = strokeWidth / 2;
+      const outer = points.map((pt, i) => ({
+        x: pt.x + normals[i].x * half,
+        y: pt.y + normals[i].y * half,
+      }));
+      const inner = points.map((pt, i) => ({
+        x: pt.x - normals[i].x * half,
+        y: pt.y - normals[i].y * half,
+      }));
 
 
-      state.controlPoints = strokeControlPoints;
+      const outline = closed
+        ? [...outer, ...inner.reverse()]
+        : [...outer, ...inner.reverse()];
 
-      console.log("Stroke control points added for the selected shape:", strokeControlPoints);
+
+      shape.type = "Polygon";
+      shape.points = outline;
+      shape.fill = shape.stroke || "#000";
+      shape.stroke = undefined;
+      shape.strokeWidth = 1;
+      shape.closed = true;
     },
     updateStrokeControlPoint: (state, action) => {
       const { index, newPosition } = action.payload;
@@ -2599,6 +2636,220 @@ const toolSlice = createSlice({
 
       layer.shapes = [...layer.shapes];
     },
+    autoSmoothSelectedNodes: (state) => {
+      if (state.selectedNodePoints.length === 0) return;
+
+      const layer = state.layers[state.selectedLayerIndex];
+      if (!layer) return;
+
+      state.selectedNodePoints.forEach((node) => {
+        const shape = layer.shapes.find((shape) => shape.id === node.shapeId);
+        if (!shape || !Array.isArray(shape.points)) return;
+
+        let pt = shape.points[node.index];
+
+
+        if (Array.isArray(pt) && pt.length >= 2) {
+          function chaikin(points, iterations = 2) {
+            let pts = points;
+            for (let iter = 0; iter < iterations; iter++) {
+              const newPts = [];
+              for (let i = 0; i < pts.length - 1; i++) {
+                const [x0, y0] = pts[i];
+                const [x1, y1] = pts[i + 1];
+                newPts.push(
+                  [0.75 * x0 + 0.25 * x1, 0.75 * y0 + 0.25 * y1],
+                  [0.25 * x0 + 0.75 * x1, 0.25 * y0 + 0.75 * y1]
+                );
+              }
+              newPts.unshift(pts[0]);
+              newPts.push(pts[pts.length - 1]);
+              pts = newPts;
+            }
+            return pts;
+          }
+          shape.points = chaikin(shape.points, 3);
+          return;
+        }
+
+
+        if (
+          pt &&
+          typeof pt === "object" &&
+          pt.x !== undefined &&
+          pt.y !== undefined &&
+          shape.type === "Calligraphy"
+        ) {
+          function chaikinObj(points, iterations = 2) {
+            let pts = points;
+            for (let iter = 0; iter < iterations; iter++) {
+              const newPts = [];
+              for (let i = 0; i < pts.length - 1; i++) {
+                const p0 = pts[i];
+                const p1 = pts[i + 1];
+                newPts.push(
+                  {
+                    x: 0.75 * p0.x + 0.25 * p1.x,
+                    y: 0.75 * p0.y + 0.25 * p1.y,
+                  },
+                  {
+                    x: 0.25 * p0.x + 0.75 * p1.x,
+                    y: 0.25 * p0.y + 0.75 * p1.y,
+                  }
+                );
+              }
+              newPts.unshift({ ...pts[0] });
+              newPts.push({ ...pts[pts.length - 1] });
+              pts = newPts;
+            }
+            return pts;
+          }
+          shape.points = chaikinObj(shape.points, 3);
+          return;
+        }
+
+
+        if (pt && typeof pt === "object" && pt.x !== undefined && pt.y !== undefined) {
+          const x = pt.x, y = pt.y;
+          const prevPt = shape.points[node.index - 1] || pt;
+          const nextPt = shape.points[node.index + 1] || pt;
+
+          const prev = Array.isArray(prevPt)
+            ? { x: prevPt[0], y: prevPt[1] }
+            : { x: prevPt.x, y: prevPt.y };
+          const next = Array.isArray(nextPt)
+            ? { x: nextPt[0], y: nextPt[1] }
+            : { x: nextPt.x, y: nextPt.y };
+
+          const toPrev = { x: x - prev.x, y: y - prev.y };
+          const toNext = { x: next.x - x, y: next.y - y };
+
+          let dirX = 0, dirY = 0;
+          if (prev !== pt && next !== pt) {
+            dirX = (toPrev.x / (Math.hypot(toPrev.x, toPrev.y) || 1)) + (toNext.x / (Math.hypot(toNext.x, toNext.y) || 1));
+            dirY = (toPrev.y / (Math.hypot(toPrev.x, toPrev.y) || 1)) + (toNext.y / (Math.hypot(toNext.x, toNext.y) || 1));
+          } else if (next !== pt) {
+            dirX = toNext.x / (Math.hypot(toNext.x, toNext.y) || 1);
+            dirY = toNext.y / (Math.hypot(toNext.x, toNext.y) || 1);
+          } else if (prev !== pt) {
+            dirX = toPrev.x / (Math.hypot(toPrev.x, toPrev.y) || 1);
+            dirY = toPrev.y / (Math.hypot(toPrev.x, toPrev.y) || 1);
+          }
+
+          const dirLen = Math.hypot(dirX, dirY) || 1;
+          const handleLength = 40;
+
+          const controlPoint1 = {
+            x: x - (dirX / dirLen) * handleLength,
+            y: y - (dirY / dirLen) * handleLength,
+          };
+          const controlPoint2 = {
+            x: x + (dirX / dirLen) * handleLength,
+            y: y + (dirY / dirLen) * handleLength,
+          };
+
+          shape.points[node.index] = {
+            x,
+            y,
+            controlPoint1,
+            controlPoint2,
+            smooth: true,
+          };
+        }
+      });
+
+      layer.shapes = [...layer.shapes];
+    },
+    addCornerLPE: (state) => {
+      if (!state.selectedNodePoints?.length) return;
+      const layer = state.layers[state.selectedLayerIndex];
+      if (!layer) return;
+
+      layer.shapes = layer.shapes.map((shape) => {
+        const selectedNodes = state.selectedNodePoints.filter(n => n.shapeId === shape.id);
+        console.log("addCornerLPE called", state.selectedNodePoints);
+        if (!selectedNodes.length) return shape;
+
+        const updatedPoints = shape.points.map((pt, idx) => {
+          if (!selectedNodes.some(sel => sel.index === idx)) return pt;
+
+          return {
+            ...pt,
+            cornerLPE: { radius: pt.cornerLPE?.radius || 10 }
+          };
+        });
+
+        return { ...shape, points: updatedPoints };
+      });
+    },
+    updateCornerLPE: (state, action) => {
+      const { shapeId, pointIdx, radius } = action.payload;
+      const layer = state.layers[state.selectedLayerIndex];
+      if (!layer) return;
+      const shape = layer.shapes.find(s => s.id === shapeId);
+      if (!shape) return;
+      if (!shape.points[pointIdx]) return;
+      shape.points[pointIdx].cornerLPE = { radius };
+    },
+    objectToPath: (state) => {
+      const layer = state.layers[state.selectedLayerIndex];
+      if (!layer) return;
+
+      state.selectedShapeIds.forEach((shapeId) => {
+        const shape = layer.shapes.find(s => s.id === shapeId);
+        if (!shape) return;
+
+
+        if (shape.type === "Rectangle") {
+          const { x, y, width, height } = shape;
+          shape.type = "Polygon";
+          shape.points = [
+            { x: x, y: y },
+            { x: x + width, y: y },
+            { x: x + width, y: y + height },
+            { x: x, y: y + height }
+          ];
+        }
+
+        else if (shape.type === "Circle") {
+          const { x, y, radius } = shape;
+          const numPoints = 36;
+          shape.type = "Polygon";
+          shape.points = Array.from({ length: numPoints }, (_, i) => {
+            const angle = (2 * Math.PI * i) / numPoints;
+            return {
+              x: x + radius * Math.cos(angle),
+              y: y + radius * Math.sin(angle)
+            };
+          });
+        }
+
+        else if (shape.type === "Star") {
+          const { x, y, innerRadius, outerRadius, corners } = shape;
+          const numPoints = (corners || 5) * 2;
+          shape.type = "Polygon";
+          shape.points = Array.from({ length: numPoints }, (_, i) => {
+            const angle = (Math.PI * i) / corners;
+            const r = i % 2 === 0 ? outerRadius : innerRadius;
+            return {
+              x: x + r * Math.cos(angle),
+              y: y + r * Math.sin(angle)
+            };
+          });
+        }
+
+      });
+
+
+      if (state.selectedShapeIds.length === 1) {
+        const shape = layer.shapes.find(s => s.id === state.selectedShapeIds[0]);
+        if (shape && Array.isArray(shape.points)) {
+          state.controlPoints = shape.points.map(pt =>
+            Array.isArray(pt) ? { x: pt[0], y: pt[1] } : pt
+          );
+        }
+      }
+    },
   },
 
 });
@@ -2654,6 +2905,7 @@ export const {
   zoomOut,
   cut,
   paste,
+  autoSmoothSelectedNodes,
   copy,
   undo,
   redo,
@@ -2790,6 +3042,9 @@ export const {
   clearSelectedNodePoints,
   breakPathAtSelectedNode,
   makeSelectedNodesSymmetric,
+  addCornerLPE,
+  updateCornerLPE,
+  objectToPath
 } = toolSlice.actions;
 
 export default toolSlice.reducer;

@@ -12,7 +12,7 @@ import { MdRoundedCorner, MdOutlineVerticalAlignTop, MdOutlineAltRoute } from "r
 import { FaMousePointer, FaStepForward, FaArrowsAltH, FaEyeSlash, FaLayerGroup, FaBullseye, FaCompressAlt, FaRandom, FaSyncAlt, FaArrowCircleUp, FaCompress, FaPaintBrush, FaPalette } from "react-icons/fa";
 import { AiOutlineVerticalAlignBottom } from "react-icons/ai";
 import { VscDebugReverseContinue } from "react-icons/vsc";
-import { FaSearchPlus, FaUndo, FaRedo, FaEdit, FaCheck, FaTimes, FaArrowLeft, FaArrowRight, FaArrowsAlt } from "react-icons/fa";
+import { FaSearchPlus, FaUndo, FaRedo, FaEdit, FaCheck, FaTimes, FaArrowLeft, FaArrowRight, FaArrowsAlt, FaRegObjectGroup } from "react-icons/fa";
 import { GiStraightPipe } from "react-icons/gi";
 import { PiPath } from "react-icons/pi";
 import { FaObjectGroup, FaObjectUngroup, FaExpand, FaRegFile, FaRegDotCircle, FaBan, FaVectorSquare } from "react-icons/fa";
@@ -126,6 +126,8 @@ import {
   breakPathAtSelectedNode,
   makeSelectedNodesSmooth,
   makeSelectedNodesSymmetric,
+  autoSmoothSelectedNodes,
+  objectToPath,
 } from "../../Redux/Slice/toolSlice";
 import {
   TbDeselect,
@@ -966,7 +968,7 @@ const Topbar = ({
   ];
 
   const PathOptions = [
-    { label: "Object to Path", onClick: handleObjectToPath },
+    { label: "Object to Path", onClick: () => dispatch(objectToPath()) },
     { label: "Stroke to Path" },
     { label: "Trace Bitemap...", onClick: handleTraceBitmap },
     "divider",
@@ -4263,6 +4265,36 @@ function NodeTopbar() {
       </div>
       <div className="p-2 top-icon" onClick={handleMakeNodesSymmetric}>
         <MdOutlineVerticalAlignTop size={20} title="Mark Selected Nodes Symmetric" />
+      </div>
+      <div
+        className="p-2 top-icon"
+        onClick={() => dispatch(autoSmoothSelectedNodes())}
+        title="Mark Selected Nodes Auto-smooth"
+      >
+        <svg width="20" height="20" viewBox="0 0 20 20">
+          <circle cx="5" cy="15" r="2" fill="#333" />
+          <circle cx="15" cy="15" r="2" fill="#333" />
+          <path d="M5 15 Q10 5 15 15" stroke="#333" strokeWidth="2" fill="none" />
+        </svg>
+      </div>
+      <div
+        className="p-2 top-icon"
+        onClick={() => dispatch({ type: "tool/addCornerLPE" })}
+        title="Add corner LPE"
+      >
+        <svg width="20" height="20" viewBox="0 0 20 20">
+          <circle cx="5" cy="15" r="2" fill="#333" />
+          <circle cx="15" cy="15" r="2" fill="#333" />
+          <path d="M5 15 Q10 10 15 15" stroke="#333" strokeWidth="2" fill="none" />
+          <circle cx="10" cy="10" r="3" fill="#007bff" />
+        </svg>
+      </div>
+      <div
+        className="p-2 top-icon"
+        onClick={() => dispatch({ type: "tool/objectToPath" })}
+        title="Object to Path"
+      >
+        <FaRegObjectGroup size={20} />
       </div>
     </div>
   );

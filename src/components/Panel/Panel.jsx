@@ -5852,9 +5852,11 @@ const Panel = React.forwardRef(({
                             if (node) shapeRefs.current[shape.id] = node;
                             else delete shapeRefs.current[shape.id];
                           }}
+                          key={shape.id}
                           id={shape.id}
                           x={shape.x}
                           y={shape.y}
+                          points={shape.points.flatMap(pt => [pt.x, pt.y])}
                           data={generatePolygonPath(shape.points)}
                           stroke={
                             shape.stroke?.type === "linear-gradient" || shape.stroke?.type === "radial-gradient"

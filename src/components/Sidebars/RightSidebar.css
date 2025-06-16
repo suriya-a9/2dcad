@@ -140,3 +140,8 @@
   /* Show the active tab */
   opacity: 1;
 }
+
+.selected-tool {
+  background: gray !important;
+  border-radius: 6px;
+}

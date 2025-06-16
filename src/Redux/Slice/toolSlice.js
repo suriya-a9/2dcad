@@ -130,6 +130,7 @@ const toolSlice = createSlice({
     tweakRadius: 40,
     tweakForce: 1,
     tweakFidelity: 50,
+    blockProgression: "normal",
   },
 
   reducers: {
@@ -524,15 +525,15 @@ const toolSlice = createSlice({
       }
     },
 
-    setStrokeColorForSelectedShape: (state, action) => {
-      const selectedLayer = state.layers[state.selectedLayerIndex];
-      const selectedShape = selectedLayer.shapes.find(
-        (shape) => shape.id === state.selectedShapeId
-      );
-      if (selectedShape) {
-        selectedShape.stroke = action.payload || "#000000";
-      }
-    },
+
+
+
+
+
+
+
+
+
 
     setStrokeWidthForSelectedShape: (state, action) => {
       const selectedLayer = state.layers[state.selectedLayerIndex];
@@ -2850,6 +2851,14 @@ const toolSlice = createSlice({
         }
       }
     },
+    setBlockProgression: (state, action) => {
+      state.blockProgression = action.payload;
+    },
+    selectAllShapesInAllLayers: (state) => {
+
+      const allShapeIds = state.layers.flatMap(layer => layer.shapes.map(shape => shape.id));
+      state.selectedShapeIds = allShapeIds;
+    },
   },
 
 });
@@ -3044,7 +3053,9 @@ export const {
   makeSelectedNodesSymmetric,
   addCornerLPE,
   updateCornerLPE,
-  objectToPath
+  objectToPath,
+  setBlockProgression,
+  selectAllShapesInAllLayers,
 } = toolSlice.actions;
 
 export default toolSlice.reducer;

@@ -49,12 +49,10 @@
 
 .top-bar .value label {
   color: white;
-  /* font-size: 12px; */
+
 }
 
-/* .top-bar .value input {
-  width: 51px !important;
-} */
+
 
 .top-bar .value label {
   color: white;
@@ -242,9 +240,23 @@ textarea.form-control {
   align-items: center;
   justify-content: start;
   gap: 20px;
-  overflow: scroll;
+  overflow-x: auto;
+  overflow-y: hidden;
+  white-space: nowrap;
+  width: 100%;
 }
 
 .top-icon.active {
   color: #007bff;
+}
+
+
+.default-topbar-scroll::-webkit-scrollbar {
+  height: 8px;
+  background: #eee;
+}
+
+.default-topbar-scroll::-webkit-scrollbar-thumb {
+  background: #bbb;
+  border-radius: 4px;
 }

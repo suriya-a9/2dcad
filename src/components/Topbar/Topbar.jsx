@@ -128,6 +128,8 @@ import {
   makeSelectedNodesSymmetric,
   autoSmoothSelectedNodes,
   objectToPath,
+  setBlockProgression,
+  selectAllShapesInAllLayers,
 } from "../../Redux/Slice/toolSlice";
 import {
   TbDeselect,
@@ -1815,6 +1817,13 @@ function DefaultTopbar() {
           <TbSelectAll
             data-tooltip-content="Select All"
             data-tooltip-id="tool-top"
+          />
+        </div>
+        <div className="p-2 top-icon" onClick={() => dispatch(selectAllShapesInAllLayers())}>
+          <FaLayerGroup
+            data-tooltip-content="Select All in All Layers"
+            data-tooltip-id="tool-top"
+            style={{ fontSize: 22 }}
           />
         </div>
         {/* <div className="p-2 top-icon">
@@ -4353,7 +4362,7 @@ function PencilTopbar() {
   return (
     <div className="d-flex flex-row mb-3" style={{ alignItems: "center", color: "white" }}>
       <div className="p-2 value" style={{ display: "flex", alignItems: "center", padding: "0.3rem" }}>
-        <label>Options:&nbsp;</label>
+        <label>Shape:&nbsp;</label>
         <select
           value={pencilOption}
           onChange={(e) => handleOptionSelect(e.target.value)}
@@ -4630,6 +4639,7 @@ function TextEditorTopbar({ onStyleChange, selectedShapeId }) {
   const selectedFontFamily = useSelector((state) => state.tool.selectedFontFamily);
   const selectedAlignment = useSelector((state) => state.tool.selectedAlignment);
   const selectedFontStyle = useSelector((state) => state.tool.selectedFontStyle);
+  const blockProgression = useSelector(state => state.tool.blockProgression || "normal");
 
   const handleFontSizeChange = (e) => {
     const newSize = parseInt(e.target.value, 10);
@@ -4806,8 +4816,11 @@ function TextEditorTopbar({ onStyleChange, selectedShapeId }) {
       </select>
       <label>Progression</label>
       <select
-        onChange={(e) => handleBlockProgressionChange(e.target.value)}
-        defaultValue="normal"
+        value={blockProgression}
+        onChange={e => {
+          dispatch(setBlockProgression(e.target.value));
+          handleBlockProgressionChange(e.target.value);
+        }}
       >
         <option value="normal">Normal</option>
         <option value="vertical">Vertical</option>

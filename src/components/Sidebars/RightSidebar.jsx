@@ -118,6 +118,7 @@ const RightSidebar = ({
   const [paramAngleStart, setParamAngleStart] = useState(0);
   const [paramAngleEnd, setParamAngleEnd] = useState(360);
   const [rotateObjects, setRotateObjects] = useState(false);
+  const [selectedRightIcon, setSelectedRightIcon] = useState(null);
   const alignOptions = [
     { key: "left", label: "Align Left", icon: <FaAlignLeft /> },
     { key: "center", label: "Align Center", icon: <FaAlignCenter /> },
@@ -813,11 +814,17 @@ const RightSidebar = ({
     <div className="right-sidebar">
       <div className="d-flex flex-column align-items-end mb-3">
         <div className="right-icons">
-          <div className="p-2 right-icon">
+          <div className="p-2 right-icon" onClick={() => {
+            setSelectedRightIcon("layers")
+            toggleSidebar();
+          }}
+            style={{
+              background: selectedRightIcon === "layers" ? "#444" : undefined,
+              borderRadius: 4,
+            }}>
             <LuLayers
               data-tooltip-content="Layer & Objects"
               data-tooltip-id="tool-right"
-              onClick={toggleSidebar}
               style={{ cursor: "pointer" }}
             />
           </div>

@@ -84,7 +84,8 @@ import {
   addMeasurementLine,
   setMeasurementDraft,
   setConvertToItem,
-  removeMeasurementLine
+  removeMeasurementLine,
+  deselectAllShapes
 } from "../../Redux/Slice/toolSlice";
 
 export const generateSpiralPath = (x, y, turns = 5, radius = 50, divergence = 1) => {
@@ -358,6 +359,7 @@ const Panel = React.forwardRef(({
   const tweakRadius = useSelector(state => state.tool.tweakRadius || 40);
   const tweakForce = useSelector(state => state.tool.tweakForce || 1);
   const tweakFidelity = useSelector(state => state.tool.tweakFidelity || 50);
+  const [snapText, setSnapText] = useState(null); // { text: string, x: number, y: number }
   function addGuidesAtLine(x1, y1, x2, y2) {
     setGuides(prev => [
       ...prev,
@@ -3411,6 +3413,9 @@ const Panel = React.forwardRef(({
       ) {
         dispatch(removeShapes(selectedShapeIds));
       }
+      if (e.key === "Escape") {
+        dispatch(deselectAllShapes());
+      }
       if (e.ctrlKey && e.key === "c") {
         dispatch(copy());
       }
@@ -3622,64 +3627,61 @@ const Panel = React.forwardRef(({
     }
   }, [isSnappingEnabled]);
   const snapToObjects = (node, objects, threshold = 10) => {
-    console.log("snapToObjects called with:", { node, objects, threshold });
+    let snappedX = node.x();
+    let snappedY = node.y();
+    let snapped = false;
     const newSnappingLines = [];
 
     objects.forEach((obj) => {
 
       if (Math.abs(node.x() - obj.x) < threshold) {
-        console.log(`Snapping to left edge of object:`, obj);
-        node.x(obj.x);
+        snappedX = obj.x;
+        snapped = true;
         newSnappingLines.push({
           points: [obj.x, 0, obj.x, height],
           orientation: "vertical",
         });
       }
 
-
       if (Math.abs(node.x() + node.width() - (obj.x + obj.width)) < threshold) {
-        console.log(`Snapping to right edge of object:`, obj);
-        node.x(obj.x + obj.width - node.width());
+        snappedX = obj.x + obj.width - node.width();
+        snapped = true;
         newSnappingLines.push({
           points: [obj.x + obj.width, 0, obj.x + obj.width, height],
           orientation: "vertical",
         });
       }
 
-
       if (Math.abs(node.x() + node.width() / 2 - (obj.x + obj.width / 2)) < threshold) {
-        console.log(`Snapping to center of object:`, obj);
-        node.x(obj.x + obj.width / 2 - node.width() / 2);
+        snappedX = obj.x + obj.width / 2 - node.width() / 2;
+        snapped = true;
         newSnappingLines.push({
           points: [obj.x + obj.width / 2, 0, obj.x + obj.width / 2, height],
           orientation: "vertical",
         });
       }
 
-
       if (Math.abs(node.y() - obj.y) < threshold) {
-        console.log(`Snapping to top edge of object:`, obj);
-        node.y(obj.y);
+        snappedY = obj.y;
+        snapped = true;
         newSnappingLines.push({
           points: [0, obj.y, width, obj.y],
           orientation: "horizontal",
         });
       }
 
-
       if (Math.abs(node.y() + node.height() - (obj.y + obj.height)) < threshold) {
-        console.log(`Snapping to bottom edge of object:`, obj);
-        node.y(obj.y + obj.height - node.height());
+        snappedY = obj.y + obj.height - node.height();
+        snapped = true;
         newSnappingLines.push({
           points: [0, obj.y + obj.height, width, obj.y + obj.height],
           orientation: "horizontal",
         });
       }
 
-
       if (Math.abs(node.y() + node.height() / 2 - (obj.y + obj.height / 2)) < threshold) {
-        console.log(`Snapping to vertical center of object:`, obj);
-        node.y(obj.y + obj.height / 2 - node.height() / 2);
+        snappedY = obj.y + obj.height / 2 - node.height() / 2;
+        snapped = true;
         newSnappingLines.push({
           points: [0, obj.y + obj.height / 2, width, obj.y + obj.height / 2],
           orientation: "horizontal",
@@ -3688,6 +3690,14 @@ const Panel = React.forwardRef(({
     });
 
     setSnappingLines(newSnappingLines);
+
+
+    if (snapped && node.id()) {
+      dispatch(updateShapePosition({ id: node.id(), x: snappedX, y: snappedY }));
+
+      node.x(snappedX);
+      node.y(snappedY);
+    }
   };
 
   {
@@ -4790,6 +4800,20 @@ const Panel = React.forwardRef(({
                     strokeWidth={2}
                     fill={isShapeClosed ? fillColor : "black"}
                     closed={isShapeClosed}
+                  />
+                )}
+                {snapText && (
+                  <Text
+                    x={snapText.x}
+                    y={snapText.y}
+                    text={snapText.text}
+                    fontSize={16}
+                    fill="#444"
+                    fontStyle="bold"
+                    stroke="white"
+                    strokeWidth={2}
+                    padding={4}
+                    align="center"
                   />
                 )}
                 {selectedTool === "Bezier" && bezierOption !== "Spiro Path" && (

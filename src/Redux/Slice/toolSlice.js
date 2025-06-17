@@ -177,72 +177,72 @@ const toolSlice = createSlice({
       state.selectedFontStyle = action.payload;
     },
     joinSelectedEndNodesWithSegment: (state) => {
-      if (state.selectedNodePoints.length === 2) {
-        const [firstNode, secondNode] = state.selectedNodePoints;
-
-        const layer = state.layers[state.selectedLayerIndex];
-        if (!layer) {
-          console.error("No layer selected.");
-          return;
-        }
-
-        const firstShape = layer.shapes.find((shape) => shape.id === firstNode.shapeId);
-        const secondShape = layer.shapes.find((shape) => shape.id === secondNode.shapeId);
-
-        if (!firstShape || !secondShape) {
-          console.error("One or both shapes not found.");
-          return;
-        }
-
-        const firstPoint = firstShape.points[firstNode.index];
-        const secondPoint = secondShape.points[secondNode.index];
-
-        if (!firstPoint || !secondPoint) {
-          console.error("Invalid node points selected.");
-          return;
-        }
-
-
-        const adjustedSecondPoint = Array.isArray(secondPoint)
-          ? [
-            secondPoint[0] + (secondShape.x - firstShape.x || 0),
-            secondPoint[1] + (secondShape.y - firstShape.y || 0),
-          ]
-          : {
-            x: secondPoint.x + (secondShape.x - firstShape.x || 0),
-            y: secondPoint.y + (secondShape.y - firstShape.y || 0),
-          };
-
-
-        const connectingPath = Array.isArray(firstPoint)
-          ? [
-            [firstPoint[0], firstPoint[1]],
-            [adjustedSecondPoint[0], adjustedSecondPoint[1]],
-          ]
-          : [
-            { x: firstPoint.x, y: firstPoint.y },
-            { x: adjustedSecondPoint.x, y: adjustedSecondPoint.y },
-          ];
-
-
-        const mergedPoints = [
-          ...firstShape.points.slice(0, firstNode.index + 1),
-          ...connectingPath,
-          ...secondShape.points.slice(secondNode.index),
-          ...secondShape.points.slice(0, secondNode.index),
-          ...firstShape.points.slice(firstNode.index + 1),
-        ];
-
-
-        firstShape.points = mergedPoints;
-
-
-        layer.shapes = layer.shapes.filter((shape) => shape.id !== secondShape.id);
-
-        console.log("Shapes connected and merged successfully!");
-      } else {
-        console.error("Exactly two nodes must be selected to join end nodes.");
+      if (state.selectedNodePoints.length !== 2) {
+        console.error("You must select exactly two nodes to join them.");
+        return;
       }
+
+      const [nodeA, nodeB] = state.selectedNodePoints;
+      const layer = state.layers[state.selectedLayerIndex];
+      if (!layer) return;
+
+      const shapeA = layer.shapes.find(s => s.id === nodeA.shapeId);
+      const shapeB = layer.shapes.find(s => s.id === nodeB.shapeId);
+
+      if (!shapeA || !shapeB) {
+        console.error("One or both shapes not found.");
+        return;
+      }
+
+
+      const normPoints = pts =>
+        pts.map(pt =>
+          Array.isArray(pt)
+            ? { x: pt[0], y: pt[1] }
+            : { x: pt.x, y: pt.y }
+        );
+
+
+      if (nodeA.shapeId === nodeB.shapeId) {
+        const points = normPoints(shapeA.points);
+
+
+        points.push({ x: points[nodeB.index].x, y: points[nodeB.index].y });
+        shapeA.points = points;
+        state.controlPoints = [...points];
+        state.selectedNodePoints = [];
+        return;
+      }
+
+
+      const pointsA = normPoints(shapeA.points);
+      const pointsB = normPoints(shapeB.points);
+
+
+      const reorderedA = [
+        ...pointsA.slice(nodeA.index),
+        ...pointsA.slice(0, nodeA.index + 1),
+      ];
+
+      const reorderedB = [
+        ...pointsB.slice(nodeB.index),
+        ...pointsB.slice(0, nodeB.index + 1),
+      ];
+
+
+      const mergedPoints = [
+        ...pointsA,
+        { x: pointsB[nodeB.index].x, y: pointsB[nodeB.index].y },
+        ...pointsB.slice(nodeB.index + 1),
+      ];
+
+
+      shapeA.points = mergedPoints;
+
+      layer.shapes = layer.shapes.filter(s => s.id !== shapeB.id);
+
+      state.controlPoints = [...mergedPoints];
+      state.selectedNodePoints = [];
     },
     setFontSize: (state, action) => {
       state.selectedFontSize = action.payload;
@@ -363,7 +363,6 @@ const toolSlice = createSlice({
       });
       state.history.push(JSON.parse(JSON.stringify(state)));
       state.future = [];
-      state.shapes.push(action.payload);
       console.log("New shape added with name:", newShape.name);
     },
     addShapes: (state, action) => {
@@ -2078,74 +2077,123 @@ const toolSlice = createSlice({
     strokePath: (state) => {
       const layer = state.layers[state.selectedLayerIndex];
       if (!layer) return;
-
-      const shape = layer.shapes.find((shape) => shape.id === state.selectedShapeId);
+      const shape = layer.shapes.find(s => s.id === state.selectedShapeId);
       if (!shape) return;
 
-      let points = [];
-      let closed = true;
-      let strokeWidth = shape.strokeWidth || 2;
 
-      if (["Pencil", "Calligraphy", "Polygon"].includes(shape.type) && Array.isArray(shape.points)) {
-        points = shape.points.map(pt =>
-          Array.isArray(pt) ? { x: pt[0], y: pt[1] } : { x: pt.x, y: pt.y }
-        );
-        closed = !!shape.closed;
+      let outline = [];
+      if (shape.type === "Rectangle") {
+        const half = (shape.strokeWidth || 1) / 2;
+
+
+        const outer = [
+          { x: shape.x - half, y: shape.y - half },
+          { x: shape.x + shape.width + half, y: shape.y - half },
+          { x: shape.x + shape.width + half, y: shape.y + shape.height + half },
+          { x: shape.x - half, y: shape.y + shape.height + half },
+        ];
+
+
+        const inner = [
+          { x: shape.x + half, y: shape.y + half },
+          { x: shape.x + half, y: shape.y + shape.height - half },
+          { x: shape.x + shape.width - half, y: shape.y + shape.height - half },
+          { x: shape.x + shape.width - half, y: shape.y + half },
+        ];
+
+
+        const outline = [
+          ...outer,
+          ...inner.reverse()
+        ];
+
+
+        shape.type = "Polygon";
+        shape.points = outline;
+        shape.closed = true;
+        shape.fill = shape.stroke || "#000";
+        shape.stroke = undefined;
+        shape.strokeWidth = 1;
+
+
+        delete shape.x;
+        delete shape.y;
+        delete shape.width;
+        delete shape.height;
+
+        state.selectedTool = "Node";
+        state.selectedShapeId = shape.id;
+        state.selectedShapeIds = [shape.id];
+        state.controlPoints = outline;
+        return;
       } else if (shape.type === "Circle") {
+        const numPoints = 36;
+        const half = (shape.strokeWidth || 1) / 2;
 
-        const { x, y, radius } = shape;
-        const numPoints = 64;
-        points = Array.from({ length: numPoints }, (_, i) => {
+        for (let i = 0; i < numPoints; i++) {
           const angle = (2 * Math.PI * i) / numPoints;
-          return {
-            x: x + radius * Math.cos(angle),
-            y: y + radius * Math.sin(angle)
-          };
-        });
-        closed = true;
-        strokeWidth = shape.strokeWidth || 2;
+          outline.push({
+            x: shape.x + (shape.radius + half) * Math.cos(angle),
+            y: shape.y + (shape.radius + half) * Math.sin(angle),
+          });
+        }
+
+        for (let i = numPoints - 1; i >= 0; i--) {
+          const angle = (2 * Math.PI * i) / numPoints;
+          outline.push({
+            x: shape.x + (shape.radius - half) * Math.cos(angle),
+            y: shape.y + (shape.radius - half) * Math.sin(angle),
+          });
+        }
+      } else if (shape.type === "Star") {
+        const half = (shape.strokeWidth || 1) / 2;
+        const corners = shape.corners || 5;
+        const numPoints = corners * 2;
+        const outer = [];
+        const inner = [];
+
+        for (let i = 0; i < numPoints; i++) {
+          const angle = (Math.PI * 2 * i) / numPoints - Math.PI / 2;
+          const baseRadius = i % 2 === 0 ? shape.outerRadius : shape.innerRadius;
+
+          outer.push({
+            x: shape.x + (baseRadius + half) * Math.cos(angle),
+            y: shape.y + (baseRadius + half) * Math.sin(angle),
+          });
+
+          inner.unshift({
+            x: shape.x + (baseRadius - half) * Math.cos(angle),
+            y: shape.y + (baseRadius - half) * Math.sin(angle),
+          });
+        }
+        outline = [...outer, ...inner];
+      } else if (shape.type === "Polygon") {
+        outline = shape.points.map(p => ({ x: p.x, y: p.y }));
+      } else if (shape.type === "Pencil" || shape.type === "Calligraphy") {
+        outline = shape.points.map(p => ({ x: p.x, y: p.y }));
       } else {
 
         return;
       }
 
 
-      function getNormals(pts, closed) {
-        const n = pts.length;
-        return pts.map((pt, i) => {
-          const prev = pts[(i - 1 + n) % n];
-          const next = pts[(i + 1) % n];
-          const dx = next.x - prev.x;
-          const dy = next.y - prev.y;
-          const len = Math.hypot(dx, dy) || 1;
-          return { x: -dy / len, y: dx / len };
-        });
-      }
-      const normals = getNormals(points, closed);
-
-
-      const half = strokeWidth / 2;
-      const outer = points.map((pt, i) => ({
-        x: pt.x + normals[i].x * half,
-        y: pt.y + normals[i].y * half,
-      }));
-      const inner = points.map((pt, i) => ({
-        x: pt.x - normals[i].x * half,
-        y: pt.y - normals[i].y * half,
-      }));
-
-
-      const outline = closed
-        ? [...outer, ...inner.reverse()]
-        : [...outer, ...inner.reverse()];
-
-
       shape.type = "Polygon";
       shape.points = outline;
+      shape.closed = true;
       shape.fill = shape.stroke || "#000";
       shape.stroke = undefined;
       shape.strokeWidth = 1;
-      shape.closed = true;
+
+      state.controlPoints = outline;
+      state.selectedTool = "Node";
+      state.selectedShapeId = shape.id;
+      state.selectedShapeIds = [shape.id];
+
+
+      state.controlPoints = outline;
+      state.selectedTool = "Node";
+      state.selectedShapeId = shape.id;
+      state.selectedShapeIds = [shape.id];
     },
     updateStrokeControlPoint: (state, action) => {
       const { index, newPosition } = action.payload;

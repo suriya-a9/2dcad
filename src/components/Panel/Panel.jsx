@@ -1632,7 +1632,7 @@ const Panel = React.forwardRef(({
       setNewShape({
         id: `pencil-${Date.now()}`,
         type: "Pencil",
-        points: [[x, y]],
+        points: [{ x, y }],
       });
       setIsDrawing(true);
     } else if (selectedTool === "Calligraphy") {
@@ -2202,7 +2202,7 @@ const Panel = React.forwardRef(({
         } else {
           setNewShape((prev) => ({
             ...prev,
-            points: [...prev.points, [x, y]],
+            points: [...prev.points, { x, y }],
           }));
         }
       } else if (isDrawing && newShape && newShape.type === "Calligraphy") {
@@ -2523,16 +2523,13 @@ const Panel = React.forwardRef(({
       }
       return points;
     } else if (shape.type === "Polygon") {
-      return shape.points.map((point) => ({
-        x: shape.x + point.x,
-        y: shape.y + point.y,
-      }));
+      return shape.points.map((point) => ({ x: point.x, y: point.y }));
     } else if (shape.type === "Pencil") {
-      console.log("Generating Node Points for Pencil Tool:", shape.points);
-      return shape.points.map((point) => ({
-        x: point[0],
-        y: point[1],
-      }));
+      return shape.points.map((point) =>
+        Array.isArray(point)
+          ? { x: point[0], y: point[1] }
+          : { x: point.x, y: point.y }
+      );
     } else if (shape.type === "Calligraphy") {
       console.log("Generating Node Points for Calligraphy Tool:", shape.points);
 
@@ -2663,16 +2660,13 @@ const Panel = React.forwardRef(({
         });
         dispatch(setControlPoints(regeneratedPoints));
       } else if (selectedShape && selectedShape.type === "Pencil") {
-        const newPoints = updatedPoints.map((point) => [point.x, point.y]);
-        console.log("Updated Pencil Points:", newPoints);
-
+        const newPoints = updatedPoints.map((point) => ({ x: point.x, y: point.y }));
         dispatch(
           updateShapePosition({
             id: selectedShape.id,
             points: newPoints,
           })
         );
-
         const regeneratedPoints = generateNodePoints({
           ...selectedShape,
           points: newPoints,
@@ -2980,7 +2974,9 @@ const Panel = React.forwardRef(({
           addShape({
             id: newShape.id,
             type: "Pencil",
-            points: finalPoints,
+            points: finalPoints.map(p =>
+              Array.isArray(p) ? { x: p[0], y: p[1] } : { x: p.x, y: p.y }
+            ),
             strokeColor: strokeColor,
             fill: fillColor || "black",
             closed: isClosed,
@@ -3139,7 +3135,9 @@ const Panel = React.forwardRef(({
           addShape({
             id: newShape.id,
             type: "Pencil",
-            points: finalPoints,
+            points: finalPoints.map(p =>
+              Array.isArray(p) ? { x: p[0], y: p[1] } : { x: p.x, y: p.y }
+            ),
             strokeColor: strokeColor,
             fill: fillColor || "black",
             closed: isClosed,
@@ -6046,22 +6044,21 @@ const Panel = React.forwardRef(({
                       />
                     );
                   } else if (shape.type === "Pencil") {
-                    if (!Array.isArray(shape.points) || !shape.points.every((p) => Array.isArray(p) && p.length === 2)) {
+                    if (!Array.isArray(shape.points) || !shape.points.every((p) => typeof p.x === "number" && typeof p.y === "number")) {
                       console.error("Invalid points structure for Pencil shape:", shape);
                       return null;
                     }
+                    const centerX = shape.points.reduce((sum, p) => sum + p.x, 0) / shape.points.length;
+                    const centerY = shape.points.reduce((sum, p) => sum + p.y, 0) / shape.points.length;
 
-                    const centerX = shape.points.reduce((sum, [x]) => sum + x, 0) / shape.points.length;
-                    const centerY = shape.points.reduce((sum, [, y]) => sum + y, 0) / shape.points.length;
-
-                    const rotatedPoints = shape.points.map(([x, y]) => {
-                      const { x: nx, y: ny } = rotatePoint(x, y, centerX, centerY, shape.rotation || 0);
+                    const rotatedPoints = shape.points.map((p) => {
+                      const { x: nx, y: ny } = rotatePoint(p.x, p.y, centerX, centerY, shape.rotation || 0);
                       return [nx, ny];
                     });
-                    const scaledPoints = scaleShapePoints(shape.points, 1 + pencilScale, centerX, centerY);
+                    const scaledPoints = scaleShapePoints(shape.points.map(p => [p.x, p.y]), 1 + pencilScale, centerX, centerY);
                     const isSelected = selectedShapeIds.includes(shape.id);
                     const pencilOption = shape.pencilOption || "None";
-                    const points = shape.points;
+                    const points = shape.points.map(p => [p.x, p.y]);
                     const width = (shape.strokeWidth || 10) * (1 + (shape.pencilScale ?? pencilScale ?? 0));
                     function getPerp([x1, y1], [x2, y2], w) {
                       const dx = x2 - x1, dy = y2 - y1;
@@ -6124,7 +6121,7 @@ const Panel = React.forwardRef(({
                           }}
                           key={shape.id}
                           id={shape.id}
-                          points={shape.points.flatMap((p) => [p[0], p[1]])}
+                          points={shape.points.flatMap((p) => [p.x, p.y])}
                           stroke={shape.strokeColor}
                           fill={shape.fill || "transparent"}
                           strokeWidth={(shape.strokeWidth || 1) * (shape.pencilScale ?? pencilScale ?? 1)}
@@ -7225,7 +7222,7 @@ const Panel = React.forwardRef(({
                 )}
                 {newShape && newShape.type === "Pencil" && (
                   <Line
-                    points={newShape.points.flatMap((p) => [p[0], p[1]])}
+                    points={newShape.points.flatMap((p) => [p.x, p.y])}
                     stroke={strokeColor}
                     fill={fillColor || "black"}
                     strokeWidth={2}

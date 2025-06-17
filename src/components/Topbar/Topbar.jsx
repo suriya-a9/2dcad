@@ -130,6 +130,7 @@ import {
   objectToPath,
   setBlockProgression,
   selectAllShapesInAllLayers,
+  updateNodePosition,
 } from "../../Redux/Slice/toolSlice";
 import {
   TbDeselect,
@@ -4158,7 +4159,9 @@ function MeshTopbar() {
 function NodeTopbar() {
   const dispatch = useDispatch();
   const selectedTool = useSelector((state) => state.tool.selectedTool);
-
+  const selectedNodePoints = useSelector(state => state.tool.selectedNodePoints);
+  const layers = useSelector(state => state.tool.layers);
+  const selectedLayerIndex = useSelector(state => state.tool.selectedLayerIndex);
   const handleInsertNode = () => {
     console.log("Insert Node clicked");
     dispatch(insertNode());
@@ -4221,7 +4224,24 @@ function NodeTopbar() {
     console.log("Make Selected Nodes Symmetric clicked");
     dispatch(makeSelectedNodesSymmetric());
   };
+  let node = null;
+  if (selectedNodePoints.length === 1) {
+    const { shapeId, index } = selectedNodePoints[0];
+    const shape = layers[selectedLayerIndex].shapes.find(s => s.id === shapeId);
+    if (shape && Array.isArray(shape.points) && shape.points[index]) {
+      node = { ...shape.points[index], shapeId, index };
+    }
+  }
 
+  const handleNodeCoordChange = (axis, value) => {
+    if (!node) return;
+    const newPos = { ...node, [axis]: Number(value) };
+    dispatch(updateNodePosition({
+      shapeId: node.shapeId,
+      nodeIndex: node.index,
+      newPosition: { x: newPos.x, y: newPos.y }
+    }));
+  };
   useEffect(() => {
     console.log("Updated selectedTool:", selectedTool);
   }, [selectedTool]);
@@ -4305,6 +4325,28 @@ function NodeTopbar() {
       >
         <FaRegObjectGroup size={20} />
       </div>
+      {node && (
+        <>
+          <div className="p-2 value" style={{ display: "flex", alignItems: "center" }}>
+            <label>X:&nbsp;</label>
+            <input
+              type="number"
+              value={node.x}
+              onChange={e => handleNodeCoordChange("x", e.target.value)}
+              style={{ width: 70 }}
+            />
+          </div>
+          <div className="p-2 value" style={{ display: "flex", alignItems: "center" }}>
+            <label>Y:&nbsp;</label>
+            <input
+              type="number"
+              value={node.y}
+              onChange={e => handleNodeCoordChange("y", e.target.value)}
+              style={{ width: 70 }}
+            />
+          </div>
+        </>
+      )}
     </div>
   );
 }

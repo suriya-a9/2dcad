@@ -375,6 +375,7 @@ const toolSlice = createSlice({
     zoomIn: (state) => { state.zoomLevel = Math.min(state.zoomLevel * 1.25, 16); },
     zoomOut: (state) => { state.zoomLevel = Math.max(state.zoomLevel / 1.25, 0.05); },
     copy: (state) => {
+      console.log("copy clikced");
       const selectedLayer = state.layers[state.selectedLayerIndex];
       const selectedShapes = selectedLayer.shapes.filter(shape =>
         state.selectedShapeIds.includes(shape.id)
@@ -384,6 +385,7 @@ const toolSlice = createSlice({
         ...JSON.parse(JSON.stringify(shape)),
         id: `shape-${Date.now()}-${Math.random()}`
       }));
+      console.log("state clip", state.clipboard);
       state.clipboadType = "copy";
     },
 
@@ -2096,43 +2098,48 @@ const toolSlice = createSlice({
 
         const inner = [
           { x: shape.x + half, y: shape.y + half },
-          { x: shape.x + half, y: shape.y + shape.height - half },
-          { x: shape.x + shape.width - half, y: shape.y + shape.height - half },
           { x: shape.x + shape.width - half, y: shape.y + half },
-        ];
+          { x: shape.x + shape.width - half, y: shape.y + shape.height - half },
+          { x: shape.x + half, y: shape.y + shape.height - half },
+        ].reverse();
+
+        const outline = [...outer, ...inner];
 
 
-        const outline = [
-          ...outer,
-          ...inner.reverse()
-        ];
+        const newStrokeShape = {
+          id: `stroke-path-${Date.now()}`,
+          type: "Polygon",
+          points: outline,
+          closed: true,
+          fill: shape.stroke || "#000",
+          stroke: undefined,
+          strokeWidth: 1,
+          name: "Stroke Outline",
+        };
 
 
-        shape.type = "Polygon";
-        shape.points = outline;
-        shape.closed = true;
-        shape.fill = shape.stroke || "#000";
         shape.stroke = undefined;
-        shape.strokeWidth = 1;
+        shape.strokeWidth = 0;
 
 
-        delete shape.x;
-        delete shape.y;
-        delete shape.width;
-        delete shape.height;
+        layer.shapes.push(newStrokeShape);
+
 
         state.selectedTool = "Node";
-        state.selectedShapeId = shape.id;
-        state.selectedShapeIds = [shape.id];
+        state.selectedShapeId = newStrokeShape.id;
+        state.selectedShapeIds = [newStrokeShape.id];
         state.controlPoints = outline;
         return;
       } else if (shape.type === "Circle") {
         const numPoints = 36;
         const half = (shape.strokeWidth || 1) / 2;
+        const outer = [];
+        const inner = [];
+
 
         for (let i = 0; i < numPoints; i++) {
           const angle = (2 * Math.PI * i) / numPoints;
-          outline.push({
+          outer.push({
             x: shape.x + (shape.radius + half) * Math.cos(angle),
             y: shape.y + (shape.radius + half) * Math.sin(angle),
           });
@@ -2140,11 +2147,38 @@ const toolSlice = createSlice({
 
         for (let i = numPoints - 1; i >= 0; i--) {
           const angle = (2 * Math.PI * i) / numPoints;
-          outline.push({
+          inner.push({
             x: shape.x + (shape.radius - half) * Math.cos(angle),
             y: shape.y + (shape.radius - half) * Math.sin(angle),
           });
         }
+        const outline = [...outer, ...inner];
+
+
+        const newStrokeShape = {
+          id: `stroke-path-${Date.now()}`,
+          type: "Polygon",
+          points: outline,
+          closed: true,
+          fill: shape.stroke || "#000",
+          stroke: undefined,
+          strokeWidth: 1,
+          name: "Stroke Outline",
+        };
+
+
+        shape.stroke = undefined;
+        shape.strokeWidth = 0;
+
+
+        layer.shapes.push(newStrokeShape);
+
+
+        state.selectedTool = "Node";
+        state.selectedShapeId = newStrokeShape.id;
+        state.selectedShapeIds = [newStrokeShape.id];
+        state.controlPoints = outline;
+        return;
       } else if (shape.type === "Star") {
         const half = (shape.strokeWidth || 1) / 2;
         const corners = shape.corners || 5;
@@ -2152,21 +2186,51 @@ const toolSlice = createSlice({
         const outer = [];
         const inner = [];
 
+
         for (let i = 0; i < numPoints; i++) {
           const angle = (Math.PI * 2 * i) / numPoints - Math.PI / 2;
           const baseRadius = i % 2 === 0 ? shape.outerRadius : shape.innerRadius;
-
           outer.push({
             x: shape.x + (baseRadius + half) * Math.cos(angle),
             y: shape.y + (baseRadius + half) * Math.sin(angle),
           });
+        }
 
-          inner.unshift({
+        for (let i = numPoints - 1; i >= 0; i--) {
+          const angle = (Math.PI * 2 * i) / numPoints - Math.PI / 2;
+          const baseRadius = i % 2 === 0 ? shape.outerRadius : shape.innerRadius;
+          inner.push({
             x: shape.x + (baseRadius - half) * Math.cos(angle),
             y: shape.y + (baseRadius - half) * Math.sin(angle),
           });
         }
-        outline = [...outer, ...inner];
+        const outline = [...outer, ...inner];
+
+
+        const newStrokeShape = {
+          id: `stroke-path-${Date.now()}`,
+          type: "Polygon",
+          points: outline,
+          closed: true,
+          fill: shape.stroke || "#000",
+          stroke: undefined,
+          strokeWidth: 1,
+          name: "Stroke Outline",
+        };
+
+
+        shape.stroke = undefined;
+        shape.strokeWidth = 0;
+
+
+        layer.shapes.push(newStrokeShape);
+
+
+        state.selectedTool = "Node";
+        state.selectedShapeId = newStrokeShape.id;
+        state.selectedShapeIds = [newStrokeShape.id];
+        state.controlPoints = outline;
+        return;
       } else if (shape.type === "Polygon") {
         outline = shape.points.map(p => ({ x: p.x, y: p.y }));
       } else if (shape.type === "Pencil" || shape.type === "Calligraphy") {
@@ -2175,25 +2239,6 @@ const toolSlice = createSlice({
 
         return;
       }
-
-
-      shape.type = "Polygon";
-      shape.points = outline;
-      shape.closed = true;
-      shape.fill = shape.stroke || "#000";
-      shape.stroke = undefined;
-      shape.strokeWidth = 1;
-
-      state.controlPoints = outline;
-      state.selectedTool = "Node";
-      state.selectedShapeId = shape.id;
-      state.selectedShapeIds = [shape.id];
-
-
-      state.controlPoints = outline;
-      state.selectedTool = "Node";
-      state.selectedShapeId = shape.id;
-      state.selectedShapeIds = [shape.id];
     },
     updateStrokeControlPoint: (state, action) => {
       const { index, newPosition } = action.payload;

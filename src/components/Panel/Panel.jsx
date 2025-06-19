@@ -5052,6 +5052,137 @@ const Panel = React.forwardRef(({
                       </Group>
                     );
                   }
+                  if (shape.type === "Clone") {
+
+                    const original = shapes.find(s => s.id === shape.cloneOf);
+                    if (!original) return null;
+
+
+                    const cloneShape = {
+                      ...original,
+                      id: shape.id,
+                      x: shape.x ?? original.x,
+                      y: shape.y ?? original.y,
+                      name: shape.name,
+                      isClone: true,
+                    };
+
+
+                    if (original.type === "Rectangle") {
+                      return (
+                        <Rect
+                          key={cloneShape.id}
+                          id={cloneShape.id}
+                          x={cloneShape.x}
+                          y={cloneShape.y}
+                          width={original.width}
+                          height={original.height}
+                          fill={original.fill || "black"}
+                          stroke={original.stroke || "black"}
+                          strokeWidth={original.strokeWidth || 1}
+                          draggable
+                          onClick={e => {
+                            e.cancelBubble = true;
+                            if (!selectedShapeIds.includes(cloneShape.id)) {
+                              dispatch(selectShape(cloneShape.id));
+                            }
+                          }}
+                          onDragEnd={e => {
+                            const { x, y } = e.target.position();
+                            dispatch(updateShapePosition({ id: cloneShape.id, x, y }));
+                          }}
+                        />
+                      );
+                    }
+
+                    if (original.type === "Circle") {
+                      return (
+                        <Circle
+                          key={cloneShape.id}
+                          id={cloneShape.id}
+                          x={cloneShape.x}
+                          y={cloneShape.y}
+                          radius={original.radius}
+                          innerRadius={original.innerRadius}
+                          outerRadius={original.outerRadius}
+                          fill={original.fill || "black"}
+                          stroke={original.stroke || "black"}
+                          strokeWidth={original.strokeWidth || 1}
+                          draggable
+                          onClick={e => {
+                            e.cancelBubble = true;
+                            if (!selectedShapeIds.includes(cloneShape.id)) {
+                              dispatch(selectShape(cloneShape.id));
+                            }
+                          }}
+                          onDragEnd={e => {
+                            const { x, y } = e.target.position();
+                            dispatch(updateShapePosition({ id: cloneShape.id, x, y }));
+                          }}
+                        />
+                      );
+                    }
+
+                    if (original.type === "Star") {
+                      return (
+                        <Star
+                          key={cloneShape.id}
+                          id={cloneShape.id}
+                          x={cloneShape.x}
+                          y={cloneShape.y}
+                          numPoints={original.corners}
+                          innerRadius={original.innerRadius}
+                          outerRadius={original.outerRadius}
+                          fill={original.fill || "black"}
+                          rotation={original.rotation}
+                          scaleX={original.scaleX}
+                          scaleY={original.scaleY}
+                          stroke={original.stroke || "black"}
+                          strokeWidth={original.strokeWidth || 1}
+                          draggable
+                          onClick={e => {
+                            e.cancelBubble = true;
+                            if (!selectedShapeIds.includes(cloneShape.id)) {
+                              dispatch(selectShape(cloneShape.id));
+                            }
+                          }}
+                          onDragEnd={e => {
+                            const { x, y } = e.target.position();
+                            dispatch(updateShapePosition({ id: cloneShape.id, x, y }));
+                          }}
+                        />
+                      );
+                    }
+
+                    if (original.type === "Polygon") {
+                      return (
+                        <Line
+                          key={cloneShape.id}
+                          id={cloneShape.id}
+                          x={cloneShape.x}
+                          y={cloneShape.y}
+                          points={original.points.flatMap(pt => [pt.x, pt.y])}
+                          closed
+                          fill={original.fill || "black"}
+                          stroke={original.stroke || "black"}
+                          strokeWidth={original.strokeWidth || 1}
+                          draggable
+                          onClick={e => {
+                            e.cancelBubble = true;
+                            if (!selectedShapeIds.includes(cloneShape.id)) {
+                              dispatch(selectShape(cloneShape.id));
+                            }
+                          }}
+                          onDragEnd={e => {
+                            const { x, y } = e.target.position();
+                            dispatch(updateShapePosition({ id: cloneShape.id, x, y }));
+                          }}
+                        />
+                      );
+                    }
+
+                    return null;
+                  }
                   if (shape.type === "Rectangle") {
                     return (
                       <React.Fragment key={shape.id}>
@@ -5896,6 +6027,39 @@ const Panel = React.forwardRef(({
                           />
                         )}
                       </React.Fragment>
+                    );
+                  } else if (shape.type === "CompoundPath") {
+                    return (
+                      <Group
+                        key={shape.id}
+                        id={shape.id}
+                        ref={node => {
+                          if (node) shapeRefs.current[shape.id] = node;
+                          else delete shapeRefs.current[shape.id];
+                        }}
+                        draggable
+                        onClick={e => {
+                          e.cancelBubble = true;
+                          if (!selectedShapeIds.includes(shape.id)) {
+                            dispatch(selectShape(shape.id));
+                          }
+                        }}
+                        onDragEnd={e => {
+                          const { x, y } = e.target.position();
+                          dispatch(updateShapePosition({ id: shape.id, x, y }));
+                        }}
+                      >
+                        {shape.rings.map((ring, i) => (
+                          <Line
+                            key={i}
+                            points={ring.flatMap(pt => [pt.x, pt.y])}
+                            closed
+                            fill={shape.fill || "transparent"}
+                            stroke={shape.stroke || "black"}
+                            strokeWidth={shape.strokeWidth || 1}
+                          />
+                        ))}
+                      </Group>
                     );
                   } else if (shape.type === "Polygon") {
                     if (!shape.points || shape.points.length === 0) return null;

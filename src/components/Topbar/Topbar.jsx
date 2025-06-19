@@ -1,7 +1,7 @@
 import "./Topbar.css";
 import { useEffect } from "react";
 import { useSelector, useDispatch } from "react-redux";
-import { setFontSize, setFontFamily, setAlignment, setFontStyle, clearPoints, handleUnion, intersection } from "../../Redux/Slice/toolSlice";
+import { setFontSize, setFontFamily, setAlignment, setFontStyle, clearPoints, handleUnion, difference, intersection, exclusion, division, cutPath, combine, breakApart, splitPath, relinkClone, selectOriginal } from "../../Redux/Slice/toolSlice";
 import { setBezierOption } from "../../Redux/Slice/toolSlice";
 import { BsVectorPen } from "react-icons/bs";
 import { TbBrandSnapseed } from "react-icons/tb";
@@ -576,8 +576,8 @@ const Topbar = ({
         { id: 102, label: "Create Tiled Clones" },
         { id: 103, label: "Unlink Clone" },
         { id: 104, label: "Unlink Clones Recursively" },
-        { id: 105, label: "Relink to Copied" },
-        { id: 106, label: "Select Original" },
+        { id: 105, label: "Relink to Copied", onClick: () => dispatch(relinkClone()) },
+        { id: 106, label: "Select Original", onClick: () => dispatch(selectOriginal()) },
         { id: 107, label: "Clone Original" },
         { id: 108, label: "Path (LPE)" },
       ],
@@ -976,15 +976,15 @@ const Topbar = ({
     { label: "Trace Bitemap...", onClick: handleTraceBitmap },
     "divider",
     { label: "Union", onClick: () => dispatch(handleUnion()) },
-    { label: "Difference" },
+    { label: "Difference", onClick: () => dispatch(difference()) },
     { label: "intersection", onClick: () => dispatch(intersection()) },
-    { label: "Exclusion" },
-    { label: "Division" },
-    { label: "Cut Path" },
+    { label: "Exclusion", onClick: () => dispatch(exclusion()) },
+    { label: "Division", onClick: () => dispatch(division()) },
+    { label: "Cut Path", onClick: () => dispatch(cutPath()) },
     "divider",
-    { label: "Combine" },
-    { label: "Break Apart" },
-    { label: "Split Path" },
+    { label: "Combine", onClick: () => dispatch(combine()) },
+    { label: "Break Apart", onClick: () => dispatch(breakApart()) },
+    { label: "Split Path", onClick: () => dispatch(splitPath()) },
     { label: "Fracture" },
     { label: "Flatten" },
     "divider",

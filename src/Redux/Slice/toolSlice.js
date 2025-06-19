@@ -1,6 +1,7 @@
 import { createSlice } from "@reduxjs/toolkit";
 import { shapes } from "konva/lib/Shape";
 import { generateSpiralPath } from "../../components/Panel/Panel"
+import * as martinez from "martinez-polygon-clipping";
 import { act } from "react";
 
 
@@ -375,18 +376,31 @@ const toolSlice = createSlice({
     zoomIn: (state) => { state.zoomLevel = Math.min(state.zoomLevel * 1.25, 16); },
     zoomOut: (state) => { state.zoomLevel = Math.max(state.zoomLevel / 1.25, 0.05); },
     copy: (state) => {
-      console.log("copy clikced");
       const selectedLayer = state.layers[state.selectedLayerIndex];
       const selectedShapes = selectedLayer.shapes.filter(shape =>
         state.selectedShapeIds.includes(shape.id)
       );
 
-      state.clipboard = selectedShapes.map(shape => ({
-        ...JSON.parse(JSON.stringify(shape)),
-        id: `shape-${Date.now()}-${Math.random()}`
-      }));
-      console.log("state clip", state.clipboard);
+      const copiedShapes = selectedShapes.map(shape => {
+        const newId = `shape-${Date.now()}-${Math.random()}`;
+        return {
+          ...JSON.parse(JSON.stringify(shape)),
+          id: newId,
+          cloneOf: shape.cloneOf || shape.id,
+        };
+      });
+
+      state.clipboard = copiedShapes;
       state.clipboadType = "copy";
+      console.log("clipboard", copiedShapes);
+
+
+      if (selectedShapes.length === 1) {
+        const shape = selectedShapes[0];
+        state.lastCopiedShapeId = shape.cloneOf || shape.id;
+      } else {
+        state.lastCopiedShapeId = null;
+      }
     },
 
     cut: (state) => {
@@ -2284,113 +2298,1318 @@ const toolSlice = createSlice({
         return;
       }
 
-      const shapesToCombine = selectedShapeIds.map((id) =>
-        selectedLayer.shapes.find((shape) => shape.id === id)
-      );
 
-      if (shapesToCombine.some((shape) => !shape)) {
-        console.error("One or more selected shapes not found.");
+      selectedShapeIds.forEach((shapeId) => {
+        const shape = selectedLayer.shapes.find(s => s.id === shapeId);
+        if (!shape) return;
+        if (shape.type === "Rectangle") {
+          const { x, y, width, height } = shape;
+          const pointsPerEdge = 12;
+          shape.type = "Polygon";
+          shape.points = [];
+
+
+          for (let i = 0; i < pointsPerEdge; i++) {
+            const t = i / (pointsPerEdge - 1);
+            shape.points.push({ x: x + t * width, y: y });
+          }
+
+          for (let i = 1; i < pointsPerEdge; i++) {
+            const t = i / (pointsPerEdge - 1);
+            shape.points.push({ x: x + width, y: y + t * height });
+          }
+
+          for (let i = 1; i < pointsPerEdge; i++) {
+            const t = i / (pointsPerEdge - 1);
+            shape.points.push({ x: x + width - t * width, y: y + height });
+          }
+
+          for (let i = 1; i < pointsPerEdge - 1; i++) {
+            const t = i / (pointsPerEdge - 1);
+            shape.points.push({ x: x, y: y + height - t * height });
+          }
+        } else if (shape.type === "Circle") {
+          const { x, y, radius } = shape;
+          const numPoints = 36;
+          shape.type = "Polygon";
+          shape.points = Array.from({ length: numPoints }, (_, i) => {
+            const angle = (2 * Math.PI * i) / numPoints;
+            return {
+              x: x + radius * Math.cos(angle),
+              y: y + radius * Math.sin(angle)
+            };
+          });
+        } else if (shape.type === "Star") {
+          const { x, y, innerRadius, outerRadius, corners } = shape;
+          const spikes = corners || 5;
+          const numPoints = spikes * 2;
+          shape.type = "Polygon";
+          shape.points = Array.from({ length: numPoints }, (_, i) => {
+            const angle = (Math.PI * i) / spikes - Math.PI / 2;
+            const r = i % 2 === 0 ? outerRadius : innerRadius;
+            return {
+              x: x + r * Math.cos(angle),
+              y: y + r * Math.sin(angle),
+            };
+          });
+        } else if (shape.type === "Pencil" || shape.type === "Calligraphy") {
+
+          if (Array.isArray(shape.points) && Array.isArray(shape.points[0])) {
+            shape.points = shape.points.map(pt =>
+              Array.isArray(pt) ? { x: pt[0], y: pt[1] } : pt
+            );
+          }
+
+          const first = shape.points[0];
+          const last = shape.points[shape.points.length - 1];
+          if (first.x !== last.x || first.y !== last.y) {
+            shape.points.push({ x: first.x, y: first.y });
+          }
+
+          const minPoints = 36;
+          if (shape.points.length < minPoints) {
+            const pts = shape.points;
+            const resampled = [];
+            for (let i = 0; i < minPoints; i++) {
+              const t = i / minPoints * pts.length;
+              const idx = Math.floor(t);
+              const nextIdx = (idx + 1) % pts.length;
+              const frac = t - idx;
+              const x = pts[idx].x + frac * (pts[nextIdx].x - pts[idx].x);
+              const y = pts[idx].y + frac * (pts[nextIdx].y - pts[idx].y);
+              resampled.push({ x, y });
+            }
+            shape.points = resampled;
+          }
+          shape.type = "Polygon";
+        }
+      });
+
+
+
+      const shapesToCombine = selectedShapeIds
+        .map(id => selectedLayer.shapes.find(shape => shape.id === id))
+        .filter(shape => shape && shape.type === "Polygon");
+
+      if (shapesToCombine.length < 2) {
+        console.error("Union only supported for Polygon shapes.");
+        return;
+      }
+      function closePolygon(points) {
+        if (points.length < 3) return points;
+        const first = points[0];
+        const last = points[points.length - 1];
+        if (first.x !== last.x || first.y !== last.y) {
+          return [...points, { x: first.x, y: first.y }];
+        }
+        return points;
+      }
+      function polygonArea(points) {
+        let area = 0;
+        for (let i = 0, n = points.length; i < n; i++) {
+          const p1 = points[i];
+          const p2 = points[(i + 1) % n];
+          area += (p1.x * p2.y - p2.x * p1.y);
+        }
+        return area / 2;
+      }
+
+      function ensureCCW(points) {
+        return polygonArea(points) < 0 ? points.slice().reverse() : points;
+      }
+      const polygons = shapesToCombine.map(shape => {
+        let pts = closePolygon(shape.points);
+        pts = ensureCCW(pts);
+        return [pts.map(pt => [pt.x, pt.y])];
+      });
+
+      const unionResult = martinez.union(...polygons);
+
+      if (!unionResult || !unionResult.length) {
+        console.error("Union failed.");
         return;
       }
 
 
-      const groupX = Math.min(...shapesToCombine.map((shape) => shape.x || 0));
-      const groupY = Math.min(...shapesToCombine.map((shape) => shape.y || 0));
+      const rings = [];
+      for (const poly of unionResult) {
+        for (const ring of poly) {
+          rings.push(ring.map(([x, y]) => ({ x, y })));
+        }
+      }
 
+      if (rings.length === 1) {
 
-      const adjustedShapes = shapesToCombine.map((shape) => ({
-        ...shape,
-        x: (shape.x || 0) - groupX,
-        y: (shape.y || 0) - groupY,
-      }));
+        const mergedPoints = rings[0];
+        const newShape = {
+          id: `union-${Date.now()}`,
+          type: "Polygon",
+          points: mergedPoints,
+          fill: shapesToCombine[0].fill,
+          stroke: shapesToCombine[0].stroke,
+          strokeWidth: shapesToCombine[0].strokeWidth,
+          closed: true,
+          name: "Union",
+        };
+        selectedLayer.shapes = selectedLayer.shapes.filter(
+          shape => !selectedShapeIds.includes(shape.id)
+        );
+        selectedLayer.shapes.push(newShape);
+        state.selectedShapeIds = [newShape.id];
+        state.selectedShapeId = newShape.id;
+        state.controlPoints = mergedPoints;
+      } else {
 
-
-      const groupShape = {
-        id: `group-${Date.now()}`,
-        type: "Group",
-        shapes: adjustedShapes,
-        x: groupX,
-        y: groupY,
-      };
-
-
-      selectedLayer.shapes = selectedLayer.shapes.filter(
-        (shape) => !selectedShapeIds.includes(shape.id)
-      );
-
-
-      selectedLayer.shapes.push(groupShape);
-
-
-      state.selectedShapeIds = [groupShape.id];
-      console.log("Shapes combined into a single group:", groupShape);
+        const compoundShape = {
+          id: `union-${Date.now()}`,
+          type: "CompoundPath",
+          rings: rings,
+          fill: shapesToCombine[0].fill,
+          stroke: shapesToCombine[0].stroke,
+          strokeWidth: shapesToCombine[0].strokeWidth,
+          closed: true,
+          name: "Union",
+        };
+        selectedLayer.shapes = selectedLayer.shapes.filter(
+          shape => !selectedShapeIds.includes(shape.id)
+        );
+        selectedLayer.shapes.push(compoundShape);
+        state.selectedShapeIds = [compoundShape.id];
+        state.selectedShapeId = compoundShape.id;
+        state.controlPoints = rings[0];
+      }
     },
+    difference: (state) => {
+      const selectedLayer = state.layers[state.selectedLayerIndex];
+      const selectedShapeIds = state.selectedShapeIds;
 
+      if (selectedShapeIds.length < 2) {
+        console.error("Please select at least two shapes for difference.");
+        return;
+      }
+
+
+      selectedShapeIds.forEach((shapeId) => {
+        const shape = selectedLayer.shapes.find(s => s.id === shapeId);
+        if (!shape) return;
+        if (shape.type === "Rectangle") {
+          const { x, y, width, height } = shape;
+          const pointsPerEdge = 12;
+          shape.type = "Polygon";
+          shape.points = [];
+          for (let i = 0; i < pointsPerEdge; i++) {
+            const t = i / (pointsPerEdge - 1);
+            shape.points.push({ x: x + t * width, y: y });
+          }
+          for (let i = 1; i < pointsPerEdge; i++) {
+            const t = i / (pointsPerEdge - 1);
+            shape.points.push({ x: x + width, y: y + t * height });
+          }
+          for (let i = 1; i < pointsPerEdge; i++) {
+            const t = i / (pointsPerEdge - 1);
+            shape.points.push({ x: x + width - t * width, y: y + height });
+          }
+          for (let i = 1; i < pointsPerEdge - 1; i++) {
+            const t = i / (pointsPerEdge - 1);
+            shape.points.push({ x: x, y: y + height - t * height });
+          }
+        } else if (shape.type === "Circle") {
+          const { x, y, radius } = shape;
+          const numPoints = 36;
+          shape.type = "Polygon";
+          shape.points = Array.from({ length: numPoints }, (_, i) => {
+            const angle = (2 * Math.PI * i) / numPoints;
+            return {
+              x: x + radius * Math.cos(angle),
+              y: y + radius * Math.sin(angle)
+            };
+          });
+        } else if (shape.type === "Star") {
+          const { x, y, innerRadius, outerRadius, corners } = shape;
+          const spikes = corners || 5;
+          const numPoints = spikes * 2;
+          shape.type = "Polygon";
+          shape.points = Array.from({ length: numPoints }, (_, i) => {
+            const angle = (Math.PI * i) / spikes - Math.PI / 2;
+            const r = i % 2 === 0 ? outerRadius : innerRadius;
+            return {
+              x: x + r * Math.cos(angle),
+              y: y + r * Math.sin(angle),
+            };
+          });
+        } else if (shape.type === "Pencil" || shape.type === "Calligraphy") {
+
+          if (Array.isArray(shape.points) && Array.isArray(shape.points[0])) {
+            shape.points = shape.points.map(pt =>
+              Array.isArray(pt) ? { x: pt[0], y: pt[1] } : pt
+            );
+          }
+
+          const first = shape.points[0];
+          const last = shape.points[shape.points.length - 1];
+          if (first.x !== last.x || first.y !== last.y) {
+            shape.points.push({ x: first.x, y: first.y });
+          }
+
+          const minPoints = 36;
+          if (shape.points.length < minPoints) {
+            const pts = shape.points;
+            const resampled = [];
+            for (let i = 0; i < minPoints; i++) {
+              const t = i / minPoints * pts.length;
+              const idx = Math.floor(t);
+              const nextIdx = (idx + 1) % pts.length;
+              const frac = t - idx;
+              const x = pts[idx].x + frac * (pts[nextIdx].x - pts[idx].x);
+              const y = pts[idx].y + frac * (pts[nextIdx].y - pts[idx].y);
+              resampled.push({ x, y });
+            }
+            shape.points = resampled;
+          }
+          shape.type = "Polygon";
+        }
+      });
+
+
+      const shapesToCombine = selectedShapeIds
+        .map(id => selectedLayer.shapes.find(shape => shape.id === id))
+        .filter(shape => shape && shape.type === "Polygon");
+
+      if (shapesToCombine.length < 2) {
+        console.error("Difference only supported for Polygon shapes.");
+        return;
+      }
+
+
+      function closePolygon(points) {
+        if (points.length < 3) return points;
+        const first = points[0];
+        const last = points[points.length - 1];
+        if (first.x !== last.x || first.y !== last.y) {
+          return [...points, { x: first.x, y: first.y }];
+        }
+        return points;
+      }
+      function polygonArea(points) {
+        let area = 0;
+        for (let i = 0, n = points.length; i < n; i++) {
+          const p1 = points[i];
+          const p2 = points[(i + 1) % n];
+          area += (p1.x * p2.y - p2.x * p1.y);
+        }
+        return area / 2;
+      }
+      function ensureCCW(points) {
+        return polygonArea(points) < 0 ? points.slice().reverse() : points;
+      }
+      const polygons = shapesToCombine.map(shape => {
+        let pts = closePolygon(shape.points);
+        pts = ensureCCW(pts);
+        return [pts.map(pt => [pt.x, pt.y])];
+      });
+
+
+      let diffResult = polygons[0];
+      for (let i = 1; i < polygons.length; i++) {
+        diffResult = martinez.diff(diffResult, polygons[i]);
+        if (!diffResult || !diffResult.length) {
+          console.error("Difference failed.");
+          return;
+        }
+      }
+
+
+      const rings = [];
+      for (const poly of diffResult) {
+        for (const ring of poly) {
+          rings.push(ring.map(([x, y]) => ({ x, y })));
+        }
+      }
+
+      if (rings.length === 0) {
+        console.error("Difference resulted in empty shape.");
+        return;
+      }
+
+      if (rings.length === 1) {
+        const mergedPoints = rings[0];
+        const newShape = {
+          id: `difference-${Date.now()}`,
+          type: "Polygon",
+          points: mergedPoints,
+          fill: shapesToCombine[0].fill,
+          stroke: shapesToCombine[0].stroke,
+          strokeWidth: shapesToCombine[0].strokeWidth,
+          closed: true,
+          name: "Difference",
+        };
+        selectedLayer.shapes = selectedLayer.shapes.filter(
+          shape => !selectedShapeIds.includes(shape.id)
+        );
+        selectedLayer.shapes.push(newShape);
+        state.selectedShapeIds = [newShape.id];
+        state.selectedShapeId = newShape.id;
+        state.controlPoints = mergedPoints;
+      } else {
+        const compoundShape = {
+          id: `difference-${Date.now()}`,
+          type: "CompoundPath",
+          rings: rings,
+          fill: shapesToCombine[0].fill,
+          stroke: shapesToCombine[0].stroke,
+          strokeWidth: shapesToCombine[0].strokeWidth,
+          closed: true,
+          name: "Difference",
+        };
+        selectedLayer.shapes = selectedLayer.shapes.filter(
+          shape => !selectedShapeIds.includes(shape.id)
+        );
+        selectedLayer.shapes.push(compoundShape);
+        state.selectedShapeIds = [compoundShape.id];
+        state.selectedShapeId = compoundShape.id;
+        state.controlPoints = rings[0];
+      }
+    },
     intersection: (state) => {
       const selectedLayer = state.layers[state.selectedLayerIndex];
       const selectedShapeIds = state.selectedShapeIds;
 
-      if (selectedShapeIds.length !== 2) {
-        console.error("Please select exactly two shapes to perform an intersection.");
+      if (selectedShapeIds.length < 2) {
+        console.error("Please select at least two shapes for intersection.");
         return;
       }
 
-      const [shape1, shape2] = selectedShapeIds.map((id) =>
-        selectedLayer.shapes.find((shape) => shape.id === id)
+
+      selectedShapeIds.forEach((shapeId) => {
+        const shape = selectedLayer.shapes.find(s => s.id === shapeId);
+        if (!shape) return;
+        if (shape.type === "Rectangle") {
+          const { x, y, width, height } = shape;
+          const pointsPerEdge = 12;
+          shape.type = "Polygon";
+          shape.points = [];
+          for (let i = 0; i < pointsPerEdge; i++) {
+            const t = i / (pointsPerEdge - 1);
+            shape.points.push({ x: x + t * width, y: y });
+          }
+          for (let i = 1; i < pointsPerEdge; i++) {
+            const t = i / (pointsPerEdge - 1);
+            shape.points.push({ x: x + width, y: y + t * height });
+          }
+          for (let i = 1; i < pointsPerEdge; i++) {
+            const t = i / (pointsPerEdge - 1);
+            shape.points.push({ x: x + width - t * width, y: y + height });
+          }
+          for (let i = 1; i < pointsPerEdge - 1; i++) {
+            const t = i / (pointsPerEdge - 1);
+            shape.points.push({ x: x, y: y + height - t * height });
+          }
+        } else if (shape.type === "Circle") {
+          const { x, y, radius } = shape;
+          const numPoints = 36;
+          shape.type = "Polygon";
+          shape.points = Array.from({ length: numPoints }, (_, i) => {
+            const angle = (2 * Math.PI * i) / numPoints;
+            return {
+              x: x + radius * Math.cos(angle),
+              y: y + radius * Math.sin(angle)
+            };
+          });
+        } else if (shape.type === "Star") {
+          const { x, y, innerRadius, outerRadius, corners } = shape;
+          const spikes = corners || 5;
+          const numPoints = spikes * 2;
+          shape.type = "Polygon";
+          shape.points = Array.from({ length: numPoints }, (_, i) => {
+            const angle = (Math.PI * i) / spikes - Math.PI / 2;
+            const r = i % 2 === 0 ? outerRadius : innerRadius;
+            return {
+              x: x + r * Math.cos(angle),
+              y: y + r * Math.sin(angle),
+            };
+          });
+        } else if (shape.type === "Pencil" || shape.type === "Calligraphy") {
+          if (Array.isArray(shape.points) && Array.isArray(shape.points[0])) {
+            shape.points = shape.points.map(pt =>
+              Array.isArray(pt) ? { x: pt[0], y: pt[1] } : pt
+            );
+          }
+          const first = shape.points[0];
+          const last = shape.points[shape.points.length - 1];
+          if (first.x !== last.x || first.y !== last.y) {
+            shape.points.push({ x: first.x, y: first.y });
+          }
+          const minPoints = 36;
+          if (shape.points.length < minPoints) {
+            const pts = shape.points;
+            const resampled = [];
+            for (let i = 0; i < minPoints; i++) {
+              const t = i / minPoints * pts.length;
+              const idx = Math.floor(t);
+              const nextIdx = (idx + 1) % pts.length;
+              const frac = t - idx;
+              const x = pts[idx].x + frac * (pts[nextIdx].x - pts[idx].x);
+              const y = pts[idx].y + frac * (pts[nextIdx].y - pts[idx].y);
+              resampled.push({ x, y });
+            }
+            shape.points = resampled;
+          }
+          shape.type = "Polygon";
+        }
+      });
+
+
+      const shapesToCombine = selectedShapeIds
+        .map(id => selectedLayer.shapes.find(shape => shape.id === id))
+        .filter(shape => shape && shape.type === "Polygon");
+
+      if (shapesToCombine.length < 2) {
+        console.error("Intersection only supported for Polygon shapes.");
+        return;
+      }
+
+      function closePolygon(points) {
+        if (points.length < 3) return points;
+        const first = points[0];
+        const last = points[points.length - 1];
+        if (first.x !== last.x || first.y !== last.y) {
+          return [...points, { x: first.x, y: first.y }];
+        }
+        return points;
+      }
+      function polygonArea(points) {
+        let area = 0;
+        for (let i = 0, n = points.length; i < n; i++) {
+          const p1 = points[i];
+          const p2 = points[(i + 1) % n];
+          area += (p1.x * p2.y - p2.x * p1.y);
+        }
+        return area / 2;
+      }
+      function ensureCCW(points) {
+        return polygonArea(points) < 0 ? points.slice().reverse() : points;
+      }
+      const polygons = shapesToCombine.map(shape => {
+        let pts = closePolygon(shape.points);
+        pts = ensureCCW(pts);
+        return [pts.map(pt => [pt.x, pt.y])];
+      });
+
+
+      let intersectionResult = polygons[0];
+      for (let i = 1; i < polygons.length; i++) {
+        intersectionResult = martinez.intersection(intersectionResult, polygons[i]);
+        if (!intersectionResult || !intersectionResult.length) {
+          console.error("Intersection failed.");
+          return;
+        }
+      }
+
+
+      const rings = [];
+      for (const poly of intersectionResult) {
+        for (const ring of poly) {
+          rings.push(ring.map(([x, y]) => ({ x, y })));
+        }
+      }
+
+      if (rings.length === 0) {
+        console.error("Intersection resulted in empty shape.");
+        return;
+      }
+
+      if (rings.length === 1) {
+        const mergedPoints = rings[0];
+        const newShape = {
+          id: `intersection-${Date.now()}`,
+          type: "Polygon",
+          points: mergedPoints,
+          fill: shapesToCombine[0].fill,
+          stroke: shapesToCombine[0].stroke,
+          strokeWidth: shapesToCombine[0].strokeWidth,
+          closed: true,
+          name: "Intersection",
+        };
+        selectedLayer.shapes = selectedLayer.shapes.filter(
+          shape => !selectedShapeIds.includes(shape.id)
+        );
+        selectedLayer.shapes.push(newShape);
+        state.selectedShapeIds = [newShape.id];
+        state.selectedShapeId = newShape.id;
+        state.controlPoints = mergedPoints;
+      } else {
+        const compoundShape = {
+          id: `intersection-${Date.now()}`,
+          type: "CompoundPath",
+          rings: rings,
+          fill: shapesToCombine[0].fill,
+          stroke: shapesToCombine[0].stroke,
+          strokeWidth: shapesToCombine[0].strokeWidth,
+          closed: true,
+          name: "Intersection",
+        };
+        selectedLayer.shapes = selectedLayer.shapes.filter(
+          shape => !selectedShapeIds.includes(shape.id)
+        );
+        selectedLayer.shapes.push(compoundShape);
+        state.selectedShapeIds = [compoundShape.id];
+        state.selectedShapeId = compoundShape.id;
+        state.controlPoints = rings[0];
+      }
+    },
+    exclusion: (state) => {
+      const selectedLayer = state.layers[state.selectedLayerIndex];
+      const selectedShapeIds = state.selectedShapeIds;
+
+      if (selectedShapeIds.length < 2) {
+        console.error("Please select at least two shapes for exclusion.");
+        return;
+      }
+
+
+      selectedShapeIds.forEach((shapeId) => {
+        const shape = selectedLayer.shapes.find(s => s.id === shapeId);
+        if (!shape) return;
+        if (shape.type === "Rectangle") {
+          const { x, y, width, height } = shape;
+          const pointsPerEdge = 12;
+          shape.type = "Polygon";
+          shape.points = [];
+          for (let i = 0; i < pointsPerEdge; i++) {
+            const t = i / (pointsPerEdge - 1);
+            shape.points.push({ x: x + t * width, y: y });
+          }
+          for (let i = 1; i < pointsPerEdge; i++) {
+            const t = i / (pointsPerEdge - 1);
+            shape.points.push({ x: x + width, y: y + t * height });
+          }
+          for (let i = 1; i < pointsPerEdge; i++) {
+            const t = i / (pointsPerEdge - 1);
+            shape.points.push({ x: x + width - t * width, y: y + height });
+          }
+          for (let i = 1; i < pointsPerEdge - 1; i++) {
+            const t = i / (pointsPerEdge - 1);
+            shape.points.push({ x: x, y: y + height - t * height });
+          }
+        } else if (shape.type === "Circle") {
+          const { x, y, radius } = shape;
+          const numPoints = 36;
+          shape.type = "Polygon";
+          shape.points = Array.from({ length: numPoints }, (_, i) => {
+            const angle = (2 * Math.PI * i) / numPoints;
+            return {
+              x: x + radius * Math.cos(angle),
+              y: y + radius * Math.sin(angle)
+            };
+          });
+        } else if (shape.type === "Star") {
+          const { x, y, innerRadius, outerRadius, corners } = shape;
+          const spikes = corners || 5;
+          const numPoints = spikes * 2;
+          shape.type = "Polygon";
+          shape.points = Array.from({ length: numPoints }, (_, i) => {
+            const angle = (Math.PI * i) / spikes - Math.PI / 2;
+            const r = i % 2 === 0 ? outerRadius : innerRadius;
+            return {
+              x: x + r * Math.cos(angle),
+              y: y + r * Math.sin(angle),
+            };
+          });
+        } else if (shape.type === "Pencil" || shape.type === "Calligraphy") {
+          if (Array.isArray(shape.points) && Array.isArray(shape.points[0])) {
+            shape.points = shape.points.map(pt =>
+              Array.isArray(pt) ? { x: pt[0], y: pt[1] } : pt
+            );
+          }
+          const first = shape.points[0];
+          const last = shape.points[shape.points.length - 1];
+          if (first.x !== last.x || first.y !== last.y) {
+            shape.points.push({ x: first.x, y: first.y });
+          }
+          const minPoints = 36;
+          if (shape.points.length < minPoints) {
+            const pts = shape.points;
+            const resampled = [];
+            for (let i = 0; i < minPoints; i++) {
+              const t = i / minPoints * pts.length;
+              const idx = Math.floor(t);
+              const nextIdx = (idx + 1) % pts.length;
+              const frac = t - idx;
+              const x = pts[idx].x + frac * (pts[nextIdx].x - pts[idx].x);
+              const y = pts[idx].y + frac * (pts[nextIdx].y - pts[idx].y);
+              resampled.push({ x, y });
+            }
+            shape.points = resampled;
+          }
+          shape.type = "Polygon";
+        }
+      });
+
+
+      const shapesToCombine = selectedShapeIds
+        .map(id => selectedLayer.shapes.find(shape => shape.id === id))
+        .filter(shape => shape && shape.type === "Polygon");
+
+      if (shapesToCombine.length < 2) {
+        console.error("Exclusion only supported for Polygon shapes.");
+        return;
+      }
+
+      function closePolygon(points) {
+        if (points.length < 3) return points;
+        const first = points[0];
+        const last = points[points.length - 1];
+        if (first.x !== last.x || first.y !== last.y) {
+          return [...points, { x: first.x, y: first.y }];
+        }
+        return points;
+      }
+      function polygonArea(points) {
+        let area = 0;
+        for (let i = 0, n = points.length; i < n; i++) {
+          const p1 = points[i];
+          const p2 = points[(i + 1) % n];
+          area += (p1.x * p2.y - p2.x * p1.y);
+        }
+        return area / 2;
+      }
+      function ensureCCW(points) {
+        return polygonArea(points) < 0 ? points.slice().reverse() : points;
+      }
+      const polygons = shapesToCombine.map(shape => {
+        let pts = closePolygon(shape.points);
+        pts = ensureCCW(pts);
+        return [pts.map(pt => [pt.x, pt.y])];
+      });
+
+
+      let xorResult = polygons[0];
+      for (let i = 1; i < polygons.length; i++) {
+        xorResult = martinez.xor(xorResult, polygons[i]);
+        if (!xorResult || !xorResult.length) {
+          console.error("Exclusion failed.");
+          return;
+        }
+      }
+
+
+      const rings = [];
+      for (const poly of xorResult) {
+        for (const ring of poly) {
+          rings.push(ring.map(([x, y]) => ({ x, y })));
+        }
+      }
+
+      if (rings.length === 0) {
+        console.error("Exclusion resulted in empty shape.");
+        return;
+      }
+
+      if (rings.length === 1) {
+        const mergedPoints = rings[0];
+        const newShape = {
+          id: `exclusion-${Date.now()}`,
+          type: "Polygon",
+          points: mergedPoints,
+          fill: shapesToCombine[0].fill,
+          stroke: shapesToCombine[0].stroke,
+          strokeWidth: shapesToCombine[0].strokeWidth,
+          closed: true,
+          name: "Exclusion",
+        };
+        selectedLayer.shapes = selectedLayer.shapes.filter(
+          shape => !selectedShapeIds.includes(shape.id)
+        );
+        selectedLayer.shapes.push(newShape);
+        state.selectedShapeIds = [newShape.id];
+        state.selectedShapeId = newShape.id;
+        state.controlPoints = mergedPoints;
+      } else {
+        const compoundShape = {
+          id: `exclusion-${Date.now()}`,
+          type: "CompoundPath",
+          rings: rings,
+          fill: shapesToCombine[0].fill,
+          stroke: shapesToCombine[0].stroke,
+          strokeWidth: shapesToCombine[0].strokeWidth,
+          closed: true,
+          name: "Exclusion",
+        };
+        selectedLayer.shapes = selectedLayer.shapes.filter(
+          shape => !selectedShapeIds.includes(shape.id)
+        );
+        selectedLayer.shapes.push(compoundShape);
+        state.selectedShapeIds = [compoundShape.id];
+        state.selectedShapeId = compoundShape.id;
+        state.controlPoints = rings[0];
+      }
+    },
+    division: (state) => {
+      const selectedLayer = state.layers[state.selectedLayerIndex];
+      const selectedShapeIds = state.selectedShapeIds;
+
+      if (selectedShapeIds.length < 2) {
+        console.error("Please select at least two shapes for division.");
+        return;
+      }
+
+
+      selectedShapeIds.forEach((shapeId) => {
+        const shape = selectedLayer.shapes.find(s => s.id === shapeId);
+        if (!shape) return;
+        if (shape.type === "Rectangle") {
+          const { x, y, width, height } = shape;
+          const pointsPerEdge = 12;
+          shape.type = "Polygon";
+          shape.points = [];
+          for (let i = 0; i < pointsPerEdge; i++) {
+            const t = i / (pointsPerEdge - 1);
+            shape.points.push({ x: x + t * width, y: y });
+          }
+          for (let i = 1; i < pointsPerEdge; i++) {
+            const t = i / (pointsPerEdge - 1);
+            shape.points.push({ x: x + width, y: y + t * height });
+          }
+          for (let i = 1; i < pointsPerEdge; i++) {
+            const t = i / (pointsPerEdge - 1);
+            shape.points.push({ x: x + width - t * width, y: y + height });
+          }
+          for (let i = 1; i < pointsPerEdge - 1; i++) {
+            const t = i / (pointsPerEdge - 1);
+            shape.points.push({ x: x, y: y + height - t * height });
+          }
+        } else if (shape.type === "Circle") {
+          const { x, y, radius } = shape;
+          const numPoints = 36;
+          shape.type = "Polygon";
+          shape.points = Array.from({ length: numPoints }, (_, i) => {
+            const angle = (2 * Math.PI * i) / numPoints;
+            return {
+              x: x + radius * Math.cos(angle),
+              y: y + radius * Math.sin(angle)
+            };
+          });
+        } else if (shape.type === "Star") {
+          const { x, y, innerRadius, outerRadius, corners } = shape;
+          const spikes = corners || 5;
+          const numPoints = spikes * 2;
+          shape.type = "Polygon";
+          shape.points = Array.from({ length: numPoints }, (_, i) => {
+            const angle = (Math.PI * i) / spikes - Math.PI / 2;
+            const r = i % 2 === 0 ? outerRadius : innerRadius;
+            return {
+              x: x + r * Math.cos(angle),
+              y: y + r * Math.sin(angle),
+            };
+          });
+        } else if (shape.type === "Pencil" || shape.type === "Calligraphy") {
+          if (Array.isArray(shape.points) && Array.isArray(shape.points[0])) {
+            shape.points = shape.points.map(pt =>
+              Array.isArray(pt) ? { x: pt[0], y: pt[1] } : pt
+            );
+          }
+          const first = shape.points[0];
+          const last = shape.points[shape.points.length - 1];
+          if (first.x !== last.x || first.y !== last.y) {
+            shape.points.push({ x: first.x, y: first.y });
+          }
+          const minPoints = 36;
+          if (shape.points.length < minPoints) {
+            const pts = shape.points;
+            const resampled = [];
+            for (let i = 0; i < minPoints; i++) {
+              const t = i / minPoints * pts.length;
+              const idx = Math.floor(t);
+              const nextIdx = (idx + 1) % pts.length;
+              const frac = t - idx;
+              const x = pts[idx].x + frac * (pts[nextIdx].x - pts[idx].x);
+              const y = pts[idx].y + frac * (pts[nextIdx].y - pts[idx].y);
+              resampled.push({ x, y });
+            }
+            shape.points = resampled;
+          }
+          shape.type = "Polygon";
+        }
+      });
+
+
+      const shapesToDivide = selectedShapeIds
+        .map(id => selectedLayer.shapes.find(shape => shape.id === id))
+        .filter(shape => shape && shape.type === "Polygon");
+
+      if (shapesToDivide.length < 2) {
+        console.error("Division only supported for Polygon shapes.");
+        return;
+      }
+
+      function closePolygon(points) {
+        if (points.length < 3) return points;
+        const first = points[0];
+        const last = points[points.length - 1];
+        if (first.x !== last.x || first.y !== last.y) {
+          return [...points, { x: first.x, y: first.y }];
+        }
+        return points;
+      }
+      function polygonArea(points) {
+        let area = 0;
+        for (let i = 0, n = points.length; i < n; i++) {
+          const p1 = points[i];
+          const p2 = points[(i + 1) % n];
+          area += (p1.x * p2.y - p2.x * p1.y);
+        }
+        return area / 2;
+      }
+      function ensureCCW(points) {
+        return polygonArea(points) < 0 ? points.slice().reverse() : points;
+      }
+
+
+      const baseShape = shapesToDivide[0];
+      const cutters = shapesToDivide.slice(1);
+
+      let basePoly = [ensureCCW(closePolygon(baseShape.points)).map(pt => [pt.x, pt.y])];
+      let cutterPolys = cutters.map(shape => [ensureCCW(closePolygon(shape.points)).map(pt => [pt.x, pt.y])]);
+
+
+      let diffResult = basePoly;
+      for (let i = 0; i < cutterPolys.length; i++) {
+        diffResult = martinez.diff(diffResult, cutterPolys[i]);
+        if (!diffResult || !diffResult.length) {
+          diffResult = [];
+          break;
+        }
+      }
+
+
+      let intersectionPieces = [];
+      for (let i = 0; i < cutterPolys.length; i++) {
+        let inter = martinez.intersection(basePoly, cutterPolys[i]);
+        if (inter && inter.length) intersectionPieces.push(...inter);
+      }
+
+
+      let allRings = [];
+
+      for (const poly of diffResult) {
+        for (const ring of poly) {
+          allRings.push(ring.map(([x, y]) => ({ x, y })));
+        }
+      }
+
+      for (const poly of intersectionPieces) {
+        for (const ring of poly) {
+          allRings.push(ring.map(([x, y]) => ({ x, y })));
+        }
+      }
+
+      if (allRings.length === 0) {
+        console.error("Division resulted in empty shape.");
+        return;
+      }
+
+
+      selectedLayer.shapes = selectedLayer.shapes.filter(
+        shape => !selectedShapeIds.includes(shape.id)
       );
 
-      if (!shape1 || !shape2) {
-        console.error("Selected shapes not found.");
+
+      allRings.forEach((points, idx) => {
+        selectedLayer.shapes.push({
+          id: `division-${Date.now()}-${idx}`,
+          type: "Polygon",
+          points,
+          fill: baseShape.fill,
+          stroke: baseShape.stroke,
+          strokeWidth: baseShape.strokeWidth,
+          closed: true,
+          name: "Division",
+        });
+      });
+
+
+      state.selectedShapeIds = selectedLayer.shapes
+        .slice(-allRings.length)
+        .map(s => s.id);
+      state.selectedShapeId = null;
+      state.controlPoints = [];
+    },
+    cutPath: (state) => {
+      const selectedLayer = state.layers[state.selectedLayerIndex];
+      const selectedShapeIds = state.selectedShapeIds;
+
+      if (selectedShapeIds.length < 2) {
+        console.error("Please select at least two shapes for Cut Path.");
         return;
       }
 
-      let intersectionShape = null;
 
-
-      if (shape1.type === "Rectangle" && shape2.type === "Rectangle") {
-        const x1 = Math.max(shape1.x, shape2.x);
-        const y1 = Math.max(shape1.y, shape2.y);
-        const x2 = Math.min(shape1.x + shape1.width, shape2.x + shape2.width);
-        const y2 = Math.min(shape1.y + shape1.height, shape2.y + shape2.height);
-
-        if (x1 < x2 && y1 < y2) {
-          intersectionShape = {
-            id: `intersection-${Date.now()}`,
-            type: "Rectangle",
-            x: x1,
-            y: y1,
-            width: x2 - x1,
-            height: y2 - y1,
-            fill: shape1.fill || shape2.fill,
-            stroke: shape1.stroke || shape2.stroke,
-            strokeWidth: Math.max(shape1.strokeWidth || 1, shape2.strokeWidth || 1),
-          };
+      selectedShapeIds.forEach((shapeId) => {
+        const shape = selectedLayer.shapes.find(s => s.id === shapeId);
+        if (!shape) return;
+        if (shape.type === "Rectangle") {
+          const { x, y, width, height } = shape;
+          const pointsPerEdge = 12;
+          shape.type = "Polygon";
+          shape.points = [];
+          for (let i = 0; i < pointsPerEdge; i++) {
+            const t = i / (pointsPerEdge - 1);
+            shape.points.push({ x: x + t * width, y: y });
+          }
+          for (let i = 1; i < pointsPerEdge; i++) {
+            const t = i / (pointsPerEdge - 1);
+            shape.points.push({ x: x + width, y: y + t * height });
+          }
+          for (let i = 1; i < pointsPerEdge; i++) {
+            const t = i / (pointsPerEdge - 1);
+            shape.points.push({ x: x + width - t * width, y: y + height });
+          }
+          for (let i = 1; i < pointsPerEdge - 1; i++) {
+            const t = i / (pointsPerEdge - 1);
+            shape.points.push({ x: x, y: y + height - t * height });
+          }
+        } else if (shape.type === "Circle") {
+          const { x, y, radius } = shape;
+          const numPoints = 36;
+          shape.type = "Polygon";
+          shape.points = Array.from({ length: numPoints }, (_, i) => {
+            const angle = (2 * Math.PI * i) / numPoints;
+            return {
+              x: x + radius * Math.cos(angle),
+              y: y + radius * Math.sin(angle)
+            };
+          });
+        } else if (shape.type === "Star") {
+          const { x, y, innerRadius, outerRadius, corners } = shape;
+          const spikes = corners || 5;
+          const numPoints = spikes * 2;
+          shape.type = "Polygon";
+          shape.points = Array.from({ length: numPoints }, (_, i) => {
+            const angle = (Math.PI * i) / spikes - Math.PI / 2;
+            const r = i % 2 === 0 ? outerRadius : innerRadius;
+            return {
+              x: x + r * Math.cos(angle),
+              y: y + r * Math.sin(angle),
+            };
+          });
+        } else if (shape.type === "Pencil" || shape.type === "Calligraphy") {
+          if (Array.isArray(shape.points) && Array.isArray(shape.points[0])) {
+            shape.points = shape.points.map(pt =>
+              Array.isArray(pt) ? { x: pt[0], y: pt[1] } : pt
+            );
+          }
+          const first = shape.points[0];
+          const last = shape.points[shape.points.length - 1];
+          if (first.x !== last.x || first.y !== last.y) {
+            shape.points.push({ x: first.x, y: first.y });
+          }
+          const minPoints = 36;
+          if (shape.points.length < minPoints) {
+            const pts = shape.points;
+            const resampled = [];
+            for (let i = 0; i < minPoints; i++) {
+              const t = i / minPoints * pts.length;
+              const idx = Math.floor(t);
+              const nextIdx = (idx + 1) % pts.length;
+              const frac = t - idx;
+              const x = pts[idx].x + frac * (pts[nextIdx].x - pts[idx].x);
+              const y = pts[idx].y + frac * (pts[nextIdx].y - pts[idx].y);
+              resampled.push({ x, y });
+            }
+            shape.points = resampled;
+          }
+          shape.type = "Polygon";
         }
-      } else {
-        console.error("Intersection logic for this shape type is not implemented.");
+      });
+
+
+      const shapesToCut = selectedShapeIds
+        .map(id => selectedLayer.shapes.find(shape => shape.id === id))
+        .filter(shape => shape && shape.type === "Polygon");
+
+      if (shapesToCut.length < 2) {
+        console.error("Cut Path only supported for Polygon shapes.");
         return;
       }
 
-      if (intersectionShape) {
-
-        selectedLayer.shapes = selectedLayer.shapes.filter(
-          (shape) => !selectedShapeIds.includes(shape.id)
-        );
-        state.layers[state.selectedLayerIndex] = {
-          ...selectedLayer,
-          shapes: [
-            ...selectedLayer.shapes.filter((s) => !selectedShapeIds.includes(s.id)),
-            intersectionShape,
-          ],
-        };
-        state.selectedShapeIds = [intersectionShape.id];
-
-        console.log("Intersection shape added:", intersectionShape);
-      } else {
-        console.error("Intersection failed. Ensure the shapes overlap.");
-
-        state.selectedShapeIds = [...selectedShapeIds];
+      function closePolygon(points) {
+        if (points.length < 3) return points;
+        const first = points[0];
+        const last = points[points.length - 1];
+        if (first.x !== last.x || first.y !== last.y) {
+          return [...points, { x: first.x, y: first.y }];
+        }
+        return points;
       }
+      function polygonArea(points) {
+        let area = 0;
+        for (let i = 0, n = points.length; i < n; i++) {
+          const p1 = points[i];
+          const p2 = points[(i + 1) % n];
+          area += (p1.x * p2.y - p2.x * p1.y);
+        }
+        return area / 2;
+      }
+      function ensureCCW(points) {
+        return polygonArea(points) < 0 ? points.slice().reverse() : points;
+      }
+
+
+      const baseShape = shapesToCut[0];
+      const cutters = shapesToCut.slice(1);
+
+      let basePoly = [ensureCCW(closePolygon(baseShape.points)).map(pt => [pt.x, pt.y])];
+      let cutterPolys = cutters.map(shape => [ensureCCW(closePolygon(shape.points)).map(pt => [pt.x, pt.y])]);
+
+
+      let diffResult = basePoly;
+      for (let i = 0; i < cutterPolys.length; i++) {
+        diffResult = martinez.diff(diffResult, cutterPolys[i]);
+        if (!diffResult || !diffResult.length) {
+          diffResult = [];
+          break;
+        }
+      }
+
+
+      let intersectionPieces = [];
+      for (let i = 0; i < cutterPolys.length; i++) {
+        let inter = martinez.intersection(basePoly, cutterPolys[i]);
+        if (inter && inter.length) intersectionPieces.push(...inter);
+      }
+
+
+      let allRings = [];
+
+      for (const poly of diffResult) {
+        for (const ring of poly) {
+          allRings.push(ring.map(([x, y]) => ({ x, y })));
+        }
+      }
+
+      for (const poly of intersectionPieces) {
+        for (const ring of poly) {
+          allRings.push(ring.map(([x, y]) => ({ x, y })));
+        }
+      }
+
+      if (allRings.length === 0) {
+        console.error("Cut Path resulted in empty shape.");
+        return;
+      }
+
+
+      selectedLayer.shapes = selectedLayer.shapes.filter(
+        shape => !selectedShapeIds.includes(shape.id)
+      );
+
+
+      allRings.forEach((points, idx) => {
+        selectedLayer.shapes.push({
+          id: `cutpath-${Date.now()}-${idx}`,
+          type: "Polygon",
+          points,
+          fill: baseShape.fill,
+          stroke: baseShape.stroke,
+          strokeWidth: baseShape.strokeWidth,
+          closed: true,
+          name: "Cut Path",
+        });
+      });
+
+
+      state.selectedShapeIds = selectedLayer.shapes
+        .slice(-allRings.length)
+        .map(s => s.id);
+      state.selectedShapeId = null;
+      state.controlPoints = [];
+    },
+    combine: (state) => {
+      const selectedLayer = state.layers[state.selectedLayerIndex];
+      const selectedShapeIds = state.selectedShapeIds;
+
+      if (selectedShapeIds.length < 2) {
+        console.error("Please select at least two shapes to combine.");
+        return;
+      }
+
+
+      selectedShapeIds.forEach((shapeId) => {
+        const shape = selectedLayer.shapes.find(s => s.id === shapeId);
+        if (!shape) return;
+        if (shape.type === "Rectangle") {
+          const { x, y, width, height } = shape;
+          const pointsPerEdge = 12;
+          shape.type = "Polygon";
+          shape.points = [];
+          for (let i = 0; i < pointsPerEdge; i++) {
+            const t = i / (pointsPerEdge - 1);
+            shape.points.push({ x: x + t * width, y: y });
+          }
+          for (let i = 1; i < pointsPerEdge; i++) {
+            const t = i / (pointsPerEdge - 1);
+            shape.points.push({ x: x + width, y: y + t * height });
+          }
+          for (let i = 1; i < pointsPerEdge; i++) {
+            const t = i / (pointsPerEdge - 1);
+            shape.points.push({ x: x + width - t * width, y: y + height });
+          }
+          for (let i = 1; i < pointsPerEdge - 1; i++) {
+            const t = i / (pointsPerEdge - 1);
+            shape.points.push({ x: x, y: y + height - t * height });
+          }
+        } else if (shape.type === "Circle") {
+          const { x, y, radius } = shape;
+          const numPoints = 36;
+          shape.type = "Polygon";
+          shape.points = Array.from({ length: numPoints }, (_, i) => {
+            const angle = (2 * Math.PI * i) / numPoints;
+            return {
+              x: x + radius * Math.cos(angle),
+              y: y + radius * Math.sin(angle)
+            };
+          });
+        } else if (shape.type === "Star") {
+          const { x, y, innerRadius, outerRadius, corners } = shape;
+          const spikes = corners || 5;
+          const numPoints = spikes * 2;
+          shape.type = "Polygon";
+          shape.points = Array.from({ length: numPoints }, (_, i) => {
+            const angle = (Math.PI * i) / spikes - Math.PI / 2;
+            const r = i % 2 === 0 ? outerRadius : innerRadius;
+            return {
+              x: x + r * Math.cos(angle),
+              y: y + r * Math.sin(angle),
+            };
+          });
+        }
+      });
+
+
+      const rings = [];
+      selectedShapeIds.forEach((shapeId) => {
+        const shape = selectedLayer.shapes.find(s => s.id === shapeId);
+        if (!shape) return;
+
+        if (shape.type === "Polygon" || shape.type === "Pencil" || shape.type === "Calligraphy") {
+          let pts = shape.points;
+          if (Array.isArray(pts) && Array.isArray(pts[0])) {
+            pts = pts.map(pt => Array.isArray(pt) ? { x: pt[0], y: pt[1] } : pt);
+          }
+          const first = pts[0];
+          const last = pts[pts.length - 1];
+          if (first.x !== last.x || first.y !== last.y) {
+            pts = [...pts, { x: first.x, y: first.y }];
+          }
+          rings.push(pts);
+        }
+        if (shape.type === "CompoundPath" && Array.isArray(shape.rings)) {
+          rings.push(...shape.rings);
+        }
+      });
+
+      if (rings.length === 0) {
+        console.error("No valid paths to combine.");
+        return;
+      }
+
+
+      selectedLayer.shapes = selectedLayer.shapes.filter(
+        shape => !selectedShapeIds.includes(shape.id)
+      );
+
+      const firstShape = selectedLayer.shapes.find(s => s.id === selectedShapeIds[0]);
+
+      const newShape = {
+        id: `combine-${Date.now()}`,
+        type: "CompoundPath",
+        rings: rings,
+        fill: firstShape?.fill || "black",
+        stroke: firstShape?.stroke || "black",
+        strokeWidth: firstShape?.strokeWidth || 1,
+        closed: true,
+        name: "Combined Path",
+      };
+      selectedLayer.shapes.push(newShape);
+
+      state.selectedShapeIds = [newShape.id];
+      state.selectedShapeId = newShape.id;
+      state.controlPoints = rings[0];
+    },
+    breakApart: (state) => {
+      const selectedLayer = state.layers[state.selectedLayerIndex];
+      const selectedShapeIds = state.selectedShapeIds;
+
+      if (selectedShapeIds.length === 0) {
+        console.error("Please select at least one shape to break apart.");
+        return;
+      }
+
+      let newShapes = [];
+
+      selectedShapeIds.forEach((shapeId) => {
+        const shape = selectedLayer.shapes.find(s => s.id === shapeId);
+        if (!shape) return;
+
+
+        if (shape.type === "CompoundPath" && Array.isArray(shape.rings)) {
+          shape.rings.forEach((ring, idx) => {
+            newShapes.push({
+              id: `breakapart-${Date.now()}-${Math.random()}-${idx}`,
+              type: "Polygon",
+              points: ring,
+              fill: shape.fill,
+              stroke: shape.stroke,
+              strokeWidth: shape.strokeWidth,
+              closed: true,
+              name: "Break Apart",
+            });
+          });
+        }
+
+        else if (shape.type === "Polygon" && Array.isArray(shape.points)) {
+
+          newShapes.push({
+            id: `breakapart-${Date.now()}-${Math.random()}`,
+            type: "Polygon",
+            points: shape.points,
+            fill: shape.fill,
+            stroke: shape.stroke,
+            strokeWidth: shape.strokeWidth,
+            closed: true,
+            name: "Break Apart",
+          });
+        }
+
+        else if ((shape.type === "Pencil" || shape.type === "Calligraphy") && Array.isArray(shape.points)) {
+          newShapes.push({
+            id: `breakapart-${Date.now()}-${Math.random()}`,
+            type: shape.type,
+            points: shape.points,
+            fill: shape.fill,
+            stroke: shape.stroke,
+            strokeWidth: shape.strokeWidth,
+            closed: false,
+            name: "Break Apart",
+          });
+        }
+      });
+
+
+      selectedLayer.shapes = selectedLayer.shapes.filter(
+        shape => !selectedShapeIds.includes(shape.id)
+      );
+
+
+      selectedLayer.shapes.push(...newShapes);
+
+
+      state.selectedShapeIds = newShapes.map(s => s.id);
+      state.selectedShapeId = null;
+      state.controlPoints = [];
+    },
+    splitPath: (state) => {
+      console.log("shapes Splitted 😁");
     },
     setSnapping: (state, action) => {
       state.isSnappingEnabled = action.payload;
@@ -2631,18 +3850,21 @@ const toolSlice = createSlice({
     },
     cloneShape: (state, action) => {
       const { id } = action.payload;
+      if (!id) {
+        console.error("relinkClone: No shape selected.");
+        return;
+      }
       const selectedLayer = state.layers[state.selectedLayerIndex];
       const shape = selectedLayer.shapes.find(s => s.id === id);
       if (!shape) return;
 
 
-      const shapeClone = JSON.parse(JSON.stringify(shape));
-
       const newShape = {
-        ...shapeClone,
-        id: `shape-${Date.now()}-${Math.random()}`,
-        x: (shape.x || 0) + 10,
-        y: (shape.y || 0) + 10,
+        id: `clone-${Date.now()}-${Math.random()}`,
+        type: "Clone",
+        cloneOf: shape.id,
+        x: (shape.x || 0) + 20,
+        y: (shape.y || 0) + 20,
         name: (shape.name || shape.type || "Shape") + " (clone)",
         isClone: true,
       };
@@ -2661,6 +3883,111 @@ const toolSlice = createSlice({
           shape.name = shape.name.replace(/ \(clone\)$/, "");
         }
       }
+    },
+    selectOriginal: (state) => {
+
+
+      const selectedIds = state.selectedShapeIds;
+      const selectedLayer = state.layers[state.selectedLayerIndex];
+
+      if (!selectedIds || selectedIds.length === 0) {
+        console.warn("[Reducer] ⚠️ No selected shapes");
+        return;
+      }
+
+      if (!selectedLayer || !selectedLayer.shapes) {
+        console.error("[Reducer] ❌ Selected layer not found or invalid");
+        return;
+      }
+
+      const newSelectedIds = [];
+      let foundAnyOriginal = false;
+
+      selectedIds.forEach((shapeId) => {
+        const shape = selectedLayer.shapes.find(s => s.id === shapeId);
+        console.log('****shape', shape)
+        if (!shape) {
+          return;
+        }
+
+        if (shape.isClone) {
+          const originalName = shape.name.replace(/\s*\(clone(?:\s*\d*)?\)/i, '').trim();
+
+          const original = selectedLayer.shapes.find(s =>
+            s.name === originalName && !s.isClone && s.id !== shape.id
+          );
+
+          if (original) {
+
+            newSelectedIds.push(original.id);
+            foundAnyOriginal = true;
+          } else {
+
+            newSelectedIds.push(shapeId);
+          }
+        } else {
+          newSelectedIds.push(shapeId);
+        }
+      });
+
+      const uniqueIds = [...new Set(newSelectedIds)];
+
+      if (foundAnyOriginal || uniqueIds.length !== selectedIds.length) {
+
+        state.selectedShapeIds = uniqueIds;
+      } else {
+
+      }
+    },
+    relinkClone: (state) => {
+      const selectedShapeId = state.selectedShapeIds[0];
+      if (!selectedShapeId) {
+        console.error("relinkClone: No shape selected.");
+        return;
+      }
+      const clipboardShape = state.clipboard?.[0];
+      const shapeMap = {};
+      state.layers.forEach(layer => {
+        layer.shapes.forEach(shape => {
+          shapeMap[shape.id] = shape;
+        });
+      });
+
+      const cloneShape = shapeMap[selectedShapeId];
+      const sourceShape = clipboardShape;
+
+      if (!cloneShape) {
+        console.error("relinkClone: Clone shape not found for id", selectedShapeId);
+        return;
+      }
+      if (!sourceShape) {
+        console.error("relinkClone: No source shape in clipboard.");
+        return;
+      }
+
+      const updatedClone = {
+        ...sourceShape,
+        id: cloneShape.id,
+        cloneOf: state.lastCopiedShapeId,
+        x: cloneShape.x,
+        y: cloneShape.y,
+        width: sourceShape.width,
+        height: sourceShape.height,
+        transform: cloneShape.transform,
+        name: `${sourceShape.name || sourceShape.type || "Shape"} (clone)`,
+        isClone: true,
+        updatedAt: Date.now(),
+      };
+
+      state.layers = state.layers.map((layer) => ({
+        ...layer,
+        shapes: layer.shapes.map((shape) =>
+          shape.id === selectedShapeId ? updatedClone : shape
+        ),
+      }));
+
+      state.history.push({ layers: JSON.parse(JSON.stringify(state.layers)) });
+      state.future = [];
     },
     makeSelectedNodesSymmetric: (state) => {
       if (state.selectedNodePoints.length === 0) return;
@@ -3149,6 +4476,15 @@ export const {
   objectToPath,
   setBlockProgression,
   selectAllShapesInAllLayers,
+  difference,
+  exclusion,
+  division,
+  cutPath,
+  combine,
+  breakApart,
+  splitPath,
+  selectOriginal,
+  relinkClone,
 } = toolSlice.actions;
 
 export default toolSlice.reducer;

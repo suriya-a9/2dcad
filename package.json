@@ -24,6 +24,7 @@
     "html2canvas": "^1.4.1",
     "jspdf": "^2.5.2",
     "konva": "^9.3.18",
+    "martinez-polygon-clipping": "^0.7.4",
     "polygon-clipping": "^0.15.7",
     "react": "^18.3.1",
     "react-color": "^2.19.3",

@@ -26,6 +26,7 @@
     "konva": "^9.3.18",
     "martinez-polygon-clipping": "^0.7.4",
     "polygon-clipping": "^0.15.7",
+    "polygon-offset": "^0.3.2",
     "react": "^18.3.1",
     "react-color": "^2.19.3",
     "react-dom": "^18.3.1",

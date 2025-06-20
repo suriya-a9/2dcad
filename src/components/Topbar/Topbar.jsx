@@ -1,7 +1,7 @@
 import "./Topbar.css";
 import { useEffect } from "react";
 import { useSelector, useDispatch } from "react-redux";
-import { setFontSize, setFontFamily, setAlignment, setFontStyle, clearPoints, handleUnion, difference, intersection, exclusion, division, cutPath, combine, breakApart, splitPath, relinkClone, selectOriginal } from "../../Redux/Slice/toolSlice";
+import { setFontSize, setFontFamily, setAlignment, setFontStyle, clearPoints, handleUnion, difference, intersection, exclusion, division, cutPath, combine, breakApart, splitPath, relinkClone, selectOriginal, fracture, flatten, inset, outset, fillBetweenPaths, simplify, reverse } from "../../Redux/Slice/toolSlice";
 import { setBezierOption } from "../../Redux/Slice/toolSlice";
 import { BsVectorPen } from "react-icons/bs";
 import { TbBrandSnapseed } from "react-icons/tb";
@@ -985,22 +985,33 @@ const Topbar = ({
     { label: "Combine", onClick: () => dispatch(combine()) },
     { label: "Break Apart", onClick: () => dispatch(breakApart()) },
     { label: "Split Path", onClick: () => dispatch(splitPath()) },
-    { label: "Fracture" },
-    { label: "Flatten" },
+    { label: "Fracture", onClick: () => dispatch(fracture()) },
+    { label: "Flatten", onClick: () => dispatch(flatten()) },
     "divider",
-    { label: "inset" },
-    { label: "Outset" },
+    { label: "inset", onClick: () => dispatch(inset()) },
+    { label: "Outset", onClick: () => dispatch(outset()) },
     { label: "Dynamic Offset" },
     { label: "Linked Offset" },
     "divider",
-    { label: "Difference" },
+    { label: "Fill Between Paths", onClick: () => dispatch(fillBetweenPaths()) },
     "divider",
-    { label: "Simplify" },
-    { label: "Reverse" },
+    { label: "Simplify", onClick: () => dispatch(simplify()) },
+    { label: "Reverse", onClick: () => dispatch(reverse()) },
     { label: "Path Effects..." },
     { label: "Paste Path Effect" },
     { label: "Remove Path Effect" },
   ];
+
+  const FilterOptions = [
+    {
+      label: "Bevel",
+      subMenu: [
+        { label: "Bloom" },
+        { label: "Bright Metal" },
+        { label: "Button" },
+      ],
+    },
+  ]
 
   const HelpOptions = [
     { label: "Cad Manual", link: "#" },
@@ -1484,13 +1495,51 @@ const Topbar = ({
                       )}
                     </ul>
                   </li>
-                  <li className="nav-item">
-                    <a className="nav-link" href="#">
+                  <li
+                    className="nav-item dropdown"
+                    style={{ display: "block" }}
+                  >
+                    <a
+                      className="nav-link dropdown-toggle"
+                      href="#"
+                      role="button"
+                      data-bs-toggle="dropdown"
+                      aria-expanded="false"
+                    >
                       Filter
                     </a>
+                    <ul className="dropdown-menu" style={{ cursor: "pointer" }}>
+                      {FilterOptions.map((item, index) =>
+                        item === "divider" ? (
+                          <hr key={index} style={{ margin: "0px" }} />
+                        ) : item.subMenu ? (
+                          <li key={index} className="paste-dropdown">
+                            <div className="icon-div">
+                              <a href="#" className="dropdown-item">
+                                {item.label}
+                              </a>
+                              <MdOutlineArrowRight
+                                style={{ fontSize: "25px" }}
+                              />
+                            </div>
+                            <ul className="paste-dropdown-item">
+                              {item.subMenu.map((subItem, subIndex) => (
+                                <li key={subIndex}>
+                                  <a href="#">{subItem.label}</a>
+                                </li>
+                              ))}
+                            </ul>
+                          </li>
+                        ) : (
+                          <li key={index}>
+                            <a className="dropdown-item" onClick={item.onClick}>
+                              {item.label}
+                            </a>
+                          </li>
+                        )
+                      )}
+                    </ul>
                   </li>
-
-
                   <li
                     className="nav-item dropdown"
                     style={{ display: "block" }}
@@ -1520,7 +1569,7 @@ const Topbar = ({
             </div>
           </div>
         </div>
-      </nav>
+      </nav >
       <div className="container-fluid top-bar">
         <div className="row">
           {isRenaming ? (
@@ -1592,7 +1641,7 @@ const Topbar = ({
           )}
         </div>
       </div>
-    </div>
+    </div >
   );
 };
 

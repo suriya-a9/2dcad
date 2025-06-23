@@ -133,6 +133,9 @@ const toolSlice = createSlice({
     tweakForce: 1,
     tweakFidelity: 50,
     blockProgression: "normal",
+    dynamicOffsetMode: false,
+    dynamicOffsetShapeId: null,
+    dynamicOffsetAmount: 20,
   },
 
   reducers: {
@@ -5255,6 +5258,44 @@ const toolSlice = createSlice({
       const allShapeIds = state.layers.flatMap(layer => layer.shapes.map(shape => shape.id));
       state.selectedShapeIds = allShapeIds;
     },
+    setDynamicOffsetMode(state, action) {
+      state.dynamicOffsetMode = action.payload;
+    },
+    setDynamicOffsetShapeId(state, action) {
+      state.dynamicOffsetShapeId = action.payload;
+    },
+    setDynamicOffsetAmount(state, action) {
+      state.dynamicOffsetAmount = action.payload;
+    },
+    createLinkedOffset: (state, action) => {
+      const { sourceId, offsetAmount } = action.payload || {};
+      if (!sourceId) return;
+
+      const selectedLayer = state.layers[state.selectedLayerIndex];
+      const sourceShape = selectedLayer.shapes.find(s => s.id === sourceId);
+      if (!sourceShape) return;
+
+      const newShape = {
+        id: `linked-offset-${Date.now()}`,
+        type: "LinkedOffset",
+        linkedTo: sourceId,
+        offsetAmount,
+        fill: sourceShape.fill,
+        stroke: sourceShape.stroke,
+        strokeWidth: sourceShape.strokeWidth,
+        closed: true,
+        name: `Linked Offset of ${sourceShape.name || sourceShape.type}`,
+      };
+      selectedLayer.shapes.push(newShape);
+    },
+    applyBloomFilter: (state, action) => {
+      const { shapeId, radius = 16, brightness = 1.5 } = action.payload;
+      const selectedLayer = state.layers[state.selectedLayerIndex];
+      const shape = selectedLayer.shapes.find(s => s.id === shapeId);
+      if (shape) {
+        shape.bloom = { radius, brightness };
+      }
+    },
   },
 
 });
@@ -5468,6 +5509,11 @@ export const {
   fillBetweenPaths,
   simplify,
   reverse,
+  setDynamicOffsetMode,
+  setDynamicOffsetShapeId,
+  setDynamicOffsetAmount,
+  createLinkedOffset,
+  applyBloomFilter,
 } = toolSlice.actions;
 
 export default toolSlice.reducer;

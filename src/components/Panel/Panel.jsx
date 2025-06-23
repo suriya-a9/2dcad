@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useLayoutEffect, useImperativeHandle, forwardRef } from "react";
+import Offset from "polygon-offset";
 import polygonClipping from "polygon-clipping";
 import { BsPaintBucket, BsPencil, BsVectorPen } from "react-icons/bs";
 import { FaRegCircle, FaRegSquare, FaRegStar } from "react-icons/fa";
@@ -85,7 +86,9 @@ import {
   setMeasurementDraft,
   setConvertToItem,
   removeMeasurementLine,
-  deselectAllShapes
+  deselectAllShapes,
+  setDynamicOffsetAmount,
+  setDynamicOffsetMode,
 } from "../../Redux/Slice/toolSlice";
 
 export const generateSpiralPath = (x, y, turns = 5, radius = 50, divergence = 1) => {
@@ -359,6 +362,9 @@ const Panel = React.forwardRef(({
   const tweakRadius = useSelector(state => state.tool.tweakRadius || 40);
   const tweakForce = useSelector(state => state.tool.tweakForce || 1);
   const tweakFidelity = useSelector(state => state.tool.tweakFidelity || 50);
+  const dynamicOffsetMode = useSelector(state => state.tool.dynamicOffsetMode);
+  const dynamicOffsetShapeId = useSelector(state => state.tool.dynamicOffsetShapeId);
+  const dynamicOffsetAmount = useSelector(state => state.tool.dynamicOffsetAmount);
   const [snapText, setSnapText] = useState(null);
   function addGuidesAtLine(x1, y1, x2, y2) {
     setGuides(prev => [
@@ -2458,16 +2464,10 @@ const Panel = React.forwardRef(({
 
     return points;
   }
-  function downsamplePoints(points, maxPoints = 500) {
-    if (points.length <= maxPoints) return points;
-
+  function downsamplePoints(points, maxPoints = 200) {
+    if (!Array.isArray(points) || points.length <= maxPoints) return points;
     const factor = Math.ceil(points.length / maxPoints);
-    const downsampled = [];
-    for (let i = 0; i < points.length; i += factor) {
-      downsampled.push(points[i]);
-    }
-    downsampled.push(points[points.length - 1]);
-    return downsampled;
+    return points.filter((_, i) => i % factor === 0);
   }
 
   function generateEllipsePath(points) {
@@ -4762,11 +4762,11 @@ const Panel = React.forwardRef(({
         break;
       case "attract": {
         const radius = tweakRadius || 100;
-        const force = (tweakForce || 1) * (fidelity / 100); 
+        const force = (tweakForce || 1) * (fidelity / 100);
 
         affectedShapes.forEach(shape => {
           if (Array.isArray(shape.points)) {
-            
+
             const newPoints = shape.points.map(pt => {
               const px = pt.x !== undefined ? pt.x : pt[0];
               const py = pt.y !== undefined ? pt.y : pt[1];
@@ -4775,9 +4775,9 @@ const Panel = React.forwardRef(({
               const dist = Math.sqrt(dx * dx + dy * dy);
 
               if (dist < radius) {
-                
+
                 const falloff = Math.cos((dist / radius) * Math.PI) * 0.5 + 0.5;
-                
+
                 const moveFactor = force * falloff * 0.15;
                 if (pt.x !== undefined) {
                   return { ...pt, x: px + dx * moveFactor, y: py + dy * moveFactor };
@@ -4801,6 +4801,104 @@ const Panel = React.forwardRef(({
       window._tweakRandomDirs = {};
     }
   }, [selectedTool]);
+  function getOffsetPoints(points, amount) {
+
+    if (!Array.isArray(points) || points.length < 3) return points;
+
+
+    const cleanPoints = points.filter(
+      p => p && typeof p.x === "number" && typeof p.y === "number"
+    );
+
+
+    const first = cleanPoints[0];
+    const last = cleanPoints[cleanPoints.length - 1];
+    let closedPoints = cleanPoints;
+    if (first.x !== last.x || first.y !== last.y) {
+      closedPoints = [...cleanPoints, { x: first.x, y: first.y }];
+    }
+
+
+    const arr = closedPoints.map(pt => [pt.x, pt.y]);
+
+
+    if (arr.length < 4) return points;
+
+
+    try {
+      const offset = new Offset();
+      const result = offset.data([arr]).offset(amount);
+      if (!result || !result.length) return points;
+
+      const largest = result.reduce((a, b) => (a.length > b.length ? a : b));
+      return largest.map(([x, y]) => ({ x, y }));
+    } catch (e) {
+      console.error("Offset error:", e);
+      return points;
+    }
+  }
+
+  function getShapeCenter(shape) {
+    const pts = shape.points;
+    const n = pts.length;
+    const sum = pts.reduce((acc, p) => {
+      const x = p.x ?? p[0];
+      const y = p.y ?? p[1];
+      return { x: acc.x + x, y: acc.y + y };
+    }, { x: 0, y: 0 });
+    return { x: sum.x / n, y: sum.y / n };
+  }
+
+  function getOriginalRadiusOrDistance(shape, handlePoint) {
+    const center = getShapeCenter(shape);
+    return Math.sqrt(
+      Math.pow(handlePoint.x - center.x, 2) +
+      Math.pow(handlePoint.y - center.y, 2)
+    );
+  }
+
+  function shapeToPoints(shape) {
+    if (shape.type === "Polygon" && Array.isArray(shape.points)) {
+      return shape.points.map(p => ({ x: p.x ?? p[0], y: p.y ?? p[1] }));
+    }
+    if (shape.type === "Pencil" && Array.isArray(shape.points)) {
+      return shape.points.map(p => ({ x: p.x ?? p[0], y: p.y ?? p[1] }));
+    }
+    if (shape.type === "Calligraphy" && Array.isArray(shape.points)) {
+      return shape.points.map(p => ({ x: p.x, y: p.y }));
+    }
+    if (shape.type === "Circle") {
+
+      const num = 60;
+      return Array.from({ length: num }).map((_, i) => {
+        const angle = (i / num) * 2 * Math.PI;
+        return {
+          x: shape.x + shape.radius * Math.cos(angle),
+          y: shape.y + shape.radius * Math.sin(angle),
+        };
+      });
+    }
+    if (shape.type === "Rectangle") {
+      return [
+        { x: shape.x, y: shape.y },
+        { x: shape.x + shape.width, y: shape.y },
+        { x: shape.x + shape.width, y: shape.y + shape.height },
+        { x: shape.x, y: shape.y + shape.height },
+      ];
+    }
+    if (shape.type === "Star") {
+      const num = (shape.corners || 5) * 2;
+      return Array.from({ length: num }).map((_, i) => {
+        const angle = (i / num) * 2 * Math.PI - Math.PI / 2;
+        const r = i % 2 === 0 ? shape.outerRadius : shape.innerRadius;
+        return {
+          x: shape.x + r * Math.cos(angle),
+          y: shape.y + r * Math.sin(angle),
+        };
+      });
+    }
+    return [];
+  }
   return (
     <>
       {/* {selectedTool === "Dropper" && (
@@ -4930,11 +5028,48 @@ const Panel = React.forwardRef(({
                   />
                 ))}
 
+
                 {renderSpiroPath()}
 
                 {renderBSplinePath()}
 
                 {renderParaxialSegments()}
+
+                {dynamicOffsetMode && dynamicOffsetShapeId && (() => {
+                  const shape = shapes.find(s => s.id === dynamicOffsetShapeId);
+                  const basePoints = shapeToPoints(shape);
+                  if (!basePoints || basePoints.length === 0) return null;
+                  const offsetPoints = getOffsetPoints(basePoints, dynamicOffsetAmount);
+                  if (!offsetPoints || offsetPoints.length === 0) return null;
+                  const handlePoint = offsetPoints[0];
+                  return (
+                    <Circle
+                      x={handlePoint.x}
+                      y={handlePoint.y}
+                      radius={10}
+                      fill="orange"
+                      draggable
+                      onDragMove={e => {
+
+                        const { x, y } = e.target.position();
+                        const center = getShapeCenter(shape);
+                        const dx = x - center.x;
+                        const dy = y - center.y;
+                        const newAmount = Math.sqrt(dx * dx + dy * dy) - getOriginalRadiusOrDistance(shape, handlePoint);
+                        dispatch(setDynamicOffsetAmount(newAmount));
+                      }}
+                      onDragEnd={e => {
+                        dispatch(updateShapePosition({
+                          id: shape.id,
+                          type: "Polygon",
+                          points: downsamplePoints(offsetPoints, 200),
+                          closed: true,
+                        }));
+                        dispatch(setDynamicOffsetMode(false));
+                      }}
+                    />
+                  );
+                })()}
 
                 {shapes.map((shape) => {
 
@@ -5091,6 +5226,93 @@ const Panel = React.forwardRef(({
                       </Group>
                     );
                   }
+                  {
+                    shape.bloom && (
+                      <Line
+                        points={offsetPoints.map(p => [p.x - (shape.x || 0), p.y - (shape.y || 0)]).flat()}
+                        closed
+                        fill={shape.fill || "transparent"}
+                        stroke={shape.stroke || "yellow"}
+                        strokeWidth={(shape.strokeWidth || 2) + (shape.bloom.radius || 16)}
+                        opacity={0.5 * (shape.bloom.brightness || 1.5)}
+                        listening={false}
+                        filters={[Konva.Filters.Blur]}
+                        blurRadius={shape.bloom?.radius || 16}
+                      />
+                    )
+                  }
+                  if (shape.type === "LinkedOffset") {
+                    const source = shapes.find(s => s.id === shape.linkedTo);
+                    if (!source) return null;
+                    const basePoints = shapeToPoints(source);
+                    const offsetPoints = getOffsetPoints(basePoints, shape.offsetAmount);
+                    const handlePoint = offsetPoints[0];
+                    const center = getShapeCenter(source);
+                    const isSelected = selectedShapeIds.includes(shape.id);
+
+                    return (
+                      <Group
+                        key={shape.id}
+                        id={shape.id}
+                        x={shape.x || 0}
+                        y={shape.y || 0}
+                        draggable
+                        ref={node => {
+                          if (node) shapeRefs.current[shape.id] = node;
+                          else delete shapeRefs.current[shape.id];
+                        }}
+                        onClick={e => {
+                          e.cancelBubble = true;
+                          if (!selectedShapeIds.includes(shape.id)) {
+                            dispatch(selectShape(shape.id));
+                          }
+                        }}
+                        onDragEnd={e => {
+                          const { x, y } = e.target.position();
+                          dispatch(updateShapePosition({ id: shape.id, x, y }));
+                        }}
+                      >
+                        <Line
+                          points={offsetPoints.map(p => [p.x - (shape.x || 0), p.y - (shape.y || 0)]).flat()}
+                          closed
+                          fill={shape.fill || "transparent"}
+                          stroke={shape.stroke || "black"}
+                          strokeWidth={shape.strokeWidth || 2}
+                          opacity={0.5}
+                        />
+                        {/* Orange handle for offset amount */}
+                        <Circle
+                          x={handlePoint.x - (shape.x || 0)}
+                          y={handlePoint.y - (shape.y || 0)}
+                          radius={8}
+                          fill="orange"
+                          draggable
+                          onDragMove={e => {
+                            const { x, y } = e.target.position();
+                            const dx = x + (shape.x || 0) - center.x;
+                            const dy = y + (shape.y || 0) - center.y;
+                            const newAmount = Math.sqrt(dx * dx + dy * dy) - getOriginalRadiusOrDistance(source, handlePoint);
+                            dispatch(updateShapePosition({
+                              id: shape.id,
+                              offsetAmount: newAmount,
+                            }));
+                          }}
+                        />
+                        {isSelected && shapeRefs.current[shape.id] && selectedTool !== "Node" && (
+                          <Transformer
+                            ref={transformerRef}
+                            nodes={selectedShapeIds.map(id => shapeRefs.current[id]).filter(Boolean)}
+                            enabledAnchors={[
+                              "top-left", "top-center", "top-right",
+                              "middle-left", "middle-right",
+                              "bottom-left", "bottom-center", "bottom-right",
+                            ]}
+                            skewEnabled={true}
+                          />
+                        )}
+                      </Group>
+                    );
+                  }
                   if (shape.type === "Clone") {
 
                     const original = shapes.find(s => s.id === shape.cloneOf);
@@ -5225,6 +5447,20 @@ const Panel = React.forwardRef(({
                   if (shape.type === "Rectangle") {
                     return (
                       <React.Fragment key={shape.id}>
+                        {shape.bloom && (
+                          <Rect
+                            x={shape.x}
+                            y={shape.y}
+                            width={shape.width}
+                            height={shape.height}
+                            fill={brightenColor(shape.fill || "#ffffff", shape.bloom.brightness)}
+                            opacity={0.5}
+                            blurRadius={shape.bloom.radius}
+                            filters={[Konva.Filters.Blur]}
+                            listening={false}
+                            globalCompositeOperation="lighter"
+                          />
+                        )}
                         {shape.mesh && shape.mesh.nodes ? (
                           <Group
                             ref={node => {
@@ -6114,6 +6350,20 @@ const Panel = React.forwardRef(({
                     const isSelected = selectedShapeIds.includes(shape.id);
                     return (
                       <React.Fragment key={shape.id}>
+                        {shape.bloom && (
+                          <Path
+                            x={shape.x}
+                            y={shape.y}
+                            data={generatePolygonPath(shape.points)}
+                            fill={shape.fill || "transparent"}
+                            stroke={shape.stroke || "#ffff99"}
+                            strokeWidth={(shape.strokeWidth || 2) + (shape.bloom.radius || 16)}
+                            opacity={0.5 * (shape.bloom.brightness || 1.5)}
+                            listening={false}
+                            filters={[window.Konva.Filters.Blur]}
+                            blurRadius={shape.bloom.radius || 16}
+                          />
+                        )}
                         <Path
                           ref={(node) => {
                             if (node) shapeRefs.current[shape.id] = node;

@@ -1,11 +1,11 @@
 import "./Topbar.css";
 import { useEffect } from "react";
 import { useSelector, useDispatch } from "react-redux";
-import { setFontSize, setFontFamily, setAlignment, setFontStyle, clearPoints, handleUnion, difference, intersection, exclusion, division, cutPath, combine, breakApart, splitPath, relinkClone, selectOriginal, fracture, flatten, inset, outset, fillBetweenPaths, simplify, reverse } from "../../Redux/Slice/toolSlice";
+import { setFontSize, setFontFamily, setAlignment, setFontStyle, clearPoints, handleUnion, difference, intersection, exclusion, division, cutPath, combine, breakApart, splitPath, relinkClone, selectOriginal, fracture, flatten, inset, outset, fillBetweenPaths, simplify, reverse, setDynamicOffsetMode, setDynamicOffsetShapeId, setDynamicOffsetAmount, createLinkedOffset, applyBloomFilter } from "../../Redux/Slice/toolSlice";
 import { setBezierOption } from "../../Redux/Slice/toolSlice";
 import { BsVectorPen } from "react-icons/bs";
 import { TbBrandSnapseed } from "react-icons/tb";
-import { FaBezierCurve, FaProjectDiagram, FaDrawPolygon, FaPlus, FaLink, FaUnlink, FaCut, FaMagnet } from "react-icons/fa";
+import { FaBezierCurve, FaProjectDiagram, FaDrawPolygon, FaPlus, FaLink, FaUnlink, FaCut, FaMagnet, FaDotCircle } from "react-icons/fa";
 import { RxCheckCircled } from "react-icons/rx";
 import { RxCrossCircled } from "react-icons/rx";
 import { MdRoundedCorner, MdOutlineVerticalAlignTop, MdOutlineAltRoute } from "react-icons/md";
@@ -178,6 +178,7 @@ const Topbar = ({
   const layers = useSelector((state) => state.tool.layers);
   const fillColor = useSelector((state) => state.tool.fillColor);
   const strokeColor = useSelector((state) => state.tool.strokeColor);
+  const dynamicOffsetMode = useSelector(state => state.tool.dynamicOffsetMode);
   const navigate = useNavigate();
 
   let selectedShapeId = useSelector((state) => state.tool.selectedShapeId);
@@ -190,6 +191,7 @@ const Topbar = ({
 
   const selectedShape =
     shapes.find((shape) => shape.id === selectedShapeId) || {};
+  console.log("topbar-id", selectedShape);
 
   const [isRenaming, setIsRenaming] = useState(false);
   const [newLayerName, setNewLayerName] = useState("");
@@ -972,6 +974,23 @@ const Topbar = ({
 
   const PathOptions = [
     { label: "Object to Path", onClick: () => dispatch(objectToPath()) },
+    {
+      label: "Object to Path", onClick: () => {
+        dispatch(setDynamicOffsetMode(!dynamicOffsetMode));
+        if (!dynamicOffsetMode && selectedShapeId) {
+          dispatch(setDynamicOffsetShapeId(selectedShapeId));
+        }
+      }
+    },
+    {
+      label: "Object to Path", onClick: () => {
+        if (selectedShapeId) {
+          dispatch(createLinkedOffset({ sourceId: selectedShapeId, offsetAmount: 20 }));
+        } else {
+          alert("Select a shape first.");
+        }
+      }
+    },
     { label: "Stroke to Path", onClick: () => dispatch(strokePath()) },
     { label: "Trace Bitemap...", onClick: handleTraceBitmap },
     "divider",
@@ -990,8 +1009,24 @@ const Topbar = ({
     "divider",
     { label: "inset", onClick: () => dispatch(inset()) },
     { label: "Outset", onClick: () => dispatch(outset()) },
-    { label: "Dynamic Offset" },
-    { label: "Linked Offset" },
+    {
+      label: "Dynamic Offset",
+      onClick: () => {
+        dispatch(setDynamicOffsetMode(!dynamicOffsetMode));
+        if (!dynamicOffsetMode && selectedShapeId) {
+          dispatch(setDynamicOffsetShapeId(selectedShapeId));
+        }
+      }
+    },
+    {
+      label: "Linked Offset", onClick: () => {
+        if (selectedShapeId) {
+          dispatch(createLinkedOffset({ sourceId: selectedShapeId, offsetAmount: 20 }));
+        } else {
+          alert("Select a shape first.");
+        }
+      }
+    },
     "divider",
     { label: "Fill Between Paths", onClick: () => dispatch(fillBetweenPaths()) },
     "divider",
@@ -1006,12 +1041,28 @@ const Topbar = ({
     {
       label: "Bevel",
       subMenu: [
-        { label: "Bloom" },
+        {
+          label: "Bloom",
+          onClick: () => {
+            if (selectedShapeId) {
+              dispatch({
+                type: "tool/applyBloomFilter",
+                payload: {
+                  shapeId: selectedShapeId,
+                  radius: 16,
+                  brightness: 1.5,
+                }
+              });
+            } else {
+              alert("Select a shape first.");
+            }
+          }
+        },
         { label: "Bright Metal" },
         { label: "Button" },
       ],
     },
-  ]
+  ];
 
   const HelpOptions = [
     { label: "Cad Manual", link: "#" },

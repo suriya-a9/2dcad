@@ -4753,6 +4753,45 @@ const Panel = React.forwardRef(({
           }
         });
         break;
+      case "blur":
+        affectedShapes.forEach(shape => {
+
+          const newBlur = Math.min((shape.blur || 0) + tweakForce, 100);
+          dispatch(updateShapePosition({ id: shape.id, blur: newBlur }));
+        });
+        break;
+      case "attract": {
+        const radius = tweakRadius || 100;
+        const force = (tweakForce || 1) * (fidelity / 100); 
+
+        affectedShapes.forEach(shape => {
+          if (Array.isArray(shape.points)) {
+            
+            const newPoints = shape.points.map(pt => {
+              const px = pt.x !== undefined ? pt.x : pt[0];
+              const py = pt.y !== undefined ? pt.y : pt[1];
+              const dx = point.x - px;
+              const dy = point.y - py;
+              const dist = Math.sqrt(dx * dx + dy * dy);
+
+              if (dist < radius) {
+                
+                const falloff = Math.cos((dist / radius) * Math.PI) * 0.5 + 0.5;
+                
+                const moveFactor = force * falloff * 0.15;
+                if (pt.x !== undefined) {
+                  return { ...pt, x: px + dx * moveFactor, y: py + dy * moveFactor };
+                } else {
+                  return [px + dx * moveFactor, py + dy * moveFactor];
+                }
+              }
+              return pt;
+            });
+            dispatch(updateShapePosition({ id: shape.id, points: newPoints }));
+          }
+        });
+        break;
+      }
       default:
         break;
     }
@@ -5385,6 +5424,9 @@ const Panel = React.forwardRef(({
                             rotation={shape.rotation || 0}
                             scaleX={shape.scaleX || 1}
                             scaleY={shape.scaleY || 1}
+                            blur={shape.blur || 0}
+                            shadowBlur={shape.blur || 0}
+                            shadowColor={shape.fill || "#fff"}
                             draggable={selectedTool !== "Node" && selectedTool !== "Mesh" && selectedTool !== "Connector"}
                             onDragMove={handleDragMove}
                             onDragEnd={(e) => handleDragEnd(e, shape.id)}
@@ -5831,6 +5873,9 @@ const Panel = React.forwardRef(({
                           draggable={selectedTool !== "Node" && selectedTool !== "Connector" && selectedTool !== "Gradient"}
                           onDragMove={handleDragMove}
                           skewX={shape.skewX || 0}
+                          blur={shape.blur || 0}
+                          shadowBlur={shape.blur || 0}
+                          shadowColor={shape.fill || "#fff"}
                           closed={false}
                           skewY={shape.skewY || 0}
                           onMouseEnter={() => {
@@ -5965,6 +6010,9 @@ const Panel = React.forwardRef(({
                           onDragMove={handleDragMove}
                           skewX={shape.skewX || 0}
                           skewY={shape.skewY || 0}
+                          blur={shape.blur || 0}
+                          shadowBlur={shape.blur || 0}
+                          shadowColor={shape.fill || "#fff"}
                           onTransformEnd={(e) => handleBezierTransformEnd(e, shape)}
                           onMouseEnter={() => {
                             if (selectedTool === "Measurement") setHoveredShape(shape);
@@ -6103,6 +6151,9 @@ const Panel = React.forwardRef(({
                           rotation={shape.rotation || 0}
                           scaleX={shape.scaleX || 1}
                           scaleY={shape.scaleY || 1}
+                          blur={shape.blur || 0}
+                          shadowBlur={shape.blur || 0}
+                          shadowColor={shape.fill || "#fff"}
                           closed
                           draggable={selectedTool !== "Node" && selectedTool !== "Connector" && selectedTool !== "Gradient"}
                           onDragMove={handleDragMove}
@@ -6196,6 +6247,9 @@ const Panel = React.forwardRef(({
                         strokeWidth={shape.strokeWidth || 2}
                         lineJoin="round"
                         lineCap="round"
+                        blur={shape.blur || 0}
+                        shadowBlur={shape.blur || 0}
+                        shadowColor={shape.fill || "#fff"}
                         rotation={shape.rotation || 0}
                         dash={getDashArray(shape.strokeStyle)}
                         scaleX={shape.scaleX || 1}
@@ -6334,6 +6388,9 @@ const Panel = React.forwardRef(({
                           scaleY={shape.scaleY || 1}
                           skewX={shape.skewX || 0}
                           skewY={shape.skewY || 0}
+                          blur={shape.blur || 0}
+                          shadowBlur={shape.blur || 0}
+                          shadowColor={shape.fill || "#fff"}
                           onMouseEnter={() => {
                             if (selectedTool === "Measurement") setHoveredShape(shape);
                           }}
@@ -6490,6 +6547,9 @@ const Panel = React.forwardRef(({
                           rotation={shape.rotation || 0}
                           scaleX={shape.scaleX || 1}
                           scaleY={shape.scaleY || 1}
+                          blur={shape.blur || 0}
+                          shadowBlur={shape.blur || 0}
+                          shadowColor={shape.fill || "#fff"}
                           offsetX={shape.width ? shape.width / 2 : 0}
                           offsetY={shape.height ? shape.height / 2 : 0}
                           skewX={shape.skewX || 0}

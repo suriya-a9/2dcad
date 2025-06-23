@@ -1,6 +1,17 @@
-@media (min-width: 1600px) and (max-width: 1921px) {
+@media (min-width: 1600px) and (max-width: 1920px) {
     .ruler.horizontal {
         top: 16% !important;
+        left: 3% !important;
+    }
+
+    .ruler.vertical {
+        left: 2% !important;
+    }
+}
+
+@media (min-width: 1921px) {
+    .ruler.horizontal {
+        top: 10% !important;
         left: 3% !important;
     }
 

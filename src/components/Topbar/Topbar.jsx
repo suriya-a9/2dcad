@@ -5,7 +5,7 @@ import { setFontSize, setFontFamily, setAlignment, setFontStyle, clearPoints, ha
 import { setBezierOption } from "../../Redux/Slice/toolSlice";
 import { BsVectorPen } from "react-icons/bs";
 import { TbBrandSnapseed } from "react-icons/tb";
-import { FaBezierCurve, FaProjectDiagram, FaDrawPolygon, FaPlus, FaLink, FaUnlink, FaCut } from "react-icons/fa";
+import { FaBezierCurve, FaProjectDiagram, FaDrawPolygon, FaPlus, FaLink, FaUnlink, FaCut, FaMagnet } from "react-icons/fa";
 import { RxCheckCircled } from "react-icons/rx";
 import { RxCrossCircled } from "react-icons/rx";
 import { MdRoundedCorner, MdOutlineVerticalAlignTop, MdOutlineAltRoute } from "react-icons/md";
@@ -247,13 +247,13 @@ const Topbar = ({
     }
   };
 
-  // const handleUndo = useCallback(() => {
-  //   dispatch(undo());
-  // }, [dispatch]);
 
-  // const handlRedo = useCallback(() => {
-  //   dispatch(redo());
-  // }, [dispatch]);
+
+
+
+
+
+
 
   const handleCut = useCallback(() => {
     dispatch(cut());
@@ -431,51 +431,51 @@ const Topbar = ({
       );
     }
   };
-  // const handleObjectToPath = () => {
-  //   if (!selectedShapeId) return;
-  //   const shape = shapes.find(s => s.id === selectedShapeId);
-  //   if (!shape) return;
 
-  //   let nodes = [];
-  //   if (shape.type === "rectangle") {
 
-  //     const x = shape.x ?? 0;
-  //     const y = shape.y ?? 0;
-  //     const w = shape.width ?? 40;
-  //     const h = shape.height ?? 40;
-  //     nodes = [
-  //       { x: x, y: y },
-  //       { x: x + w, y: y },
-  //       { x: x + w, y: y + h },
-  //       { x: x, y: y + h },
-  //       { x: x, y: y }
-  //     ];
-  //   } else if (shape.type === "circle" || shape.type === "ellipse") {
 
-  //     const cx = (shape.x ?? 0) + (shape.width ?? shape.radius ?? 40) / 2;
-  //     const cy = (shape.y ?? 0) + (shape.height ?? shape.radius ?? 40) / 2;
-  //     const rx = (shape.width ?? shape.radius ?? 40) / 2;
-  //     const ry = (shape.height ?? shape.radius ?? 40) / 2;
-  //     const points = 8;
-  //     for (let i = 0; i < points; i++) {
-  //       const angle = (2 * Math.PI * i) / points;
-  //       nodes.push({
-  //         x: cx + rx * Math.cos(angle),
-  //         y: cy + ry * Math.sin(angle)
-  //       });
-  //     }
-  //     nodes.push(nodes[0]);
-  //   } else {
 
-  //     return;
-  //   }
 
-  //   dispatch(updateShapePosition({
-  //     id: selectedShapeId,
-  //     type: "path",
-  //     nodes
-  //   }));
-  // };
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
   const handleTraceBitmap = async () => {
     const selectedShape = shapes.find(s => s.id === selectedShapeId && s.type === "Image");
     if (!selectedShape) {
@@ -2716,6 +2716,8 @@ function TweakTopbar() {
     { key: "roughen", label: "Roughen parts", icon: <GiJigsawBox /> },
     { key: "paint", label: "Paint the tool", icon: <GiPaintBrush /> },
     { key: "jitterColor", label: "Jitter the colors", icon: <FaPalette /> },
+    { key: "blur", label: "Blur objects", icon: <FaRegDotCircle /> },
+    { key: "attract", label: "Attract parts of objects", icon: <FaMagnet /> }
   ];
 
   return (

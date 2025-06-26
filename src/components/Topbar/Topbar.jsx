@@ -179,6 +179,9 @@ const Topbar = ({
   const fillColor = useSelector((state) => state.tool.fillColor);
   const strokeColor = useSelector((state) => state.tool.strokeColor);
   const dynamicOffsetMode = useSelector(state => state.tool.dynamicOffsetMode);
+  const [showFontPanel, setShowFontPanel] = useState(false);
+  const [showSvgFontEditor, setShowSvgFontEditor] = useState(false);
+  const [showUnicodePanel, setShowUnicodePanel] = useState(false);
   const navigate = useNavigate();
 
   let selectedShapeId = useSelector((state) => state.tool.selectedShapeId);
@@ -974,23 +977,6 @@ const Topbar = ({
 
   const PathOptions = [
     { label: "Object to Path", onClick: () => dispatch(objectToPath()) },
-    {
-      label: "Object to Path", onClick: () => {
-        dispatch(setDynamicOffsetMode(!dynamicOffsetMode));
-        if (!dynamicOffsetMode && selectedShapeId) {
-          dispatch(setDynamicOffsetShapeId(selectedShapeId));
-        }
-      }
-    },
-    {
-      label: "Object to Path", onClick: () => {
-        if (selectedShapeId) {
-          dispatch(createLinkedOffset({ sourceId: selectedShapeId, offsetAmount: 20 }));
-        } else {
-          alert("Select a shape first.");
-        }
-      }
-    },
     { label: "Stroke to Path", onClick: () => dispatch(strokePath()) },
     { label: "Trace Bitemap...", onClick: handleTraceBitmap },
     "divider",
@@ -1036,6 +1022,51 @@ const Topbar = ({
     { label: "Paste Path Effect" },
     { label: "Remove Path Effect" },
   ];
+  const handlePutOnPath = () => {
+    const selectedShapes = shapes.filter(s => s.selected || selectedShapeIds?.includes(s.id));
+    const textShape = selectedShapes.find(s => s.type === "Text");
+    let pathShape = selectedShapes.find(s => s.type === "Path" || s.path);
+
+
+    if (!pathShape) {
+      const rect = selectedShapes.find(s => s.type === "Rectangle");
+      if (rect) {
+        dispatch(objectToPath({ id: rect.id }));
+        alert("Converted rectangle to path. Please try 'Put on path' again.");
+        return;
+      }
+    }
+
+    if (!textShape || !pathShape) {
+      alert("Select both a text object and a path object.");
+      return;
+    }
+
+    dispatch(updateShapePosition({
+      id: textShape.id,
+      putOnPathId: pathShape.id
+    }));
+
+    alert("Text is now put on path. (Rendering must support text-on-path)");
+  };
+  const TextOptions = [
+    { label: "Text and font", onClick: () => setShowFontPanel(true) },
+    { label: "SVG Font Editor", onClick: () => setShowSvgFontEditor(true) },
+    { label: "Unicode characters", onClick: () => setShowUnicodePanel(true) },
+    "divider",
+    { label: "Put on path", onClick: handlePutOnPath },
+    { label: "Remove from path", link: "#" },
+    "divider",
+    { label: "Flow into frame", link: "#" },
+    { label: "Set subractions frame", link: "#" },
+    { label: "Unflow", link: "#" },
+    { label: "Convert to text", link: "#" },
+    "divider",
+    { label: "Remove manual kerns", link: "#" },
+    { label: "Text to glyps", link: "#" },
+    "divider",
+    { label: "Check Spelling", link: "#" },
+  ];
 
   const FilterOptions = [
     {
@@ -1072,627 +1103,746 @@ const Topbar = ({
     { label: "About Cad", link: "#" },
   ];
 
+  let fontPanelModal = null;
+  if (showFontPanel) {
+    fontPanelModal = (
+      <div
+        style={{
+          position: "fixed",
+          top: 100,
+          left: "50%",
+          transform: "translateX(-50%)",
+          background: "#fff",
+          border: "1px solid #ccc",
+          borderRadius: 8,
+          zIndex: 9999,
+          padding: 24,
+          minWidth: 340,
+          boxShadow: "0 8px 32px rgba(0,0,0,0.18)"
+        }}
+      >
+        <h4 style={{ marginBottom: 16 }}>Text and Font</h4>
+        <FontPanel
+          selectedShape={selectedShape}
+          selectedShapeId={selectedShapeId}
+          onClose={() => setShowFontPanel(false)}
+        />
+      </div>
+    );
+  }
+
+  let svgFontEditorModal = null;
+  if (showSvgFontEditor) {
+    svgFontEditorModal = (
+      <div
+        style={{
+          position: "fixed",
+          top: 120,
+          left: "50%",
+          transform: "translateX(-50%)",
+          background: "#fff",
+          border: "1px solid #ccc",
+          borderRadius: 8,
+          zIndex: 10000,
+          padding: 24,
+          minWidth: 480,
+          minHeight: 400,
+          boxShadow: "0 8px 32px rgba(0,0,0,0.18)"
+        }}
+      >
+        <h4 style={{ marginBottom: 16 }}>SVG Font Editor</h4>
+        <SvgFontEditor onClose={() => setShowSvgFontEditor(false)} />
+      </div>
+    );
+  }
+
+  let unicodePanelModal = null;
+  if (showUnicodePanel) {
+    unicodePanelModal = (
+      <div
+        style={{
+          position: "fixed",
+          top: 140,
+          left: "50%",
+          transform: "translateX(-50%)",
+          background: "#fff",
+          border: "1px solid #ccc",
+          borderRadius: 8,
+          zIndex: 10000,
+          padding: 24,
+          minWidth: 540,
+          minHeight: 400,
+          boxShadow: "0 8px 32px rgba(0,0,0,0.18)"
+        }}
+      >
+        <h4 style={{ marginBottom: 16 }}>Unicode Characters</h4>
+        <UnicodePanel onClose={() => setShowUnicodePanel(false)} />
+      </div>
+    );
+  }
+
   return (
-    <div>
-      <nav className="navbar navbar-expand-lg">
-        <div className="container-fluid">
-          <div className="row">
-            <div className="col-12">
-              <div className="collapse navbar-collapse">
-                <ul className="navbar-nav" style={{ cursor: "pointer" }}>
+    <>
+      {fontPanelModal}
+      {svgFontEditorModal}
+      {unicodePanelModal}
+      <div>
+        <nav className="navbar navbar-expand-lg">
+          <div className="container-fluid">
+            <div className="row">
+              <div className="col-12">
+                <div className="collapse navbar-collapse">
+                  <ul className="navbar-nav" style={{ cursor: "pointer" }}>
 
-                  <li className="nav-item dropdown">
-                    <a
-                      className="nav-link dropdown-toggle"
-                      href="#"
-                      role="button"
-                      data-bs-toggle="dropdown"
-                      aria-expanded="false"
-                    >
-                      File
-                    </a>
-                    <ul className="dropdown-menu">
-                      <li>
-                        <a
-                          className="dropdown-item"
-                          onClick={handleCreateNewPage}
-                        >
-                          New...
-                        </a>
-                      </li>
-                      <li>
-                        <a className="dropdown-item">New Form Template</a>
-                      </li>
-                      <li>
-                        <a
-                          className="dropdown-item"
-                          onClick={handleUploadClick}
-                        >
-                          Open...
-                        </a>
-                      </li>
-                      <li>
-                        <a className="dropdown-item">Open Recent</a>
-                      </li>
-                      <hr style={{ margin: "0px" }} />
-                      <li>
-                        <a className="dropdown-item">Revert</a>
-                      </li>
-
-                      <input
-                        type="file"
-                        accept="image/*"
-                        ref={fileInputRef}
-                        style={{ display: "none" }}
-                        onChange={haleUploadFile}
-                        multiple
-                      />
-                      <li>
-                        <a className="dropdown-item" onClick={handleSaveClick}>
-                          Save...
-                        </a>
-                      </li>
-                      <li>
-                        <a
-                          className="dropdown-item"
-                          onClick={handleSaveAsClick}
-                        >
-                          Save As...
-                        </a>
-                      </li>
-                      <hr style={{ margin: "0px" }} />
-                      <li>
-                        <a
-                          className="dropdown-item"
-                          onClick={handleImportClick}
-                        >
-                          Import...
-                        </a>
-                      </li>
-                      <input
-                        type="file"
-                        accept="image/*"
-                        ref={fileInputRef}
-                        style={{ display: "none" }}
-                        onChange={handleFileChange}
-                        multiple
-                      />
-                      <li>
-                        <a className="dropdown-item" href="#">
-                          Import Web Image...
-                        </a>
-                      </li>
-                      <li className="paste-dropdown">
-                        <div className="icon-div">
-                          <a className="dropdown-item">Export</a>
-                          <MdOutlineArrowRight style={{ fontSize: "25px" }} />
-                        </div>
-                        <ul className="paste-dropdown-item">
-                          <li>
-                            <a
-                              className="dropdown-item"
-                              onClick={() => handleSave("png")}
-                            >
-                              Export as PNG
-                            </a>
-                          </li>
-                          <li>
-                            <a
-                              className="dropdown-item"
-                              onClick={() => handleSave("jpg")}
-                            >
-                              Export as JPG
-                            </a>
-                          </li>
-                          <li>
-                            <a
-                              className="dropdown-item"
-                              onClick={() => handleSave("svg")}
-                            >
-                              Export as SVG
-                            </a>
-                          </li>
-                          <li>
-                            <a
-                              className="dropdown-item"
-                              onClick={() => handleSave("pdf")}
-                            >
-                              Export as PDF
-                            </a>
-                          </li>
-                          <li>
-                            <a
-                              className="dropdown-item"
-                              onClick={() => handleSave("webp")}
-                            >
-                              Export as WEBP
-                            </a>
-                          </li>
-                          <li>
-                            <a
-                              className="dropdown-item"
-                              onClick={() => handleSave("eps")}
-                            >
-                              Export as EPS
-                            </a>
-                          </li>
-                          <li>
-                            <a
-                              className="dropdown-item"
-                              onClick={() => handleSave("avif")}
-                            >
-                              Export as AVIF
-                            </a>
-                          </li>
-                        </ul>
-                      </li>
-                      <hr style={{ margin: "0px" }} />
-                      <li>
-                        <a
-                          className="dropdown-item"
-                          onClick={handleDownloadPdf}
-                        >
-                          Print...
-                        </a>
-                      </li>
-                      <hr style={{ margin: "0px" }} />
-                      <li>
-                        <a className="dropdown-item" onClick={handleCleanUp}>
-                          Clean Up Document
-                        </a>
-                      </li>
-                      <li>
-                        <a className="dropdown-item">Document Resources</a>
-                      </li>
-                      <hr style={{ margin: "0px" }} />
-                      <li>
-                        <a className="dropdown-item" onClick={handleCleanUp}>
-                          Document Properties
-                        </a>
-                      </li>
-                      <hr style={{ margin: "0px" }} />
-                      <li>
-                        <a className="dropdown-item" href="#">
-                          Close...
-                        </a>
-                      </li>
-                      <li>
-                        <a className="dropdown-item" onClick={handleQuit}>
-                          Quit...
-                        </a>
-                      </li>
-                    </ul>
-                  </li>
-
-
-                  <li className="nav-item dropdown">
-                    <a
-                      className="nav-link dropdown-toggle"
-                      href="#"
-                      role="button"
-                      data-bs-toggle="dropdown"
-                      aria-expanded="false"
-                    >
-                      Edit
-                    </a>
-                    <ul className="dropdown-menu" style={{ cursor: "pointer" }}>
-                      {EditOptions.map((item) => (
-                        <li
-                          key={item.id}
-                          className={item.subMenu ? "paste-dropdown" : ""}
-                        >
-                          <div className="icon-div">
-                            <a className="dropdown-item" onClick={item.onClick}>
-                              {item.label}
-                            </a>
-                            {item.subMenu && (
-                              <MdOutlineArrowRight
-                                style={{ fontSize: "25px" }}
-                              />
-                            )}
-                          </div>
-
-                          {item.subMenu && (
-                            <ul className="paste-dropdown-item">
-                              {item.subMenu.map((sub) => (
-                                <li key={sub.id}>
-                                  <a href="#"
-                                    onClick={(e) => {
-                                      e.preventDefault();
-                                      if (sub.onClick) sub.onClick();
-                                    }}
-                                  >{sub.label}</a>
-                                </li>
-                              ))}
-                            </ul>
-                          )}
+                    <li className="nav-item dropdown">
+                      <a
+                        className="nav-link dropdown-toggle"
+                        href="#"
+                        role="button"
+                        data-bs-toggle="dropdown"
+                        aria-expanded="false"
+                      >
+                        File
+                      </a>
+                      <ul className="dropdown-menu">
+                        <li>
+                          <a
+                            className="dropdown-item"
+                            onClick={handleCreateNewPage}
+                          >
+                            New...
+                          </a>
                         </li>
-                      ))}
-                    </ul>
-                  </li>
+                        <li>
+                          <a className="dropdown-item">New Form Template</a>
+                        </li>
+                        <li>
+                          <a
+                            className="dropdown-item"
+                            onClick={handleUploadClick}
+                          >
+                            Open...
+                          </a>
+                        </li>
+                        <li>
+                          <a className="dropdown-item">Open Recent</a>
+                        </li>
+                        <hr style={{ margin: "0px" }} />
+                        <li>
+                          <a className="dropdown-item">Revert</a>
+                        </li>
 
-
-                  <li className="nav-item dropdown">
-                    <a
-                      className="nav-link dropdown-toggle"
-                      href="#"
-                      role="button"
-                      data-bs-toggle="dropdown"
-                      aria-expanded="false"
-                    >
-                      View
-                    </a>
-                    <ul className="dropdown-menu" style={{ cursor: "pointer" }}>
-                      {ViewOptions.map((item) => {
-                        if (item.type === "separator") {
-                          return <hr key={item.id} style={{ margin: "0px" }} />;
-                        }
-
-                        if (item.type === "checkbox") {
-                          return (
-                            <li key={item.id} className="paste-dropdown">
-                              <div className="d-flex">
-                                <input
-                                  type="checkbox"
-                                  id={item.id}
-                                  name={item.name}
-                                  value={item.value}
-                                  style={{ marginLeft: "5px" }}
-                                />
-                                <a
-                                  className="dropdown-item"
-                                  style={{ paddingLeft: "12px" }}
-                                >
-                                  <label
-                                    htmlFor={item.id}
-                                    style={{ fontSize: "13px" }}
-                                  >
-                                    {item.label}
-                                  </label>
-                                </a>
-                              </div>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          ref={fileInputRef}
+                          style={{ display: "none" }}
+                          onChange={haleUploadFile}
+                          multiple
+                        />
+                        <li>
+                          <a className="dropdown-item" onClick={handleSaveClick}>
+                            Save...
+                          </a>
+                        </li>
+                        <li>
+                          <a
+                            className="dropdown-item"
+                            onClick={handleSaveAsClick}
+                          >
+                            Save As...
+                          </a>
+                        </li>
+                        <hr style={{ margin: "0px" }} />
+                        <li>
+                          <a
+                            className="dropdown-item"
+                            onClick={handleImportClick}
+                          >
+                            Import...
+                          </a>
+                        </li>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          ref={fileInputRef}
+                          style={{ display: "none" }}
+                          onChange={handleFileChange}
+                          multiple
+                        />
+                        <li>
+                          <a className="dropdown-item" href="#">
+                            Import Web Image...
+                          </a>
+                        </li>
+                        <li className="paste-dropdown">
+                          <div className="icon-div">
+                            <a className="dropdown-item">Export</a>
+                            <MdOutlineArrowRight style={{ fontSize: "25px" }} />
+                          </div>
+                          <ul className="paste-dropdown-item">
+                            <li>
+                              <a
+                                className="dropdown-item"
+                                onClick={() => handleSave("png")}
+                              >
+                                Export as PNG
+                              </a>
                             </li>
-                          );
-                        }
+                            <li>
+                              <a
+                                className="dropdown-item"
+                                onClick={() => handleSave("jpg")}
+                              >
+                                Export as JPG
+                              </a>
+                            </li>
+                            <li>
+                              <a
+                                className="dropdown-item"
+                                onClick={() => handleSave("svg")}
+                              >
+                                Export as SVG
+                              </a>
+                            </li>
+                            <li>
+                              <a
+                                className="dropdown-item"
+                                onClick={() => handleSave("pdf")}
+                              >
+                                Export as PDF
+                              </a>
+                            </li>
+                            <li>
+                              <a
+                                className="dropdown-item"
+                                onClick={() => handleSave("webp")}
+                              >
+                                Export as WEBP
+                              </a>
+                            </li>
+                            <li>
+                              <a
+                                className="dropdown-item"
+                                onClick={() => handleSave("eps")}
+                              >
+                                Export as EPS
+                              </a>
+                            </li>
+                            <li>
+                              <a
+                                className="dropdown-item"
+                                onClick={() => handleSave("avif")}
+                              >
+                                Export as AVIF
+                              </a>
+                            </li>
+                          </ul>
+                        </li>
+                        <hr style={{ margin: "0px" }} />
+                        <li>
+                          <a
+                            className="dropdown-item"
+                            onClick={handleDownloadPdf}
+                          >
+                            Print...
+                          </a>
+                        </li>
+                        <hr style={{ margin: "0px" }} />
+                        <li>
+                          <a className="dropdown-item" onClick={handleCleanUp}>
+                            Clean Up Document
+                          </a>
+                        </li>
+                        <li>
+                          <a className="dropdown-item">Document Resources</a>
+                        </li>
+                        <hr style={{ margin: "0px" }} />
+                        <li>
+                          <a className="dropdown-item" onClick={handleCleanUp}>
+                            Document Properties
+                          </a>
+                        </li>
+                        <hr style={{ margin: "0px" }} />
+                        <li>
+                          <a className="dropdown-item" href="#">
+                            Close...
+                          </a>
+                        </li>
+                        <li>
+                          <a className="dropdown-item" onClick={handleQuit}>
+                            Quit...
+                          </a>
+                        </li>
+                      </ul>
+                    </li>
 
-                        return (
-                          <li key={item.id} className="paste-dropdown">
+
+                    <li className="nav-item dropdown">
+                      <a
+                        className="nav-link dropdown-toggle"
+                        href="#"
+                        role="button"
+                        data-bs-toggle="dropdown"
+                        aria-expanded="false"
+                      >
+                        Edit
+                      </a>
+                      <ul className="dropdown-menu" style={{ cursor: "pointer" }}>
+                        {EditOptions.map((item) => (
+                          <li
+                            key={item.id}
+                            className={item.subMenu ? "paste-dropdown" : ""}
+                          >
                             <div className="icon-div">
-                              <a className="dropdown-item">{item.label}</a>
-                              {item.icon}
+                              <a className="dropdown-item" onClick={item.onClick}>
+                                {item.label}
+                              </a>
+                              {item.subMenu && (
+                                <MdOutlineArrowRight
+                                  style={{ fontSize: "25px" }}
+                                />
+                              )}
                             </div>
-                            {item.subItems && (
+
+                            {item.subMenu && (
                               <ul className="paste-dropdown-item">
-                                {item.subItems.map((subItem) => {
-                                  if (subItem.type === "separator") {
-                                    return (
-                                      <hr
-                                        key={subItem.id}
-                                        style={{ margin: "0px" }}
-                                      />
-                                    );
-                                  }
-
-                                  if (subItem.type === "radio") {
-                                    return (
-                                      <li
-                                        key={subItem.id}
-                                        style={{ paddingLeft: "20px" }}
-                                      >
-                                        <input
-                                          type="radio"
-                                          id={subItem.id}
-                                          name={subItem.name}
-                                          value={subItem.value}
-                                        />
-                                        <label htmlFor={subItem.id}>
-                                          {subItem.label}
-                                        </label>
-                                      </li>
-                                    );
-                                  }
-
-                                  if (subItem.type === "checkbox") {
-                                    return (
-                                      <li
-                                        key={subItem.id}
-                                        style={{ paddingLeft: "20px" }}
-                                      >
-                                        <input
-                                          type="checkbox"
-                                          id={subItem.id}
-                                          name={subItem.name}
-                                          value={subItem.value}
-                                        />
-                                        <label htmlFor={subItem.id}>
-                                          {subItem.label}
-                                        </label>
-                                      </li>
-                                    );
-                                  }
-
-                                  return (
-                                    <li key={subItem.id}>
-                                      <a onClick={subItem.onClick}>
-                                        {subItem.label}
-                                      </a>
-                                    </li>
-                                  );
-                                })}
+                                {item.subMenu.map((sub) => (
+                                  <li key={sub.id}>
+                                    <a href="#"
+                                      onClick={(e) => {
+                                        e.preventDefault();
+                                        if (sub.onClick) sub.onClick();
+                                      }}
+                                    >{sub.label}</a>
+                                  </li>
+                                ))}
                               </ul>
                             )}
                           </li>
-                        );
-                      })}
-                    </ul>
-                  </li>
+                        ))}
+                      </ul>
+                    </li>
 
-                  <li
-                    className="nav-item dropdown"
-                    style={{ display: "block" }}
-                  >
-                    <a
-                      className="nav-link dropdown-toggle"
-                      href="#"
-                      role="button"
-                      data-bs-toggle="dropdown"
-                      aria-expanded="false"
+
+                    <li className="nav-item dropdown">
+                      <a
+                        className="nav-link dropdown-toggle"
+                        href="#"
+                        role="button"
+                        data-bs-toggle="dropdown"
+                        aria-expanded="false"
+                      >
+                        View
+                      </a>
+                      <ul className="dropdown-menu" style={{ cursor: "pointer" }}>
+                        {ViewOptions.map((item) => {
+                          if (item.type === "separator") {
+                            return <hr key={item.id} style={{ margin: "0px" }} />;
+                          }
+
+                          if (item.type === "checkbox") {
+                            return (
+                              <li key={item.id} className="paste-dropdown">
+                                <div className="d-flex">
+                                  <input
+                                    type="checkbox"
+                                    id={item.id}
+                                    name={item.name}
+                                    value={item.value}
+                                    style={{ marginLeft: "5px" }}
+                                  />
+                                  <a
+                                    className="dropdown-item"
+                                    style={{ paddingLeft: "12px" }}
+                                  >
+                                    <label
+                                      htmlFor={item.id}
+                                      style={{ fontSize: "13px" }}
+                                    >
+                                      {item.label}
+                                    </label>
+                                  </a>
+                                </div>
+                              </li>
+                            );
+                          }
+
+                          return (
+                            <li key={item.id} className="paste-dropdown">
+                              <div className="icon-div">
+                                <a className="dropdown-item">{item.label}</a>
+                                {item.icon}
+                              </div>
+                              {item.subItems && (
+                                <ul className="paste-dropdown-item">
+                                  {item.subItems.map((subItem) => {
+                                    if (subItem.type === "separator") {
+                                      return (
+                                        <hr
+                                          key={subItem.id}
+                                          style={{ margin: "0px" }}
+                                        />
+                                      );
+                                    }
+
+                                    if (subItem.type === "radio") {
+                                      return (
+                                        <li
+                                          key={subItem.id}
+                                          style={{ paddingLeft: "20px" }}
+                                        >
+                                          <input
+                                            type="radio"
+                                            id={subItem.id}
+                                            name={subItem.name}
+                                            value={subItem.value}
+                                          />
+                                          <label htmlFor={subItem.id}>
+                                            {subItem.label}
+                                          </label>
+                                        </li>
+                                      );
+                                    }
+
+                                    if (subItem.type === "checkbox") {
+                                      return (
+                                        <li
+                                          key={subItem.id}
+                                          style={{ paddingLeft: "20px" }}
+                                        >
+                                          <input
+                                            type="checkbox"
+                                            id={subItem.id}
+                                            name={subItem.name}
+                                            value={subItem.value}
+                                          />
+                                          <label htmlFor={subItem.id}>
+                                            {subItem.label}
+                                          </label>
+                                        </li>
+                                      );
+                                    }
+
+                                    return (
+                                      <li key={subItem.id}>
+                                        <a onClick={subItem.onClick}>
+                                          {subItem.label}
+                                        </a>
+                                      </li>
+                                    );
+                                  })}
+                                </ul>
+                              )}
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    </li>
+
+                    <li
+                      className="nav-item dropdown"
+                      style={{ display: "block" }}
                     >
-                      Layer
-                    </a>
-                    <ul className="dropdown-menu" style={{ cursor: "pointer" }}>
-                      {LayerOptions.map((item) =>
-                        item.type === "divider" ? (
-                          <hr key={item.id} style={{ margin: "0px" }} />
-                        ) : (
-                          <li key={item.id}>
-                            {item.href ? (
-                              <a href={item.href} className="dropdown-item">
-                                {item.label}
-                              </a>
-                            ) : (
-                              <a
-                                className="dropdown-item"
-                                onClick={item.onClick}
-                              >
-                                {item.label}
-                              </a>
-                            )}
-                          </li>
-                        )
-                      )}
-                    </ul>
-                  </li>
+                      <a
+                        className="nav-link dropdown-toggle"
+                        href="#"
+                        role="button"
+                        data-bs-toggle="dropdown"
+                        aria-expanded="false"
+                      >
+                        Layer
+                      </a>
+                      <ul className="dropdown-menu" style={{ cursor: "pointer" }}>
+                        {LayerOptions.map((item) =>
+                          item.type === "divider" ? (
+                            <hr key={item.id} style={{ margin: "0px" }} />
+                          ) : (
+                            <li key={item.id}>
+                              {item.href ? (
+                                <a href={item.href} className="dropdown-item">
+                                  {item.label}
+                                </a>
+                              ) : (
+                                <a
+                                  className="dropdown-item"
+                                  onClick={item.onClick}
+                                >
+                                  {item.label}
+                                </a>
+                              )}
+                            </li>
+                          )
+                        )}
+                      </ul>
+                    </li>
 
 
-                  <li
-                    className="nav-item dropdown"
-                    style={{ display: "block" }}
-                  >
-                    <a
-                      className="nav-link dropdown-toggle"
-                      href="#"
-                      role="button"
-                      data-bs-toggle="dropdown"
-                      aria-expanded="false"
+                    <li
+                      className="nav-item dropdown"
+                      style={{ display: "block" }}
                     >
-                      Object
-                    </a>
-                    <ul className="dropdown-menu" style={{ cursor: "pointer" }}>
-                      {ObjectOptions.map((item, index) =>
-                        item === "divider" ? (
-                          <hr key={index} style={{ margin: "0px" }} />
-                        ) : item.subMenu ? (
-                          <li key={index} className="paste-dropdown">
-                            <div className="icon-div">
-                              <a href="#" className="dropdown-item">
+                      <a
+                        className="nav-link dropdown-toggle"
+                        href="#"
+                        role="button"
+                        data-bs-toggle="dropdown"
+                        aria-expanded="false"
+                      >
+                        Object
+                      </a>
+                      <ul className="dropdown-menu" style={{ cursor: "pointer" }}>
+                        {ObjectOptions.map((item, index) =>
+                          item === "divider" ? (
+                            <hr key={index} style={{ margin: "0px" }} />
+                          ) : item.subMenu ? (
+                            <li key={index} className="paste-dropdown">
+                              <div className="icon-div">
+                                <a href="#" className="dropdown-item">
+                                  {item.label}
+                                </a>
+                                <MdOutlineArrowRight
+                                  style={{ fontSize: "25px" }}
+                                />
+                              </div>
+                              <ul className="paste-dropdown-item">
+                                {item.subMenu.map((subItem, subIndex) => (
+                                  <li key={subIndex}>
+                                    <a href="#">{subItem.label}</a>
+                                  </li>
+                                ))}
+                              </ul>
+                            </li>
+                          ) : (
+                            <li key={index}>
+                              <a className="dropdown-item" onClick={item.onClick}>
                                 {item.label}
                               </a>
-                              <MdOutlineArrowRight
-                                style={{ fontSize: "25px" }}
-                              />
-                            </div>
-                            <ul className="paste-dropdown-item">
-                              {item.subMenu.map((subItem, subIndex) => (
-                                <li key={subIndex}>
-                                  <a href="#">{subItem.label}</a>
-                                </li>
-                              ))}
-                            </ul>
-                          </li>
-                        ) : (
+                            </li>
+                          )
+                        )}
+                      </ul>
+                    </li>
+                    <li
+                      className="nav-item dropdown"
+                      style={{ display: "block" }}
+                    >
+                      <a
+                        className="nav-link dropdown-toggle"
+                        href="#"
+                        role="button"
+                        data-bs-toggle="dropdown"
+                        aria-expanded="false"
+                      >
+                        Path
+                      </a>
+                      <ul className="dropdown-menu" style={{ cursor: "pointer" }}>
+                        {PathOptions.map((item) =>
+                          item.type === "divider" ? (
+                            <hr key={item.id} style={{ margin: "0px" }} />
+                          ) : (
+                            <li key={item.id}>
+                              {item.href ? (
+                                <a href={item.href} className="dropdown-item">
+                                  {item.label}
+                                </a>
+                              ) : (
+                                <a
+                                  className="dropdown-item"
+                                  onClick={item.onClick}
+                                >
+                                  {item.label}
+                                </a>
+                              )}
+                            </li>
+                          )
+                        )}
+                      </ul>
+                    </li>
+                    <li
+                      className="nav-item dropdown"
+                      style={{ display: "block" }}
+                    >
+                      <a
+                        className="nav-link dropdown-toggle"
+                        href="#"
+                        role="button"
+                        data-bs-toggle="dropdown"
+                        aria-expanded="false"
+                      >
+                        Text
+                      </a>
+                      <ul className="dropdown-menu" style={{ cursor: "pointer" }}>
+                        {TextOptions.map((item) =>
+                          item.type === "divider" ? (
+                            <hr key={item.id} style={{ margin: "0px" }} />
+                          ) : (
+                            <li key={item.id}>
+                              {item.href ? (
+                                <a href={item.href} className="dropdown-item">
+                                  {item.label}
+                                </a>
+                              ) : (
+                                <a
+                                  className="dropdown-item"
+                                  onClick={item.onClick}
+                                >
+                                  {item.label}
+                                </a>
+                              )}
+                            </li>
+                          )
+                        )}
+                      </ul>
+                    </li>
+                    <li
+                      className="nav-item dropdown"
+                      style={{ display: "block" }}
+                    >
+                      <a
+                        className="nav-link dropdown-toggle"
+                        href="#"
+                        role="button"
+                        data-bs-toggle="dropdown"
+                        aria-expanded="false"
+                      >
+                        Filter
+                      </a>
+                      <ul className="dropdown-menu" style={{ cursor: "pointer" }}>
+                        {FilterOptions.map((item, index) =>
+                          item === "divider" ? (
+                            <hr key={index} style={{ margin: "0px" }} />
+                          ) : item.subMenu ? (
+                            <li key={index} className="paste-dropdown">
+                              <div className="icon-div">
+                                <a href="#" className="dropdown-item">
+                                  {item.label}
+                                </a>
+                                <MdOutlineArrowRight
+                                  style={{ fontSize: "25px" }}
+                                />
+                              </div>
+                              <ul className="paste-dropdown-item">
+                                {item.subMenu.map((subItem, subIndex) => (
+                                  <li key={subIndex}>
+                                    <a href="#">{subItem.label}</a>
+                                  </li>
+                                ))}
+                              </ul>
+                            </li>
+                          ) : (
+                            <li key={index}>
+                              <a className="dropdown-item" onClick={item.onClick}>
+                                {item.label}
+                              </a>
+                            </li>
+                          )
+                        )}
+                      </ul>
+                    </li>
+                    <li
+                      className="nav-item dropdown"
+                      style={{ display: "block" }}
+                    >
+                      <a
+                        className="nav-link dropdown-toggle"
+                        href="#"
+                        role="button"
+                        data-bs-toggle="dropdown"
+                        aria-expanded="false"
+                      >
+                        Help
+                      </a>
+                      <ul className="dropdown-menu">
+                        {HelpOptions.map((item, index) => (
                           <li key={index}>
-                            <a className="dropdown-item" onClick={item.onClick}>
+                            <a className="dropdown-item" href={item.link}>
                               {item.label}
                             </a>
                           </li>
-                        )
-                      )}
-                    </ul>
-                  </li>
-                  <li
-                    className="nav-item dropdown"
-                    style={{ display: "block" }}
-                  >
-                    <a
-                      className="nav-link dropdown-toggle"
-                      href="#"
-                      role="button"
-                      data-bs-toggle="dropdown"
-                      aria-expanded="false"
-                    >
-                      Path
-                    </a>
-                    <ul className="dropdown-menu" style={{ cursor: "pointer" }}>
-                      {PathOptions.map((item) =>
-                        item.type === "divider" ? (
-                          <hr key={item.id} style={{ margin: "0px" }} />
-                        ) : (
-                          <li key={item.id}>
-                            {item.href ? (
-                              <a href={item.href} className="dropdown-item">
-                                {item.label}
-                              </a>
-                            ) : (
-                              <a
-                                className="dropdown-item"
-                                onClick={item.onClick}
-                              >
-                                {item.label}
-                              </a>
-                            )}
-                          </li>
-                        )
-                      )}
-                    </ul>
-                  </li>
-                  <li
-                    className="nav-item dropdown"
-                    style={{ display: "block" }}
-                  >
-                    <a
-                      className="nav-link dropdown-toggle"
-                      href="#"
-                      role="button"
-                      data-bs-toggle="dropdown"
-                      aria-expanded="false"
-                    >
-                      Filter
-                    </a>
-                    <ul className="dropdown-menu" style={{ cursor: "pointer" }}>
-                      {FilterOptions.map((item, index) =>
-                        item === "divider" ? (
-                          <hr key={index} style={{ margin: "0px" }} />
-                        ) : item.subMenu ? (
-                          <li key={index} className="paste-dropdown">
-                            <div className="icon-div">
-                              <a href="#" className="dropdown-item">
-                                {item.label}
-                              </a>
-                              <MdOutlineArrowRight
-                                style={{ fontSize: "25px" }}
-                              />
-                            </div>
-                            <ul className="paste-dropdown-item">
-                              {item.subMenu.map((subItem, subIndex) => (
-                                <li key={subIndex}>
-                                  <a href="#">{subItem.label}</a>
-                                </li>
-                              ))}
-                            </ul>
-                          </li>
-                        ) : (
-                          <li key={index}>
-                            <a className="dropdown-item" onClick={item.onClick}>
-                              {item.label}
-                            </a>
-                          </li>
-                        )
-                      )}
-                    </ul>
-                  </li>
-                  <li
-                    className="nav-item dropdown"
-                    style={{ display: "block" }}
-                  >
-                    <a
-                      className="nav-link dropdown-toggle"
-                      href="#"
-                      role="button"
-                      data-bs-toggle="dropdown"
-                      aria-expanded="false"
-                    >
-                      Help
-                    </a>
-                    <ul className="dropdown-menu">
-                      {HelpOptions.map((item, index) => (
-                        <li key={index}>
-                          <a className="dropdown-item" href={item.link}>
-                            {item.label}
-                          </a>
-                        </li>
-                      ))}
-                    </ul>
-                  </li>
+                        ))}
+                      </ul>
+                    </li>
 
-                </ul>
+                  </ul>
+                </div>
               </div>
             </div>
           </div>
+        </nav >
+        <div className="container-fluid top-bar">
+          <div className="row">
+            {isRenaming ? (
+              <input
+                type="text"
+                value={newLayerName}
+                onChange={handleLayerNameChange}
+                onKeyDown={handleLayerNameSubmit}
+                onBlur={() => setIsRenaming(false)}
+                placeholder="Enter new layer name"
+              />
+            ) : selectedTool === "Text" ? (
+              <TextEditorTopbar
+                textContent={selectedShape.text || ""}
+                selectedShapeId={selectedShapeId}
+                onTextChange={(newText, id, styles) =>
+                  dispatch(updateShapePosition({ id, text: newText, ...styles }))
+                }
+                onStyleChange={(style) =>
+                  dispatch(updateShapePosition({ id: selectedShapeId, ...style }))
+                }
+              />
+            ) : selectedTool === "Spray" ? (
+              <SprayTopbar />
+            ) : selectedTool === "Spiral" ? (
+              <SpiralTopbar />
+            ) : selectedTool === "Bezier" ? (
+              <BezierTopbar />
+            ) : selectedTool === "Calligraphy" ? (
+              <CalligraphyTopbar />
+            ) : selectedTool === "Pencil" ? (
+              <PencilTopbar />
+            ) : selectedTool === "Node" ? (
+              <NodeTopbar />
+            ) : selectedTool === "Eraser" ? (
+              <EraserTopbar />
+            ) : selectedTool === "Gradient" ? (
+              <GradientTopbar />
+            ) : selectedTool === "Dropper" ? (
+              <DropperTopbar />
+            ) : selectedTool === "Measurement" ? (
+              <MeasurementTopbar />
+            ) : selectedTool === "Connector" ? (
+              <ConnectorTopbar />
+            ) : selectedTool === "Mesh" ? (
+              <MeshTopbar />
+            ) : selectedTool === "PaintBucket" ? (
+              <PaintBucketTopbar />
+            ) : selectedTool === "Pages" ? (
+              <PagesTopbar />
+            ) : selectedTool === "Tweak" ? (
+              <TweakTopbar />
+            ) : selectedTool === "Zoom" ? (
+              <ZoomTopbar
+                zoomLevel={zoomLevel}
+                onZoomIn={onZoomIn}
+                onZoomOut={onZoomOut}
+                onSetZoom={onSetZoom}
+                onZoomSelected={onZoomSelected}
+                onZoomDrawing={onZoomDrawing}
+                onZoomPage={onZoomPage}
+                onZoomPageWidth={onZoomPageWidth}
+                onZoomCenterPage={onZoomCenterPage}
+                onZoomPrevious={onZoomPrevious}
+                onZoomNext={onZoomNext}
+              />
+            ) : (
+              <DefaultTopbar />
+            )}
+          </div>
         </div>
-      </nav >
-      <div className="container-fluid top-bar">
-        <div className="row">
-          {isRenaming ? (
-            <input
-              type="text"
-              value={newLayerName}
-              onChange={handleLayerNameChange}
-              onKeyDown={handleLayerNameSubmit}
-              onBlur={() => setIsRenaming(false)}
-              placeholder="Enter new layer name"
-            />
-          ) : selectedTool === "Text" ? (
-            <TextEditorTopbar
-              textContent={selectedShape.text || ""}
-              selectedShapeId={selectedShapeId}
-              onTextChange={(newText, id, styles) =>
-                dispatch(updateShapePosition({ id, text: newText, ...styles }))
-              }
-              onStyleChange={(style) =>
-                dispatch(updateShapePosition({ id: selectedShapeId, ...style }))
-              }
-            />
-          ) : selectedTool === "Spray" ? (
-            <SprayTopbar />
-          ) : selectedTool === "Spiral" ? (
-            <SpiralTopbar />
-          ) : selectedTool === "Bezier" ? (
-            <BezierTopbar />
-          ) : selectedTool === "Calligraphy" ? (
-            <CalligraphyTopbar />
-          ) : selectedTool === "Pencil" ? (
-            <PencilTopbar />
-          ) : selectedTool === "Node" ? (
-            <NodeTopbar />
-          ) : selectedTool === "Eraser" ? (
-            <EraserTopbar />
-          ) : selectedTool === "Gradient" ? (
-            <GradientTopbar />
-          ) : selectedTool === "Dropper" ? (
-            <DropperTopbar />
-          ) : selectedTool === "Measurement" ? (
-            <MeasurementTopbar />
-          ) : selectedTool === "Connector" ? (
-            <ConnectorTopbar />
-          ) : selectedTool === "Mesh" ? (
-            <MeshTopbar />
-          ) : selectedTool === "PaintBucket" ? (
-            <PaintBucketTopbar />
-          ) : selectedTool === "Pages" ? (
-            <PagesTopbar />
-          ) : selectedTool === "Tweak" ? (
-            <TweakTopbar />
-          ) : selectedTool === "Zoom" ? (
-            <ZoomTopbar
-              zoomLevel={zoomLevel}
-              onZoomIn={onZoomIn}
-              onZoomOut={onZoomOut}
-              onSetZoom={onSetZoom}
-              onZoomSelected={onZoomSelected}
-              onZoomDrawing={onZoomDrawing}
-              onZoomPage={onZoomPage}
-              onZoomPageWidth={onZoomPageWidth}
-              onZoomCenterPage={onZoomCenterPage}
-              onZoomPrevious={onZoomPrevious}
-              onZoomNext={onZoomNext}
-            />
-          ) : (
-            <DefaultTopbar />
-          )}
-        </div>
-      </div>
-    </div >
+      </div >
+    </>
   );
 };
 
@@ -5144,5 +5294,317 @@ function SprayTopbar() {
         <Tooltip id="tool-top" place="bottom-start" />
       </div>
     </>
+  );
+}
+function FontPanel({ selectedShape, selectedShapeId, onClose }) {
+  const dispatch = useDispatch();
+  const fontFamilies = [
+    "Arial", "Times New Roman", "Courier New", "Verdana", "Georgia",
+    "Comic Sans MS", "Trebuchet MS", "Impact", "Lucida Console", "Tahoma",
+    "Palatino Linotype", "Garamond", "Bookman", "Candara", "Helvetica",
+    "Gill Sans", "Century Gothic", "Franklin Gothic Medium"
+  ];
+  const fontStyles = [
+    { label: "Normal", value: "normal" },
+    { label: "Bold", value: "bold" },
+    { label: "Italic", value: "italic" },
+    { label: "Bold Italic", value: "bold italic" }
+  ];
+  const fontSizes = [8, 10, 12, 14, 16, 18, 24, 36, 48, 72];
+
+  const [fontFamily, setFontFamily] = useState(selectedShape.fontFamily || "Arial");
+  const [fontStyle, setFontStyle] = useState(selectedShape.fontStyle || "normal");
+  const [fontSize, setFontSize] = useState(selectedShape.fontSize || 16);
+
+  const handleApply = () => {
+    if (selectedShapeId) {
+      dispatch({
+        type: "tool/updateShapePosition",
+        payload: {
+          id: selectedShapeId,
+          fontFamily,
+          fontStyle,
+          fontSize: Number(fontSize)
+        }
+      });
+    }
+    onClose();
+  };
+
+  return (
+    <div>
+      <div style={{ marginBottom: 16 }}>
+        <label>Font Family:&nbsp;</label>
+        <select
+          value={fontFamily}
+          onChange={e => setFontFamily(e.target.value)}
+          style={{ minWidth: 180 }}
+        >
+          {fontFamilies.map(f => (
+            <option key={f} value={f}>{f}</option>
+          ))}
+        </select>
+      </div>
+      <div style={{ marginBottom: 16 }}>
+        <label>Style:&nbsp;</label>
+        <select
+          value={fontStyle}
+          onChange={e => setFontStyle(e.target.value)}
+        >
+          {fontStyles.map(s => (
+            <option key={s.value} value={s.value}>{s.label}</option>
+          ))}
+        </select>
+      </div>
+      <div style={{ marginBottom: 16 }}>
+        <label>Size:&nbsp;</label>
+        <select
+          value={fontSize}
+          onChange={e => setFontSize(e.target.value)}
+        >
+          {fontSizes.map(s => (
+            <option key={s} value={s}>{s}</option>
+          ))}
+        </select>
+      </div>
+      <div style={{ display: "flex", gap: 8 }}>
+        <button onClick={handleApply} style={{ background: "#007bff", color: "#fff", border: "none", borderRadius: 4, padding: "6px 16px" }}>Apply</button>
+        <button onClick={onClose} style={{ border: "none", borderRadius: 4, padding: "6px 16px" }}>Cancel</button>
+      </div>
+    </div>
+  );
+}
+
+function SvgFontEditor({ onClose }) {
+
+  const [fonts, setFonts] = useState([
+    { name: "MySVGFont", glyphs: [{ char: "A", path: "" }, { char: "B", path: "" }] }
+  ]);
+  const [selectedFont, setSelectedFont] = useState(0);
+  const [newFontName, setNewFontName] = useState("");
+  const [newGlyphChar, setNewGlyphChar] = useState("");
+  const [newGlyphPath, setNewGlyphPath] = useState("");
+
+  const handleAddFont = () => {
+    if (newFontName.trim()) {
+      setFonts([...fonts, { name: newFontName, glyphs: [] }]);
+      setNewFontName("");
+    }
+  };
+
+  const handleAddGlyph = () => {
+    if (newGlyphChar && newGlyphPath) {
+      const updatedFonts = [...fonts];
+      updatedFonts[selectedFont].glyphs.push({ char: newGlyphChar, path: newGlyphPath });
+      setFonts(updatedFonts);
+      setNewGlyphChar("");
+      setNewGlyphPath("");
+    }
+  };
+
+  return (
+    <div>
+      <div style={{ marginBottom: 16 }}>
+        <label>Fonts:&nbsp;</label>
+        <select
+          value={selectedFont}
+          onChange={e => setSelectedFont(Number(e.target.value))}
+        >
+          {fonts.map((f, i) => (
+            <option key={i} value={i}>{f.name}</option>
+          ))}
+        </select>
+        <input
+          type="text"
+          placeholder="New font name"
+          value={newFontName}
+          onChange={e => setNewFontName(e.target.value)}
+          style={{ marginLeft: 8 }}
+        />
+        <button onClick={handleAddFont} style={{ marginLeft: 4 }}>Add Font</button>
+      </div>
+      <div style={{ marginBottom: 16 }}>
+        <h5>Glyphs for {fonts[selectedFont]?.name}</h5>
+        <table style={{ width: "100%", marginBottom: 8 }}>
+          <thead>
+            <tr>
+              <th>Char</th>
+              <th>SVG Path</th>
+            </tr>
+          </thead>
+          <tbody>
+            {fonts[selectedFont]?.glyphs.map((g, idx) => (
+              <tr key={idx}>
+                <td>{g.char}</td>
+                <td>
+                  <input
+                    type="text"
+                    value={g.path}
+                    onChange={e => {
+                      const updatedFonts = [...fonts];
+                      updatedFonts[selectedFont].glyphs[idx].path = e.target.value;
+                      setFonts(updatedFonts);
+                    }}
+                    style={{ width: "90%" }}
+                  />
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <input
+          type="text"
+          placeholder="Char"
+          value={newGlyphChar}
+          onChange={e => setNewGlyphChar(e.target.value)}
+          style={{ width: 40, marginRight: 8 }}
+        />
+        <input
+          type="text"
+          placeholder="SVG Path"
+          value={newGlyphPath}
+          onChange={e => setNewGlyphPath(e.target.value)}
+          style={{ width: 220, marginRight: 8 }}
+        />
+        <button onClick={handleAddGlyph}>Add Glyph</button>
+      </div>
+      <div style={{ display: "flex", gap: 8 }}>
+        <button onClick={onClose} style={{ border: "none", borderRadius: 4, padding: "6px 16px" }}>Close</button>
+      </div>
+    </div>
+  );
+}
+
+function UnicodePanel({ onClose }) {
+  const dispatch = useDispatch();
+  const selectedShapeId = useSelector(state => state.tool.selectedShapeId);
+  const selectedLayerIndex = useSelector(state => state.tool.selectedLayerIndex);
+  const shapes = useSelector(state => state.tool.layers[selectedLayerIndex]?.shapes || []);
+  const selectedShape = shapes.find(s => s.id === selectedShapeId) || {};
+
+  const fontFamilies = [
+    "Arial", "Times New Roman", "Courier New", "Verdana", "Georgia", "Comic Sans MS"
+  ];
+  const fontStyles = [
+    { label: "Normal", value: "normal" },
+    { label: "Bold", value: "bold" },
+    { label: "Italic", value: "italic" }
+  ];
+  const scripts = [
+    { label: "Latin", value: "latin" },
+    { label: "Greek", value: "greek" },
+    { label: "Cyrillic", value: "cyrillic" },
+    { label: "Hebrew", value: "hebrew" },
+    { label: "Arabic", value: "arabic" },
+    { label: "Devanagari", value: "devanagari" },
+    { label: "CJK", value: "cjk" },
+
+  ];
+  const ranges = [
+    { label: "Basic Latin", start: 0x0020, end: 0x007F },
+    { label: "Latin-1 Supplement", start: 0x00A0, end: 0x00FF },
+    { label: "Latin Extended-A", start: 0x0100, end: 0x017F },
+    { label: "Latin Extended-B", start: 0x0180, end: 0x024F },
+    { label: "IPA Extensions", start: 0x0250, end: 0x02AF },
+    { label: "Greek and Coptic", start: 0x0370, end: 0x03FF },
+    { label: "Cyrillic", start: 0x0400, end: 0x04FF },
+    { label: "Hebrew", start: 0x0590, end: 0x05FF },
+    { label: "Arabic", start: 0x0600, end: 0x06FF },
+    { label: "Devanagari", start: 0x0900, end: 0x097F },
+    { label: "Hiragana", start: 0x3040, end: 0x309F },
+    { label: "Katakana", start: 0x30A0, end: 0x30FF },
+    { label: "CJK Unified Ideographs", start: 0x4E00, end: 0x9FFF },
+  ];
+
+  const [fontFamily, setFontFamily] = useState(fontFamilies[0]);
+  const [fontStyle, setFontStyle] = useState(fontStyles[0].value);
+  const [script, setScript] = useState(scripts[0].value);
+  const [rangeIdx, setRangeIdx] = useState(0);
+
+  const chars = [];
+  for (let i = ranges[rangeIdx].start; i <= ranges[rangeIdx].end; i++) {
+    chars.push(String.fromCharCode(i));
+  }
+
+  const handleCharClick = (char) => {
+    if (!selectedShapeId) {
+      alert("Select a text object first.");
+      return;
+    }
+
+    dispatch(updateShapePosition({
+      id: selectedShapeId,
+      text: (selectedShape.text || "") + char
+    }));
+  };
+
+  return (
+    <div>
+      <div style={{ display: "flex", gap: 12, marginBottom: 16 }}>
+        <div>
+          <label>Font family:&nbsp;</label>
+          <select value={fontFamily} onChange={e => setFontFamily(e.target.value)}>
+            {fontFamilies.map(f => <option key={f} value={f}>{f}</option>)}
+          </select>
+        </div>
+        <div>
+          <label>Style:&nbsp;</label>
+          <select value={fontStyle} onChange={e => setFontStyle(e.target.value)}>
+            {fontStyles.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+          </select>
+        </div>
+        <div>
+          <label>Script:&nbsp;</label>
+          <select value={script} onChange={e => setScript(e.target.value)}>
+            {scripts.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+          </select>
+        </div>
+        <div>
+          <label>Range:&nbsp;</label>
+          <select value={rangeIdx} onChange={e => setRangeIdx(Number(e.target.value))}>
+            {ranges.map((r, i) => (
+              <option key={i} value={i}>{r.label}</option>
+            ))}
+          </select>
+        </div>
+      </div>
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(16, 1fr)",
+          gap: 6,
+          maxHeight: 260,
+          overflowY: "auto",
+          border: "1px solid #eee",
+          padding: 8,
+          background: "#fafafa"
+        }}
+      >
+        {chars.map((char, idx) => (
+          <span
+            key={idx}
+            style={{
+              fontFamily,
+              fontWeight: fontStyle === "bold" ? "bold" : "normal",
+              fontStyle: fontStyle === "italic" ? "italic" : "normal",
+              fontSize: 22,
+              cursor: "pointer",
+              textAlign: "center",
+              padding: 2,
+              borderRadius: 3,
+              border: "1px solid #ddd",
+              background: "#fff"
+            }}
+            title={`U+${(ranges[rangeIdx].start + idx).toString(16).toUpperCase()}`}
+            onClick={() => handleCharClick(char)}
+          >
+            {char}
+          </span>
+        ))}
+      </div>
+      <div style={{ marginTop: 16, display: "flex", justifyContent: "flex-end" }}>
+        <button onClick={onClose} style={{ border: "none", borderRadius: 4, padding: "6px 16px" }}>Close</button>
+      </div>
+    </div>
   );
 }

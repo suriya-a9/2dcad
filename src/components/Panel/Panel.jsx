@@ -7286,6 +7286,83 @@ const Panel = React.forwardRef(({
                     const isSelected = selectedShapeIds.includes(shape.id);
                     const textDirection = shape.textDirection || "ltr";
                     const blockProgression = shape.blockProgression || "normal";
+
+                    if (shape.putOnPathId) {
+                      const pathShape = shapes.find(s => s.id === shape.putOnPathId);
+                      if (pathShape && pathShape.path) {
+
+                        const pointMatches = [...pathShape.path.matchAll(/([ML])\s*([\d.-]+)[ ,]+([\d.-]+)/gi)];
+                        if (pointMatches.length >= 2) {
+                          const x1 = parseFloat(pointMatches[0][2]);
+                          const y1 = parseFloat(pointMatches[0][3]);
+                          const x2 = parseFloat(pointMatches[1][2]);
+                          const y2 = parseFloat(pointMatches[1][3]);
+                          const dx = x2 - x1;
+                          const dy = y2 - y1;
+                          const angle = Math.atan2(dy, dx) * 180 / Math.PI;
+                          const chars = (shape.text || "").split("");
+                          const fontSize = shape.fontSize || 16;
+                          return (
+                            <Group
+                              ref={node => {
+                                if (node) shapeRefs.current[shape.id] = node;
+                                else delete shapeRefs.current[shape.id];
+                              }}
+                              key={shape.id}
+                              id={shape.id}
+                              x={x1}
+                              y={y1}
+                              draggable
+                              onDragMove={handleDragMove}
+                              onClick={(e) => {
+                                e.cancelBubble = true;
+                                setTextAreaPosition({
+                                  x: shape.x * scale + position.x,
+                                  y: shape.y * scale + position.y,
+                                });
+                                setTextContent(shape.text);
+                                setEditingTextId(shape.id);
+                                setTextAreaVisible(true);
+                              }}
+                            >
+                              {chars.map((char, i) => {
+                                const t = chars.length > 1 ? i / (chars.length - 1) : 0;
+                                const cx = t * dx;
+                                const cy = t * dy;
+                                return (
+                                  <KonvaText
+                                    key={i}
+                                    text={char}
+                                    x={cx}
+                                    y={cy}
+                                    fontSize={fontSize}
+                                    fontFamily={shape.fontFamily || "Arial"}
+                                    fontStyle={shape.fontStyle || "normal"}
+                                    fill={shape.fill || "black"}
+                                    rotation={angle}
+                                    align="center"
+                                    width={fontSize}
+                                  />
+                                );
+                              })}
+                              {isSelected && shapeRefs.current[shape.id] && selectedTool !== "Node" && (
+                                <Transformer
+                                  ref={transformerRef}
+                                  nodes={selectedShapeIds.map(id => shapeRefs.current[id]).filter(Boolean)}
+                                  enabledAnchors={[
+                                    "top-left", "top-center", "top-right",
+                                    "middle-left", "middle-right",
+                                    "bottom-left", "bottom-center", "bottom-right",
+                                  ]}
+                                  skewEnabled={true}
+                                />
+                              )}
+                            </Group>
+                          );
+                        }
+                      }
+                    }
+
                     if (blockProgression === "vertical") {
 
                       const chars = (shape.text || "").split("");

@@ -5209,6 +5209,7 @@ const toolSlice = createSlice({
             { x: x + width, y: y + height },
             { x: x, y: y + height }
           ];
+          shape.path = `M${x},${y} L${x + width},${y} L${x + width},${y + height} L${x},${y + height} Z`;
         }
 
         else if (shape.type === "Circle") {

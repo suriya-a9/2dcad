@@ -29,7 +29,7 @@ import {
   Image,
   Group,
   Shape,
-
+  TextPath,
 } from "react-konva";
 import { useSelector, useDispatch } from "react-redux";
 import {
@@ -5083,7 +5083,6 @@ const Panel = React.forwardRef(({
                       return null;
                     }
 
-
                     const points =
                       typeof shape.points[0] === "number"
                         ? shape.points.reduce((acc, val, index) => {
@@ -7287,82 +7286,181 @@ const Panel = React.forwardRef(({
                     const textDirection = shape.textDirection || "ltr";
                     const blockProgression = shape.blockProgression || "normal";
 
-                    if (shape.putOnPathId) {
+                    if (shape.type === "Text" && shape.putOnPathId) {
                       const pathShape = shapes.find(s => s.id === shape.putOnPathId);
-                      if (pathShape && pathShape.path) {
 
-                        const pointMatches = [...pathShape.path.matchAll(/([ML])\s*([\d.-]+)[ ,]+([\d.-]+)/gi)];
-                        if (pointMatches.length >= 2) {
-                          const x1 = parseFloat(pointMatches[0][2]);
-                          const y1 = parseFloat(pointMatches[0][3]);
-                          const x2 = parseFloat(pointMatches[1][2]);
-                          const y2 = parseFloat(pointMatches[1][3]);
-                          const dx = x2 - x1;
-                          const dy = y2 - y1;
-                          const angle = Math.atan2(dy, dx) * 180 / Math.PI;
-                          const chars = (shape.text || "").split("");
-                          const fontSize = shape.fontSize || 16;
-                          return (
-                            <Group
-                              ref={node => {
-                                if (node) shapeRefs.current[shape.id] = node;
-                                else delete shapeRefs.current[shape.id];
-                              }}
-                              key={shape.id}
-                              id={shape.id}
-                              x={x1}
-                              y={y1}
-                              draggable
-                              onDragMove={handleDragMove}
-                              onClick={(e) => {
-                                e.cancelBubble = true;
-                                setTextAreaPosition({
-                                  x: shape.x * scale + position.x,
-                                  y: shape.y * scale + position.y,
-                                });
-                                setTextContent(shape.text);
-                                setEditingTextId(shape.id);
-                                setTextAreaVisible(true);
-                              }}
-                            >
-                              {chars.map((char, i) => {
-                                const t = chars.length > 1 ? i / (chars.length - 1) : 0;
-                                const cx = t * dx;
-                                const cy = t * dy;
-                                return (
-                                  <KonvaText
-                                    key={i}
-                                    text={char}
-                                    x={cx}
-                                    y={cy}
-                                    fontSize={fontSize}
-                                    fontFamily={shape.fontFamily || "Arial"}
-                                    fontStyle={shape.fontStyle || "normal"}
-                                    fill={shape.fill || "black"}
-                                    rotation={angle}
-                                    align="center"
-                                    width={fontSize}
-                                  />
-                                );
-                              })}
-                              {isSelected && shapeRefs.current[shape.id] && selectedTool !== "Node" && (
-                                <Transformer
-                                  ref={transformerRef}
-                                  nodes={selectedShapeIds.map(id => shapeRefs.current[id]).filter(Boolean)}
-                                  enabledAnchors={[
-                                    "top-left", "top-center", "top-right",
-                                    "middle-left", "middle-right",
-                                    "bottom-left", "bottom-center", "bottom-right",
-                                  ]}
-                                  skewEnabled={true}
+                      let x1, y1, x2, y2;
+
+                      if (pathShape && Array.isArray(pathShape.points) && pathShape.points.length >= 2) {
+                        const p0 = pathShape.points[0];
+                        const p1 = pathShape.points[1];
+                        x1 = (pathShape.x || 0) + (p0.x ?? (Array.isArray(p0) ? p0[0] : 0));
+                        y1 = (pathShape.y || 0) + (p0.y ?? (Array.isArray(p0) ? p0[1] : 0));
+                        x2 = (pathShape.x || 0) + (p1.x ?? (Array.isArray(p1) ? p1[0] : 0));
+                        y2 = (pathShape.y || 0) + (p1.y ?? (Array.isArray(p1) ? p1[1] : 0));
+                      } else if (pathShape && typeof pathShape.path === "string") {
+
+                        const coordMatches = [...pathShape.path.matchAll(/([MLCQAZHVST])([^MLCQAZHVST]*)/gi)];
+                        let points = [];
+                        for (const match of coordMatches) {
+                          const coords = match[2]
+                            .trim()
+                            .split(/[ ,]+/)
+                            .map(Number)
+                            .filter(n => !isNaN(n));
+                          for (let i = 0; i < coords.length - 1; i += 2) {
+                            points.push({ x: coords[i], y: coords[i + 1] });
+                            if (points.length >= 2) break;
+                          }
+                          if (points.length >= 2) break;
+                        }
+                        if (points.length >= 2) {
+                          x1 = points[0].x;
+                          y1 = points[0].y;
+                          x2 = points[1].x;
+                          y2 = points[1].y;
+                        }
+                        return (
+                          <TextPath
+                            key={shape.id}
+                            data={pathShape.path}
+                            text={shape.text}
+                            fontSize={shape.fontSize || 16}
+                            fontFamily={shape.fontFamily || "Arial"}
+                            fill={shape.fill || "#000"}
+
+                          />
+                        );
+                      }
+
+                      if (x1 !== undefined && y1 !== undefined && x2 !== undefined && y2 !== undefined) {
+                        const dx = x2 - x1;
+                        const dy = y2 - y1;
+                        const angle = Math.atan2(dy, dx) * 180 / Math.PI;
+                        const chars = (shape.text || "").split("");
+                        const fontSize = shape.fontSize || 16;
+                        return (
+                          <Group
+                            key={shape.id}
+                            x={x1}
+                            y={y1 - fontSize * 0.8}
+                          >
+                            {chars.map((char, i) => {
+                              const t = chars.length > 1 ? i / (chars.length - 1) : 0;
+                              const cx = t * dx;
+                              const cy = t * dy;
+                              return (
+                                <KonvaText
+                                  key={i}
+                                  text={char}
+                                  x={cx}
+                                  y={cy}
+                                  fontSize={fontSize}
+                                  fontFamily={shape.fontFamily || "Arial"}
+                                  fontStyle={shape.fontStyle || "normal"}
+                                  fill={shape.fill || "black"}
+                                  rotation={angle}
+                                  align="center"
                                 />
-                              )}
+                              );
+                            })}
+                          </Group>
+                        );
+                      } else {
+
+                        return (
+                          <KonvaText
+                            key={shape.id}
+                            x={shape.x}
+                            y={shape.y}
+                            text="Select both a text object and a path object."
+                            fontSize={16}
+                            fill="red"
+                          />
+                        );
+                      }
+                    } else if (shape.type === "Text" && shape.flowIntoFrameId) {
+                      const frameShape = shapes.find(s => s.id === shape.flowIntoFrameId);
+                      if (frameShape) {
+
+                        if (frameShape.type === "Rectangle") {
+                          const padding = 16;
+                          return (
+                            <Group key={shape.id} clipFunc={ctx => {
+                              ctx.rect(frameShape.x, frameShape.y, frameShape.width, frameShape.height);
+                            }}>
+                              <KonvaText
+                                x={frameShape.x + padding}
+                                y={frameShape.y + padding}
+                                width={frameShape.width - 2 * padding}
+                                height={frameShape.height - 2 * padding}
+                                text={shape.text}
+                                fontSize={shape.fontSize || 16}
+                                fontFamily={shape.fontFamily || "Arial"}
+                                fill={shape.fill || "#000"}
+                                align={shape.alignment || "left"}
+                                verticalAlign="top"
+                                draggable={false}
+                                ellipsis={true}
+                              />
+                            </Group>
+                          );
+                        }
+                        if (frameShape.type === "Circle") {
+                          const boxSize = frameShape.radius * Math.sqrt(2);
+                          return (
+                            <Group key={shape.id} clipFunc={ctx => {
+                              ctx.beginPath();
+                              ctx.arc(frameShape.x, frameShape.y, frameShape.radius, 0, Math.PI * 2);
+                              ctx.closePath();
+                            }}>
+                              <KonvaText
+                                x={frameShape.x - boxSize / 2}
+                                y={frameShape.y - boxSize / 2}
+                                width={boxSize}
+                                height={boxSize}
+                                text={shape.text}
+                                fontSize={shape.fontSize || 16}
+                                fontFamily={shape.fontFamily || "Arial"}
+                                fill={shape.fill || "#000"}
+                                align="center"
+                                verticalAlign="middle"
+                                draggable
+                              />
+                            </Group>
+                          );
+                        }
+                        if ((frameShape.type === "Polygon" || frameShape.type === "Path") && frameShape.points?.length > 2) {
+                          const minX = Math.min(...frameShape.points.map(p => p.x));
+                          const minY = Math.min(...frameShape.points.map(p => p.y));
+                          const maxX = Math.max(...frameShape.points.map(p => p.x));
+                          const maxY = Math.max(...frameShape.points.map(p => p.y));
+                          return (
+                            <Group key={shape.id} clipFunc={ctx => {
+                              ctx.beginPath();
+                              ctx.moveTo(frameShape.points[0].x, frameShape.points[0].y);
+                              frameShape.points.forEach(pt => ctx.lineTo(pt.x, pt.y));
+                              ctx.closePath();
+                            }}>
+                              <KonvaText
+                                x={minX}
+                                y={minY}
+                                width={maxX - minX}
+                                height={maxY - minY}
+                                text={shape.text}
+                                fontSize={shape.fontSize || 16}
+                                fontFamily={shape.fontFamily || "Arial"}
+                                fill={shape.fill || "#000"}
+                                align={shape.alignment || "left"}
+                                verticalAlign="top"
+                                draggable
+                              />
                             </Group>
                           );
                         }
                       }
+                      return null;
                     }
-
                     if (blockProgression === "vertical") {
 
                       const chars = (shape.text || "").split("");

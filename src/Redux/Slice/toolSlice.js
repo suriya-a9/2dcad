@@ -5212,17 +5212,27 @@ const toolSlice = createSlice({
           shape.path = `M${x},${y} L${x + width},${y} L${x + width},${y + height} L${x},${y + height} Z`;
         }
 
+
+
+
+
+
+
+
+
+
+
+
+
+
         else if (shape.type === "Circle") {
           const { x, y, radius } = shape;
-          const numPoints = 36;
-          shape.type = "Polygon";
-          shape.points = Array.from({ length: numPoints }, (_, i) => {
-            const angle = (2 * Math.PI * i) / numPoints;
-            return {
-              x: x + radius * Math.cos(angle),
-              y: y + radius * Math.sin(angle)
-            };
-          });
+
+          shape.type = "Path";
+          shape.path = `M${x + radius},${y} ` +
+            `A${radius},${radius} 0 1,0 ${x - radius},${y} ` +
+            `A${radius},${radius} 0 1,0 ${x + radius},${y} Z`;
+
         }
 
         else if (shape.type === "Star") {
@@ -5295,6 +5305,48 @@ const toolSlice = createSlice({
       const shape = selectedLayer.shapes.find(s => s.id === shapeId);
       if (shape) {
         shape.bloom = { radius, brightness };
+      }
+    },
+    setTextFlowFrame: (state, action) => {
+      const { textId, frameId } = action.payload;
+      for (const layer of state.layers) {
+        const textShape = layer.shapes.find(s => s.id === textId && s.type === "Text");
+        if (textShape) {
+          textShape.flowIntoFrameId = frameId;
+          break;
+        }
+      }
+    },
+    removeTextFlowFrame: (state, action) => {
+      const { textId } = action.payload;
+      for (const layer of state.layers) {
+        const textShape = layer.shapes.find(s => s.id === textId && s.type === "Text");
+        if (textShape) {
+          delete textShape.flowIntoFrameId;
+          break;
+        }
+      }
+    },
+    setSubtractionsFrame: (state, action) => {
+
+      const { textId, frameId } = action.payload;
+      for (const layer of state.layers) {
+        const textShape = layer.shapes.find(s => s.id === textId && s.type === "Text");
+        if (textShape) {
+          textShape.subtractFromFrameId = frameId;
+          break;
+        }
+      }
+    },
+    removeSubtractionsFrame: (state, action) => {
+
+      const { textId } = action.payload;
+      for (const layer of state.layers) {
+        const textShape = layer.shapes.find(s => s.id === textId && s.type === "Text");
+        if (textShape) {
+          delete textShape.subtractFromFrameId;
+          break;
+        }
       }
     },
   },
@@ -5515,6 +5567,10 @@ export const {
   setDynamicOffsetAmount,
   createLinkedOffset,
   applyBloomFilter,
+  setTextFlowFrame,
+  removeTextFlowFrame,
+  setSubtractionsFrame,
+  removeSubtractionsFrame,
 } = toolSlice.actions;
 
 export default toolSlice.reducer;

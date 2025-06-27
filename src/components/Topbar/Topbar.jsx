@@ -131,6 +131,7 @@ import {
   setBlockProgression,
   selectAllShapesInAllLayers,
   updateNodePosition,
+  setSubtractionsFrame,
 } from "../../Redux/Slice/toolSlice";
 import {
   TbDeselect,
@@ -182,6 +183,7 @@ const Topbar = ({
   const [showFontPanel, setShowFontPanel] = useState(false);
   const [showSvgFontEditor, setShowSvgFontEditor] = useState(false);
   const [showUnicodePanel, setShowUnicodePanel] = useState(false);
+  const selectedShapeIds = useSelector((state) => state.tool.selectedShapeIds);
   const navigate = useNavigate();
 
   let selectedShapeId = useSelector((state) => state.tool.selectedShapeId);
@@ -1044,10 +1046,52 @@ const Topbar = ({
 
     dispatch(updateShapePosition({
       id: textShape.id,
-      putOnPathId: pathShape.id
+      putOnPathId: pathShape.id,
+      baselineOffset: 0,
     }));
 
     alert("Text is now put on path. (Rendering must support text-on-path)");
+  };
+  const handleRemoveFromPath = () => {
+    const selectedShapes = shapes.filter(s => s.selected || selectedShapeIds?.includes(s.id));
+    const textShape = selectedShapes.find(s => s.type === "Text" && s.putOnPathId);
+
+    if (!textShape) {
+      alert("Select a text object that is on a path.");
+      return;
+    }
+
+    dispatch(updateShapePosition({
+      id: textShape.id,
+      putOnPathId: null,
+      baselineOffset: 0,
+    }));
+
+    alert("Text is now removed from path.");
+  };
+  const handleFlowIntoFrame = () => {
+    const selectedShapes = shapes.filter(s => s.selected || selectedShapeIds?.includes(s.id));
+    const textShape = selectedShapes.find(s => s.type === "Text");
+    const frameShape = selectedShapes.find(s =>
+      (s.type === "Rectangle" || s.type === "Polygon" || s.type === "Path")
+    );
+    if (!textShape || !frameShape) {
+      alert("Select both a text object and a frame shape (rectangle, polygon, or closed path).");
+      return;
+    }
+    dispatch({ type: "tool/setTextFlowFrame", payload: { textId: textShape.id, frameId: frameShape.id } });
+    alert("Text is now flowed into frame. (Rendering must support text-in-frame)");
+  };
+
+  const handleUnflowFromFrame = () => {
+    const selectedShapes = shapes.filter(s => s.selected || selectedShapeIds?.includes(s.id));
+    const textShape = selectedShapes.find(s => s.type === "Text" && s.flowIntoFrameId);
+    if (!textShape) {
+      alert("Select a text object that is flowed into a frame.");
+      return;
+    }
+    dispatch({ type: "tool/removeTextFlowFrame", payload: { textId: textShape.id } });
+    alert("Text is now removed from frame.");
   };
   const TextOptions = [
     { label: "Text and font", onClick: () => setShowFontPanel(true) },
@@ -1055,11 +1099,11 @@ const Topbar = ({
     { label: "Unicode characters", onClick: () => setShowUnicodePanel(true) },
     "divider",
     { label: "Put on path", onClick: handlePutOnPath },
-    { label: "Remove from path", link: "#" },
+    { label: "Remove from path", onClick: handleRemoveFromPath },
     "divider",
-    { label: "Flow into frame", link: "#" },
-    { label: "Set subractions frame", link: "#" },
-    { label: "Unflow", link: "#" },
+    { label: "Flow into frame", onClick: handleFlowIntoFrame },
+    { label: "Set subractions frame", onClick: () => dispatch(setSubtractionsFrame()) },
+    { label: "Unflow", onClick: handleUnflowFromFrame },
     { label: "Convert to text", link: "#" },
     "divider",
     { label: "Remove manual kerns", link: "#" },

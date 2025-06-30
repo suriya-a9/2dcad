@@ -1,4 +1,5 @@
 import { createSlice } from "@reduxjs/toolkit";
+import opentype from "opentype.js";
 import { shapes } from "konva/lib/Shape";
 import Offset from "polygon-offset";
 import { generateSpiralPath } from "../../components/Panel/Panel"
@@ -5210,20 +5211,25 @@ const toolSlice = createSlice({
             { x: x, y: y + height }
           ];
           shape.path = `M${x},${y} L${x + width},${y} L${x + width},${y + height} L${x},${y + height} Z`;
+
+          delete shape.x;
+          delete shape.y;
+          delete shape.width;
+          delete shape.height;
         }
 
-
-
-
-
-
-
-
-
-
-
-
-
+        // else if (shape.type === "Circle") {
+        //   const { x, y, radius } = shape;
+        //   const numPoints = 36;
+        //   shape.type = "Polygon";
+        //   shape.points = Array.from({ length: numPoints }, (_, i) => {
+        //     const angle = (2 * Math.PI * i) / numPoints;
+        //     return {
+        //       x: x + radius * Math.cos(angle),
+        //       y: y + radius * Math.sin(angle)
+        //     };
+        //   });
+        // }
 
         else if (shape.type === "Circle") {
           const { x, y, radius } = shape;
@@ -5348,6 +5354,120 @@ const toolSlice = createSlice({
           break;
         }
       }
+    },
+    convertToText: (state) => {
+      const layer = state.layers[state.selectedLayerIndex];
+      if (!layer) return;
+      state.selectedShapeIds.forEach((shapeId) => {
+        const shape = layer.shapes.find(s => s.id === shapeId);
+        if (!shape) return;
+
+        if (
+          shape.type === "Polygon" ||
+          shape.type === "Path" ||
+          shape.type === "Rectangle"
+        ) {
+          let x = shape.x ?? (shape.points?.[0]?.x ?? 0);
+          let y = shape.y ?? (shape.points?.[0]?.y ?? 0);
+          let width = shape.width ?? 100;
+          let height = shape.height ?? 40;
+          if (!shape.width && Array.isArray(shape.points) && shape.points.length > 1) {
+            const xs = shape.points.map(p => p.x ?? (Array.isArray(p) ? p[0] : 0));
+            const ys = shape.points.map(p => p.y ?? (Array.isArray(p) ? p[1] : 0));
+            x = Math.min(...xs);
+            y = Math.min(...ys);
+            width = Math.max(...xs) - x;
+            height = Math.max(...ys) - y;
+          }
+
+          const newTextShape = {
+            id: `text-${Date.now()}`,
+            type: "Text",
+            x,
+            y,
+            width,
+            height,
+            text: "Edit me",
+            fontSize: 16,
+            fontFamily: "Arial",
+            fill: "#000",
+            alignment: "left",
+          };
+          layer.shapes.push(newTextShape);
+
+          state.selectedShapeId = newTextShape.id;
+          state.selectedShapeIds = [newTextShape.id];
+        }
+      });
+    },
+    removeManualKerns: (state) => {
+      const layer = state.layers[state.selectedLayerIndex];
+      if (!layer) return;
+      state.selectedShapeIds.forEach((shapeId) => {
+        const shape = layer.shapes.find(s => s.id === shapeId);
+        if (!shape) return;
+        if (shape.type === "Text") {
+          delete shape.manualKerns;
+          delete shape.charOffsets;
+          delete shape.charDx;
+          delete shape.charDy;
+        }
+      });
+    },
+    textToGlyphs: (state) => {
+      const layer = state.layers[state.selectedLayerIndex];
+      if (!layer) return;
+      state.selectedShapeIds.forEach((shapeId) => {
+        const shape = layer.shapes.find(s => s.id === shapeId);
+        if (!shape || shape.type !== "Text") return;
+
+        let font;
+        try {
+          font = opentype.loadSync('/fonts/Arial.ttf');
+        } catch (e) {
+          return;
+        }
+        if (!font) return;
+
+        const fontSize = shape.fontSize || 16;
+        let x = shape.x;
+        let y = shape.y + fontSize;
+
+        const glyphShapes = [];
+        for (let i = 0; i < shape.text.length; i++) {
+          const char = shape.text[i];
+          const glyph = font.charToGlyph(char);
+          const path = glyph.getPath(x, y, fontSize);
+          const svgPath = path.toPathData();
+
+          glyphShapes.push({
+            id: `glyph-${shape.id}-${i}-${Date.now()}`,
+            type: "Path",
+            path: svgPath,
+            fill: shape.fill || "#000",
+            stroke: shape.stroke || "#000",
+            strokeWidth: 1,
+          });
+
+          x += glyph.advanceWidth * (fontSize / font.unitsPerEm);
+        }
+
+        layer.shapes = layer.shapes.filter(s => s.id !== shapeId);
+        // Add glyphs
+        layer.shapes.push(...glyphShapes);
+
+        state.selectedShapeIds = glyphShapes.map(g => g.id);
+        state.selectedShapeId = glyphShapes[0]?.id || null;
+      });
+    },
+    REPLACE_TEXT_WITH_GLYPHS: (state, action) => {
+      const { textShapeId, glyphShapes, layerIndex } = action.payload;
+      const layer = state.layers[layerIndex ?? state.selectedLayerIndex];
+      if (!layer) return;
+      layer.shapes = layer.shapes.filter(s => s.id !== textShapeId);
+      layer.shapes.push(...glyphShapes);
+      state.selectedShapeIds = glyphShapes.map(g => g.id);
+      state.selectedShapeId = glyphShapes[0]?.id || null;
     },
   },
 
@@ -5571,6 +5691,10 @@ export const {
   removeTextFlowFrame,
   setSubtractionsFrame,
   removeSubtractionsFrame,
+  convertToText,
+  removeManualKerns,
+  textToGlyphs,
+  REPLACE_TEXT_WITH_GLYPHS,
 } = toolSlice.actions;
 
 export default toolSlice.reducer;

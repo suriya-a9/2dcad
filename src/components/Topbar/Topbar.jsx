@@ -1,7 +1,7 @@
 import "./Topbar.css";
 import { useEffect } from "react";
 import { useSelector, useDispatch } from "react-redux";
-import { setFontSize, setFontFamily, setAlignment, setFontStyle, clearPoints, handleUnion, difference, intersection, exclusion, division, cutPath, combine, breakApart, splitPath, relinkClone, selectOriginal, fracture, flatten, inset, outset, fillBetweenPaths, simplify, reverse, setDynamicOffsetMode, setDynamicOffsetShapeId, setDynamicOffsetAmount, createLinkedOffset, applyBloomFilter } from "../../Redux/Slice/toolSlice";
+import { setFontSize, setFontFamily, setAlignment, setFontStyle, clearPoints, handleUnion, difference, intersection, exclusion, division, cutPath, combine, breakApart, splitPath, relinkClone, selectOriginal, fracture, flatten, inset, outset, fillBetweenPaths, simplify, reverse, setDynamicOffsetMode, setDynamicOffsetShapeId, setDynamicOffsetAmount, createLinkedOffset, applyBloomFilter, convertToText, removeManualKerns, textToGlyphs, } from "../../Redux/Slice/toolSlice";
 import { setBezierOption } from "../../Redux/Slice/toolSlice";
 import { BsVectorPen } from "react-icons/bs";
 import { TbBrandSnapseed } from "react-icons/tb";
@@ -17,6 +17,7 @@ import { GiStraightPipe } from "react-icons/gi";
 import { PiPath } from "react-icons/pi";
 import { FaObjectGroup, FaObjectUngroup, FaExpand, FaRegFile, FaRegDotCircle, FaBan, FaVectorSquare } from "react-icons/fa";
 import { MdGridOn, MdOutlineGradient, MdOutlineFormatColorFill, MdOutlineBorderColor } from "react-icons/md";
+import { textToGlyphsHandler } from "../Panel/Panel";
 import { setSelectedTool } from "../../Redux/Slice/toolSlice";
 import { GiPerspectiveDiceSixFacesRandom, GiPaintBrush, GiJigsawBox } from "react-icons/gi";
 import { EditorState, ContentState } from "draft-js";
@@ -1093,6 +1094,14 @@ const Topbar = ({
     dispatch({ type: "tool/removeTextFlowFrame", payload: { textId: textShape.id } });
     alert("Text is now removed from frame.");
   };
+  const handleTextToGlyphs = async () => {
+    for (const id of selectedShapeIds) {
+      const shape = shapes.find(s => s.id === id);
+      if (shape && shape.type === "Text") {
+        await textToGlyphsHandler(dispatch, shape, selectedLayerIndex);
+      }
+    }
+  };
   const TextOptions = [
     { label: "Text and font", onClick: () => setShowFontPanel(true) },
     { label: "SVG Font Editor", onClick: () => setShowSvgFontEditor(true) },
@@ -1104,10 +1113,10 @@ const Topbar = ({
     { label: "Flow into frame", onClick: handleFlowIntoFrame },
     { label: "Set subractions frame", onClick: () => dispatch(setSubtractionsFrame()) },
     { label: "Unflow", onClick: handleUnflowFromFrame },
-    { label: "Convert to text", link: "#" },
+    { label: "Convert to Text", onClick: () => dispatch(convertToText()) },
     "divider",
-    { label: "Remove manual kerns", link: "#" },
-    { label: "Text to glyps", link: "#" },
+    { label: "Remove manual kerns", onClick: () => dispatch(removeManualKerns()) },
+    { label: "Text to glyphs", onClick: handleTextToGlyphs },
     "divider",
     { label: "Check Spelling", link: "#" },
   ];

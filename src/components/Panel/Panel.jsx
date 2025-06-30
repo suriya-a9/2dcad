@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useLayoutEffect, useImperativeHandle, forwardRef } from "react";
 import Offset from "polygon-offset";
 import polygonClipping from "polygon-clipping";
+import opentype from "opentype.js";
 import { BsPaintBucket, BsPencil, BsVectorPen } from "react-icons/bs";
 import { FaRegCircle, FaRegSquare, FaRegStar } from "react-icons/fa";
 import { BiPolygon, BiSolidEraser, BiSolidEyedropper } from "react-icons/bi";
@@ -30,6 +31,7 @@ import {
   Group,
   Shape,
   TextPath,
+  Ellipse,
 } from "react-konva";
 import { useSelector, useDispatch } from "react-redux";
 import {
@@ -89,6 +91,7 @@ import {
   deselectAllShapes,
   setDynamicOffsetAmount,
   setDynamicOffsetMode,
+  REPLACE_TEXT_WITH_GLYPHS
 } from "../../Redux/Slice/toolSlice";
 
 export const generateSpiralPath = (x, y, turns = 5, radius = 50, divergence = 1) => {
@@ -105,6 +108,50 @@ export const generateSpiralPath = (x, y, turns = 5, radius = 50, divergence = 1)
   return path.join(" ");
 };
 
+export async function textToGlyphsHandler(dispatch, textShape, layerIndex) {
+  const response = await fetch('/fonts/Arial.ttf');
+  if (!response.ok) {
+    alert("Font file not found! Please add Arial.ttf to public/fonts.");
+    return;
+  }
+  const arrayBuffer = await response.arrayBuffer();
+  const font = opentype.parse(arrayBuffer);
+  const fontSize = textShape.fontSize || 16;
+  let x = textShape.x;
+  let y = textShape.y + fontSize;
+  const glyphShapes = [];
+  for (let i = 0; i < textShape.text.length; i++) {
+    const char = textShape.text[i];
+    const glyph = font.charToGlyph(char);
+    const path = glyph.getPath(x, y, fontSize);
+    const svgPath = path.toPathData();
+
+    glyphShapes.push({
+      id: `glyph-${textShape.id}-${i}-${Date.now()}`,
+      name: `glyph-${textShape.id}-${i}`,
+      type: "Path",
+      path: svgPath,
+      fill: textShape.fill || "#000",
+      stroke: textShape.stroke || "#000",
+      strokeWidth: 1,
+      x: 0,
+      y: 0,
+      draggable: true,
+      selected: false,
+    });
+
+    x += glyph.advanceWidth * (fontSize / font.unitsPerEm);
+  }
+
+  dispatch({
+    type: "tool/REPLACE_TEXT_WITH_GLYPHS",
+    payload: {
+      textShapeId: textShape.id,
+      glyphShapes,
+      layerIndex,
+    }
+  });
+}
 const toolCursors = {
   Bezier: <BsVectorPen size={20} color="black" />,
   Pencil: <BsPencil size={20} color="black" />,
@@ -6039,25 +6086,23 @@ const Panel = React.forwardRef(({
 
                     if (arcType === "ellipse") {
                       return (
-                        <Arc
-                          ref={(node) => {
+                        <Ellipse
+                          ref={node => {
                             if (node) shapeRefs.current[shape.id] = node;
                             else delete shapeRefs.current[shape.id];
                           }}
                           id={shape.id}
                           x={shape.x}
                           y={shape.y}
-                          innerRadius={0}
-                          outerRadius={shape.radius}
-                          angle={360}
+                          radiusX={shape.radiusX || shape.radius}
+                          radiusY={shape.radiusY || shape.radius}
                           fill={shape.fill || "transparent"}
                           stroke={shape.stroke || "black"}
                           strokeWidth={shape.strokeWidth || 1}
                           rotation={shape.rotation || 0}
-                          closed={true}
                           draggable={selectedTool !== "Node" && selectedTool !== "Connector"}
                           onDragMove={handleDragMove}
-                          onDragEnd={(e) => {
+                          onDragEnd={e => {
                             const { x, y } = e.target.position();
                             dispatch(updateShapePosition({ id: shape.id, x, y }));
                           }}
@@ -6066,7 +6111,7 @@ const Panel = React.forwardRef(({
                     }
                     return (
                       <React.Fragment key={shape.id}>
-                        <Arc
+                        <Circle
                           ref={(node) => {
                             if (node) shapeRefs.current[shape.id] = node;
                             else delete shapeRefs.current[shape.id];
@@ -8198,6 +8243,9 @@ const Panel = React.forwardRef(({
                     text={newShape.text}
                     fontSize={newShape.fontSize}
                     fill={newShape.fill}
+                    rotation={newShape.rotation || 0}
+                    scaleX={newShape.scaleX || 1}
+                    scaleY={newShape.scaleY || 1}
                   />
                 )}
 

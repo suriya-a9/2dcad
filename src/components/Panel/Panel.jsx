@@ -91,7 +91,9 @@ import {
   deselectAllShapes,
   setDynamicOffsetAmount,
   setDynamicOffsetMode,
-  REPLACE_TEXT_WITH_GLYPHS
+  REPLACE_TEXT_WITH_GLYPHS,
+  addStraightPoint,
+  clearStraightPoints,
 } from "../../Redux/Slice/toolSlice";
 
 export const generateSpiralPath = (x, y, turns = 5, radius = 50, divergence = 1) => {
@@ -412,6 +414,7 @@ const Panel = React.forwardRef(({
   const dynamicOffsetMode = useSelector(state => state.tool.dynamicOffsetMode);
   const dynamicOffsetShapeId = useSelector(state => state.tool.dynamicOffsetShapeId);
   const dynamicOffsetAmount = useSelector(state => state.tool.dynamicOffsetAmount);
+  const straightPoints = useSelector((state) => state.tool.straightPoints);
   const [snapText, setSnapText] = useState(null);
   function addGuidesAtLine(x1, y1, x2, y2) {
     setGuides(prev => [
@@ -842,6 +845,7 @@ const Panel = React.forwardRef(({
   const [isDraggingBlueCircle, setIsDraggingBlueCircle] = useState(false);
   const [gradientDrag, setGradientDrag] = useState(null);
   const handleMouseDown = (e) => {
+    console.log("handleMouseDown", { selectedTool, bezierOption });
     console.log("Mouse Down Target:", e.target);
     console.log("Stage:", e.target.getStage());
     setIsMouseDown(true);
@@ -1668,6 +1672,35 @@ const Panel = React.forwardRef(({
         }
         return;
       }
+      else if (selectedTool === "Bezier" && bezierOption === "Straight Segments") {
+        if (
+          straightPoints.length > 1 &&
+          Math.hypot(x - straightPoints[0].x, y - straightPoints[0].y) < 10
+        ) {
+
+          let pathData = straightPoints
+            .map((point, index) => (index === 0 ? `M ${point.x} ${point.y}` : `L ${point.x} ${point.y}`))
+            .join(" ");
+          pathData += " Z";
+          dispatch(
+            addShape({
+              id: `straight-${Date.now()}`,
+              type: "Path",
+              path: pathData,
+              stroke: strokeColor,
+              strokeWidth: 2,
+              fill: fillColor || "transparent",
+            })
+          );
+          dispatch(clearStraightPoints());
+          setIsDrawing(false);
+          setIsShapeClosed(false);
+          return;
+        }
+        dispatch(addStraightPoint({ x, y }));
+        setIsDrawing(true);
+        return;
+      }
       if (
         controlPoints.length > 2 &&
         Math.hypot(x - controlPoints[0].x, y - controlPoints[0].y) < 10
@@ -1826,6 +1859,9 @@ const Panel = React.forwardRef(({
   const handleOptionSelect = (option) => {
     dispatch(setBezierOption(option));
     dispatch(clearSpiroPoints());
+    dispatch(clearBSplinePoints());
+    dispatch(clearParaxialPoints());
+    dispatch(clearStraightPoints());
   };
 
   const generateKnotVector = (n, degree) => {
@@ -2754,25 +2790,115 @@ const Panel = React.forwardRef(({
   const handleModeCompletion = () => {
     dispatch(setStrokeToPathMode(false));
   };
+  function bufferLineToPolygon(points, width) {
+    if (points.length < 4) return [points];
+    const left = [];
+    const right = [];
+    for (let i = 0; i < points.length - 2; i += 2) {
+      const x1 = points[i], y1 = points[i + 1];
+      const x2 = points[i + 2], y2 = points[i + 3];
+      const dx = x2 - x1, dy = y2 - y1;
+      const len = Math.hypot(dx, dy) || 1;
+      const nx = -dy / len, ny = dx / len;
+      left.push([x1 + nx * width / 2, y1 + ny * width / 2]);
+      right.push([x1 - nx * width / 2, y1 - ny * width / 2]);
+    }
+    const lx = points[points.length - 2], ly = points[points.length - 1];
+    left.push([lx, ly]);
+    right.push([lx, ly]);
+    return [left.concat(right.reverse())];
+  }
   const handleMouseUp = (e) => {
     if (isDrawingRef.current && selectedTool === "Eraser" && eraserMode === "cut") {
       isDrawingRef.current = false;
       if (eraserLines.length > 0) {
         const lastEraserLine = eraserLines[eraserLines.length - 1];
+        const eraserPoly = bufferLineToPolygon(lastEraserLine.points, eraserWidth);
+
         shapes.forEach((shape) => {
-          if (!shape.points) return;
-          const shapePoints = Array.isArray(shape.points[0])
-            ? shape.points
-            : shape.points.map((p) => [p.x, p.y]);
-          const isErased = shapePoints.some(([sx, sy]) =>
-            lastEraserLine.points.some((_, i, arr) =>
-              i % 2 === 0 &&
-              Math.hypot(arr[i] - sx, arr[i + 1] - sy) < 10
-            )
-          );
-          if (isErased) {
-            dispatch(deleteShape(shape.id));
+          const shapePoly = shapeToPolygon(shape);
+          if (!shapePoly) return;
+
+          const poly = shapePoly[0];
+          if (poly.length < 3) return;
+          const first = poly[0];
+          const last = poly[poly.length - 1];
+          if (first[0] !== last[0] || first[1] !== last[1]) {
+            poly.push([...first]);
           }
+
+          const diff = polygonClipping.difference([poly], eraserPoly);
+
+
+          if (!diff || diff.length === 0 || (diff.length === 1 && diff[0][0].length < 3)) {
+            dispatch(deleteShape(shape.id));
+            return;
+          }
+
+
+          dispatch(deleteShape(shape.id));
+          diff.forEach((polyPart, i) => {
+            if (polyPart[0].length > 2) {
+              dispatch(addShape({
+                id: `cut-${shape.id}-${i}-${Date.now()}`,
+                type: "Polygon",
+                points: polyPart[0].map(([x, y]) => ({ x, y })),
+                fill: shape.fill,
+                stroke: shape.stroke,
+                strokeWidth: shape.strokeWidth,
+                closed: true,
+              }));
+            }
+          });
+        });
+        setEraserLines([]);
+      }
+    }
+    if (isDrawingRef.current && selectedTool === "Eraser" && eraserMode === "clip") {
+      isDrawingRef.current = false;
+      if (eraserLines.length > 0) {
+        const lastEraserLine = eraserLines[eraserLines.length - 1];
+        const eraserPoly = bufferLineToPolygon(lastEraserLine.points, eraserWidth);
+
+        shapes.forEach((shape) => {
+          const shapePoly = shapeToPolygon(shape);
+          if (!shapePoly) return;
+
+          const poly = shapePoly[0];
+          if (poly.length < 3) return;
+          const first = poly[0];
+          const last = poly[poly.length - 1];
+          if (first[0] !== last[0] || first[1] !== last[1]) {
+            poly.push([...first]);
+          }
+
+
+          const clipped = polygonClipping.difference([poly], eraserPoly);
+
+
+          if (!clipped || clipped.length === 0 || (clipped.length === 1 && clipped[0][0].length < 3)) {
+            dispatch(updateShapePosition({ id: shape.id, visible: false }));
+            return;
+          }
+
+
+          dispatch(deleteShape(shape.id));
+
+
+          clipped.forEach((polyPart, i) => {
+            if (polyPart[0].length > 2) {
+              dispatch(addShape({
+                id: `clip-${shape.id}-${i}-${Date.now()}`,
+                type: "Polygon",
+                points: polyPart[0].map(([x, y]) => ({ x, y })),
+                fill: shape.fill,
+                stroke: shape.stroke,
+                strokeWidth: shape.strokeWidth,
+                closed: true,
+                clipped: true,
+              }));
+            }
+          });
         });
         setEraserLines([]);
       }
@@ -2933,10 +3059,7 @@ const Panel = React.forwardRef(({
             )
           );
           if (isErased) {
-
             dispatch(updateShapeVisibility({ id: shape.id, visible: false }));
-
-
           }
         });
         setEraserLines([]);
@@ -3282,6 +3405,31 @@ const Panel = React.forwardRef(({
         dispatch(clearParaxialPoints());
         setIsDrawing(false);
         return;
+      } else if (isDrawing && selectedTool === "Bezier" && bezierOption === "Straight Segments") {
+        if (straightPoints.length < 2) {
+          console.warn("Not enough points to create straight segments.");
+          return;
+        }
+        let pathData = straightPoints
+          .map((point, index) => (index === 0 ? `M ${point.x} ${point.y}` : `L ${point.x} ${point.y}`))
+          .join(" ");
+        if (isShapeClosed) {
+          pathData += " Z";
+        }
+        dispatch(
+          addShape({
+            id: `straight-${Date.now()}`,
+            type: "Path",
+            path: pathData,
+            stroke: strokeColor,
+            strokeWidth: 2,
+            fill: isShapeClosed ? fillColor : "transparent",
+          })
+        );
+        dispatch(clearStraightPoints());
+        setIsDrawing(false);
+        setIsShapeClosed(false);
+        return;
       } else if (isDrawing && selectedTool === "Bezier" && bezierOption === "Spiro Path") {
 
       } else if (isDrawing && selectedTool === "Bezier" && bezierOption === "BSpline Path") {
@@ -3438,6 +3586,27 @@ const Panel = React.forwardRef(({
 
       dispatch(clearParaxialPoints());
       setIsDrawing(false);
+    }
+
+    if (selectedTool === "Bezier" && bezierOption === "Straight Segments" && straightPoints.length > 1) {
+      let pathData = straightPoints
+        .map((point, index) => (index === 0 ? `M ${point.x} ${point.y}` : `L ${point.x} ${point.y}`))
+        .join(" ");
+      if (isShapeClosed) pathData += " Z";
+      dispatch(
+        addShape({
+          id: `straight-${Date.now()}`,
+          type: "Path",
+          path: pathData,
+          stroke: strokeColor,
+          strokeWidth: 2,
+          fill: isShapeClosed ? fillColor : "transparent",
+        })
+      );
+      dispatch(clearStraightPoints());
+      setIsDrawing(false);
+      setIsShapeClosed(false);
+      return;
     }
   };
 
@@ -5011,13 +5180,33 @@ const Panel = React.forwardRef(({
                   />
                 ))}
                 {selectedTool === "Bezier" && (
-                  <Path
-                    data={getBezierPath()}
-                    stroke="black"
-                    strokeWidth={2}
-                    fill={isShapeClosed ? fillColor : "black"}
-                    closed={isShapeClosed}
-                  />
+                  bezierOption === "Straight Segments" ? (
+                    straightPoints.length > 1 && (
+                      <Path
+                        data={`M ${straightPoints.map((p) => `${p.x},${p.y}`).join(" L ")}${isShapeClosed ? " Z" : ""}`}
+                        stroke="black"
+                        strokeWidth={2}
+                        fill={isShapeClosed ? fillColor : "transparent"}
+                        closed={isShapeClosed}
+                      />
+                    )
+                  ) : bezierOption === "Spiro Path" ? (
+                    renderSpiroPath()
+                  ) : bezierOption === "BSpline Path" ? (
+                    renderBSplinePath()
+                  ) : bezierOption === "Paraxial Line Segments" ? (
+                    renderParaxialSegments()
+                  ) : (
+                    controlPoints.length > 1 && (
+                      <Path
+                        data={getBezierPath()}
+                        stroke="black"
+                        strokeWidth={2}
+                        fill={isShapeClosed ? fillColor : "transparent"}
+                        closed={isShapeClosed}
+                      />
+                    )
+                  )
                 )}
                 {snapText && (
                   <Text
@@ -5033,7 +5222,7 @@ const Panel = React.forwardRef(({
                     align="center"
                   />
                 )}
-                {selectedTool === "Bezier" && bezierOption !== "Spiro Path" && (
+                {/* {selectedTool === "Bezier" && bezierOption !== "Spiro Path" && (
                   <Path
                     data={getBezierPath()}
                     stroke="black"
@@ -5041,7 +5230,7 @@ const Panel = React.forwardRef(({
                     fill={isShapeClosed ? fillColor : "black"}
                     closed={isShapeClosed}
                   />
-                )}
+                )} */}
                 {selectedTool === "Connector" && connectorDrag && (
                   <Line
                     points={[
@@ -5054,7 +5243,7 @@ const Panel = React.forwardRef(({
                     listening={false}
                   />
                 )}
-                {selectedTool === "Bezier" && bezierOption == "Paraxial Line Segments" && (
+                {/* {selectedTool === "Bezier" && bezierOption == "Paraxial Line Segments" && (
                   <Path
                     data={getBezierPath()}
                     stroke="black"
@@ -5062,7 +5251,7 @@ const Panel = React.forwardRef(({
                     fill={isShapeClosed ? fillColor : "black"}
                     closed={isShapeClosed}
                   />
-                )}
+                )} */}
                 {selectedTool === "Eraser" && eraserLines.map((line, i) => (
                   <Line
                     key={i}
@@ -6408,6 +6597,17 @@ const Panel = React.forwardRef(({
                             blurRadius={shape.bloom.radius || 16}
                           />
                         )}
+                        <Group
+                          key={shape.id}
+                          clipFunc={shape.clipPath ? ctx => {
+                            ctx.beginPath();
+                            shape.clipPath.forEach((pt, i) => {
+                              if (i === 0) ctx.moveTo(pt.x, pt.y);
+                              else ctx.lineTo(pt.x, pt.y);
+                            });
+                            ctx.closePath();
+                          } : undefined}
+                        ></Group>
                         <Path
                           ref={(node) => {
                             if (node) shapeRefs.current[shape.id] = node;

@@ -2729,6 +2729,16 @@ function BezierTopbar() {
             style={{ color: bezierOption === "Paraxial Line Segments" ? "#007bff" : "#6c757d" }}
           />
         </div>
+        <div
+          className={`p-2 top-icon ${bezierOption === "Straight Segments" ? "active" : ""}`}
+          onClick={() => handleOptionSelect("Straight Segments")}
+        >
+          <GiStraightPipe
+            size={24}
+            title="Straight Line Segments"
+            style={{ color: bezierOption === "Straight Segments" ? "#007bff" : "#6c757d" }}
+          />
+        </div>
       </div>
 
       <div className="p-2 value" style={{ display: "flex", alignItems: "center" }}>

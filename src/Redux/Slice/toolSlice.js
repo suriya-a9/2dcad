@@ -137,6 +137,7 @@ const toolSlice = createSlice({
     dynamicOffsetMode: false,
     dynamicOffsetShapeId: null,
     dynamicOffsetAmount: 20,
+    straightPoints: [],
   },
 
   reducers: {
@@ -5469,6 +5470,15 @@ const toolSlice = createSlice({
       state.selectedShapeIds = glyphShapes.map(g => g.id);
       state.selectedShapeId = glyphShapes[0]?.id || null;
     },
+    addStraightPoint: (state, action) => {
+      state.straightPoints.push(action.payload);
+    },
+    setStraightPoints: (state, action) => {
+      state.straightPoints = action.payload;
+    },
+    clearStraightPoints: (state) => {
+      state.straightPoints = [];
+    },
   },
 
 });
@@ -5695,6 +5705,9 @@ export const {
   removeManualKerns,
   textToGlyphs,
   REPLACE_TEXT_WITH_GLYPHS,
+  addStraightPoint,
+  setStraightPoints,
+  clearStraightPoints,
 } = toolSlice.actions;
 
 export default toolSlice.reducer;

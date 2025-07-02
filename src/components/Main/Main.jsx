@@ -21,6 +21,9 @@ const Main = () => {
   const [unit, setUnit] = useState("px");
   const [contextMenu, setContextMenu] = useState({ visible: false, x: 0, y: 0 });
   const [guidelines, setGuidelines] = useState([]);
+  const guideliness = useSelector(state => state.tool.guidelines);
+  const showGuides = useSelector(state => state.tool.showGuides);
+  const guideColor = useSelector(state => state.tool.guideColor);
   const [draggingGuide, setDraggingGuide] = useState(null);
   const [cursorPosition, setCursorPosition] = useState({ x: 0, y: 0 });
   const [canvasRotation, setCanvasRotation] = useState(0);
@@ -38,7 +41,13 @@ const Main = () => {
   const [canvasPosition, setCanvasPosition] = useState({ x: 0, y: 0 });
   const selectedTool = useSelector(state => state.tool.selectedTool);
   const selectedShapeId = useSelector(state => state.tool.selectedShapeId);
+  const pageColor = useSelector(state => state.tool.pageColor || "#fff");
+  const borderColor = useSelector(state => state.tool.borderColor || "#ccc");
+  const deskColor = useSelector(state => state.tool.deskColor || "#e5e5e5");
   const pageMargin = useSelector(state => state.tool.pageMargin || { top: 0, right: 40, bottom: 40, left: 40 });
+  const grids = useSelector(state => state.tool.grids);
+  const showGrids = true;
+  const showCheckerboard = useSelector(state => state.tool.showCheckerboard);
   // const width = useSelector(state => state.tool.width);
   // const height = useSelector(state => state.tool.height);
   const setZoomAndPosition = (zoom, position) => {
@@ -771,13 +780,15 @@ const Main = () => {
           width: '100vw',
           height: '100vh',
           position: 'relative',
+          background: showCheckerboard
+            ? "repeating-conic-gradient(#ccc 0% 25%, #fff 0% 50%) 50% / 40px 40px"
+            : deskColor,
         }}
         onWheel={handleWheel}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
         onClick={closeContextMenu}
       >
-
         <div style={{ display: 'flex', alignItems: 'stretch' }}>
           <div style={{ flexGrow: '1', position: 'fixed', width: '100%', zIndex: '1' }}>
             <Topbar editorState={editorState} onEditorStateChange={onEditorStateChange} handleSave={handleSave} setIsSidebarOpen={setIsSidebarOpen} activeTab={activeTab} setActiveTab={setActiveTab} handleDownloadPdf={handleDownloadPdf} selectedGroupId={selectedGroupId} setSelectedGroupId={setSelectedGroupId} zoomLevel={zoomLevel}
@@ -933,8 +944,8 @@ const Main = () => {
                 <div
                   key={page.id}
                   style={{
-                    border: idx === currentPageIndex ? '2px solid #007bff' : '1px solid #ccc',
-                    background: '#fff',
+                    border: idx === currentPageIndex ? `2px solid ${borderColor}` : `1px solid ${borderColor}`,
+                    background: pageColor,
                     boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
                     marginTop: pageMargin.top,
                     marginBottom: pageMargin.bottom,
@@ -944,6 +955,172 @@ const Main = () => {
                   }}
                   onClick={() => dispatch({ type: "tool/selectPage", payload: idx })}
                 >
+                  {showGuides && guideliness.map((guide, index) => {
+                    if (guide.orientation === "horizontal") {
+                      return (
+                        <div
+                          key={index}
+                          style={{
+                            position: "absolute",
+                            left: "-20px",
+                            width: `calc(100% + 40px)`,
+                            height: "1px",
+                            backgroundColor: guideColor,
+                            opacity: 0.7,
+                            pointerEvents: "none",
+                            zIndex: 100,
+                            top: `${Math.max(0, Math.min(guide.position, height - 1))}px`,
+                          }}
+                        />
+                      );
+                    } else {
+                      return (
+                        <div
+                          key={index}
+                          style={{
+                            position: "absolute",
+                            top: "-20px",
+                            height: `calc(100% + 40px)`,
+                            width: "1px",
+                            backgroundColor: guideColor,
+                            opacity: 0.7,
+                            pointerEvents: "none",
+                            zIndex: 100,
+                            left: `${Math.max(0, Math.min(guide.position, width - 1))}px`,
+                          }}
+                        />
+                      );
+                    }
+                  })}
+                  {grids.map((grid, idx) => {
+                    if (!grid.visible) return null;
+                    if (grid.type === "rectangular") {
+                      const lines = [];
+                      const step = 50;
+                      for (let x = 0; x <= width; x += step) {
+                        lines.push(
+                          <div key={`rect-v-${x}`} style={{
+                            position: "absolute",
+                            left: x,
+                            top: 0,
+                            width: 1,
+                            height: "100%",
+                            background: "#bbb",
+                            opacity: 0.5,
+                            pointerEvents: "none",
+                            zIndex: 10,
+                          }} />
+                        );
+                      }
+                      for (let y = 0; y <= height; y += step) {
+                        lines.push(
+                          <div key={`rect-h-${y}`} style={{
+                            position: "absolute",
+                            top: y,
+                            left: 0,
+                            height: 1,
+                            width: "100%",
+                            background: "#bbb",
+                            opacity: 0.5,
+                            pointerEvents: "none",
+                            zIndex: 10,
+                          }} />
+                        );
+                      }
+                      return lines;
+                    }
+                    if (grid.type === "axonometric") {
+                      const lines = [];
+                      const step = 50;
+                      for (let y = 0; y <= height; y += step) {
+                        lines.push(
+                          <div key={`axo-h-${y}`} style={{
+                            position: "absolute",
+                            top: y,
+                            left: 0,
+                            height: 1,
+                            width: "100%",
+                            background: "#8af",
+                            opacity: 0.4,
+                            pointerEvents: "none",
+                            zIndex: 10,
+                          }} />
+                        );
+                      }
+                      for (let x = -width; x < width * 2; x += step) {
+                        lines.push(
+                          <div key={`axo-30-${x}`} style={{
+                            position: "absolute",
+                            left: x,
+                            top: 0,
+                            width: 1,
+                            height: "100%",
+                            background: "#8af",
+                            opacity: 0.4,
+                            pointerEvents: "none",
+                            zIndex: 10,
+                            transform: `rotate(30deg)`,
+                            transformOrigin: "top left",
+                          }} />
+                        );
+                      }
+                      for (let x = -width; x < width * 2; x += step) {
+                        lines.push(
+                          <div key={`axo-150-${x}`} style={{
+                            position: "absolute",
+                            left: x,
+                            top: 0,
+                            width: 1,
+                            height: "100%",
+                            background: "#8af",
+                            opacity: 0.4,
+                            pointerEvents: "none",
+                            zIndex: 10,
+                            transform: `rotate(-30deg)`,
+                            transformOrigin: "top left",
+                          }} />
+                        );
+                      }
+                      return lines;
+                    }
+                    if (grid.type === "modular") {
+                      const lines = [];
+                      const majorStep = 100;
+                      const minorStep = 20;
+                      for (let x = 0; x <= width; x += minorStep) {
+                        lines.push(
+                          <div key={`mod-v-${x}`} style={{
+                            position: "absolute",
+                            left: x,
+                            top: 0,
+                            width: x % majorStep === 0 ? 2 : 1,
+                            height: "100%",
+                            background: x % majorStep === 0 ? "#fa8" : "#fa8",
+                            opacity: x % majorStep === 0 ? 0.7 : 0.3,
+                            pointerEvents: "none",
+                            zIndex: 10,
+                          }} />
+                        );
+                      }
+                      for (let y = 0; y <= height; y += minorStep) {
+                        lines.push(
+                          <div key={`mod-h-${y}`} style={{
+                            position: "absolute",
+                            top: y,
+                            left: 0,
+                            height: y % majorStep === 0 ? 2 : 1,
+                            width: "100%",
+                            background: y % majorStep === 0 ? "#fa8" : "#fa8",
+                            opacity: y % majorStep === 0 ? 0.7 : 0.3,
+                            pointerEvents: "none",
+                            zIndex: 10,
+                          }} />
+                        );
+                      }
+                      return lines;
+                    }
+                    return null;
+                  })}
                   <Panel
                     pageIndex={idx}
                     ref={idx === currentPageIndex ? panelRef : null}

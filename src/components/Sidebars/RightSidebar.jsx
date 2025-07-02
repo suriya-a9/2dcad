@@ -1,5 +1,6 @@
 import { VscNewFile } from "react-icons/vsc";
 import FillStrokeDialog from "../Dialogs/FillStrokeDialog";
+import DocumentPropertiesDialog from "../Dialogs/DocumentPropertiesDialog";
 import "./RightSidebar.css";
 import {
   FaChevronDown,
@@ -119,6 +120,7 @@ const RightSidebar = ({
   const [paramAngleEnd, setParamAngleEnd] = useState(360);
   const [rotateObjects, setRotateObjects] = useState(false);
   const [selectedRightIcon, setSelectedRightIcon] = useState(null);
+  const [isDocPropsOpen, setIsDocPropsOpen] = useState(false);
   const alignOptions = [
     { key: "left", label: "Align Left", icon: <FaAlignLeft /> },
     { key: "center", label: "Align Center", icon: <FaAlignCenter /> },
@@ -921,7 +923,7 @@ const RightSidebar = ({
           </div>
           <div className="p-2 right-icon" onClick={() => setShowPropertiesIcons(!showPropertiesIcons)}>
             <IoMdArrowDropdown
-              data-tooltip-content="Zoom Out"
+              data-tooltip-content="More Options"
               data-tooltip-id="tool-right"
               style={{ border: "1px solid white", borderRadius: "3px" }}
             />
@@ -1421,8 +1423,14 @@ const RightSidebar = ({
               <RiFileSettingsLine
                 data-tooltip-content="Document Properties"
                 data-tooltip-id="tool-top"
+                onClick={() => setIsDocPropsOpen(true)}
+                style={{ cursor: "pointer" }}
               />
             </div>
+            <DocumentPropertiesDialog
+              isOpen={isDocPropsOpen}
+              onClose={() => setIsDocPropsOpen(false)}
+            />
             {/* <div className="p-2 right-icon">
               <FaTools
                 data-tooltip-content="Preferences"

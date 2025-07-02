@@ -138,6 +138,23 @@ const toolSlice = createSlice({
     dynamicOffsetShapeId: null,
     dynamicOffsetAmount: 20,
     straightPoints: [],
+    pageColor: "#fff",
+    borderColor: "#ccc",
+    deskColor: "#e5e5e5",
+    showCheckerboard: false,
+    showGuides: true,
+    guideColor: "#00f",
+    guidelines: [],
+    grids: [],
+    availableColorProfiles: [
+      { id: "sRGB", name: "sRGB IEC61966-2.1", href: "https://www.color.org/sRGB_IEC61966-2-1_black_scaled.icc" },
+      { id: "AdobeRGB", name: "Adobe RGB (1998)", href: "https://www.color.org/AdobeRGB1998.icc" },
+      { id: "DisplayP3", name: "Display P3", href: "https://www.color.org/DisplayP3.icc" },
+      { id: "CMYK", name: "Generic CMYK", href: "https://www.color.org/USWebCoatedSWOP.icc" },
+    ],
+    linkedColorProfiles: ["sRGB"],
+    externalScripts: [],
+    embeddedScripts: [],
   },
 
   reducers: {
@@ -5454,7 +5471,7 @@ const toolSlice = createSlice({
         }
 
         layer.shapes = layer.shapes.filter(s => s.id !== shapeId);
-        // Add glyphs
+
         layer.shapes.push(...glyphShapes);
 
         state.selectedShapeIds = glyphShapes.map(g => g.id);
@@ -5478,6 +5495,76 @@ const toolSlice = createSlice({
     },
     clearStraightPoints: (state) => {
       state.straightPoints = [];
+    },
+    setPageColor: (state, action) => { state.pageColor = action.payload; },
+    setBorderColor: (state, action) => { state.borderColor = action.payload; },
+    setDeskColor: (state, action) => { state.deskColor = action.payload; },
+    setShowCheckerboard: (state, action) => { state.showCheckerboard = action.payload; },
+    setShowGuides: (state, action) => { state.showGuides = action.payload; },
+    setGuideColor: (state, action) => { state.guideColor = action.payload; },
+    createGuide: (state, action) => {
+      state.guidelines.push(action.payload);
+    },
+    deleteGuide: (state, action) => {
+      state.guidelines.pop();
+    },
+    addGrid: (state, action) => {
+
+      if (state.grids.some(g => g.type === action.payload.type)) return;
+
+      if (action.payload.type === "rectangular") {
+        state.grids.push({
+          type: "rectangular",
+          enabled: true,
+          visible: true,
+          originX: 0,
+          originY: 0,
+          spacingX: 50,
+          spacingY: 50,
+          lineColor: "#bbb",
+        });
+      } else if (action.payload.type === "axonometric") {
+        state.grids.push({
+          type: "axonometric",
+          enabled: true,
+          visible: true,
+          originX: 0,
+          originY: 0,
+          spacingY: 50,
+          angleX: 30,
+          angleZ: 150,
+          lineColor: "#8af",
+        });
+      } else if (action.payload.type === "modular") {
+        state.grids.push({
+          type: "modular",
+          enabled: true,
+          visible: true,
+        });
+      }
+    },
+    toggleGridEnabled: (state, action) => {
+      const grid = state.grids[action.payload.index];
+      if (grid) grid.enabled = !grid.enabled;
+    },
+    toggleGridVisible: (state, action) => {
+      const grid = state.grids[action.payload.index];
+      if (grid) grid.visible = !grid.visible;
+    },
+    updateGrid: (state, action) => {
+      const { index, key, value } = action.payload;
+      if (state.grids[index]) {
+        state.grids[index][key] = value;
+      }
+    },
+    setLinkedColorProfiles: (state, action) => {
+      state.linkedColorProfiles = action.payload;
+    },
+    setExternalScripts: (state, action) => {
+      state.externalScripts = action.payload;
+    },
+    setEmbeddedScripts: (state, action) => {
+      state.embeddedScripts = action.payload;
     },
   },
 
@@ -5708,6 +5795,21 @@ export const {
   addStraightPoint,
   setStraightPoints,
   clearStraightPoints,
+  setPageColor,
+  setBorderColor,
+  setDeskColor,
+  setShowCheckerboard,
+  setShowGuides,
+  setGuideColor,
+  createGuide,
+  deleteGuide,
+  addGrid,
+  toggleGridEnabled,
+  toggleGridVisible,
+  updateGrid,
+  setLinkedColorProfiles,
+  setExternalScripts,
+  setEmbeddedScripts,
 } = toolSlice.actions;
 
 export default toolSlice.reducer;

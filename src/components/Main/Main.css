@@ -11,7 +11,7 @@ canvas {
   box-shadow: 0px 0px 3px #aaa !important;
   overflow-x: scroll !important;
   overflow: visible !important;
-  background-color: white !important;
+  background-color: white;
 }
 
 canvas#drawingCanvas {
@@ -37,6 +37,7 @@ canvas#drawingCanvas {
     top: 16% !important;
     left: 3% !important;
   }
+
   .vertical-ruler {
     left: 2% !important;
   }

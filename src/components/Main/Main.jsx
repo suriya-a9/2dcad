@@ -25,6 +25,8 @@ const Main = () => {
   const showGuides = useSelector(state => state.tool.showGuides);
   const guideColor = useSelector(state => state.tool.guideColor);
   const [draggingGuide, setDraggingGuide] = useState(null);
+  const [shiftPressed, setShiftPressed] = useState(false);
+  const [hasRotatedGuide, setHasRotatedGuide] = useState(false);
   const [cursorPosition, setCursorPosition] = useState({ x: 0, y: 0 });
   const [canvasRotation, setCanvasRotation] = useState(0);
   // const zoomLevel = useSelector(state => state.tool.zoomLevel);
@@ -45,9 +47,14 @@ const Main = () => {
   const borderColor = useSelector(state => state.tool.borderColor || "#ccc");
   const deskColor = useSelector(state => state.tool.deskColor || "#e5e5e5");
   const pageMargin = useSelector(state => state.tool.pageMargin || { top: 0, right: 40, bottom: 40, left: 40 });
+  const [hoveredGuideIndex, setHoveredGuideIndex] = useState(null);
   const grids = useSelector(state => state.tool.grids);
   const showGrids = true;
   const showCheckerboard = useSelector(state => state.tool.showCheckerboard);
+  const [isFillStrokeDialogOpen, setIsFillStrokeDialogOpen] = useState(false);
+
+  const handleOpenFillStrokeDialog = () => setIsFillStrokeDialogOpen(true);
+  const handleCloseFillStrokeDialog = () => setIsFillStrokeDialogOpen(false);
   // const width = useSelector(state => state.tool.width);
   // const height = useSelector(state => state.tool.height);
   const setZoomAndPosition = (zoom, position) => {
@@ -130,7 +137,27 @@ const Main = () => {
     setUnit(newUnit);
     setContextMenu({ visible: false, x: 0, y: 0 });
   };
-
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === "Shift") setShiftPressed(true);
+      if (
+        (e.key === "Delete" || e.key === "Backspace") &&
+        hoveredGuideIndex !== null
+      ) {
+        setGuidelines((prev) => prev.filter((_, idx) => idx !== hoveredGuideIndex));
+        setHoveredGuideIndex(null);
+      }
+    };
+    const handleKeyUp = (e) => {
+      if (e.key === "Shift") setShiftPressed(false);
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("keyup", handleKeyUp);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("keyup", handleKeyUp);
+    };
+  }, [hoveredGuideIndex]);
   const closeContextMenu = () => {
     setContextMenu({ visible: false, x: 0, y: 0 });
   };
@@ -596,19 +623,37 @@ const Main = () => {
   const handleGuideMouseDown = (e, index) => {
     e.preventDefault();
     setDraggingGuide({ ...guidelines[index], index });
+    setHasRotatedGuide(false);
   };
 
   const handleMouseMove = (e) => {
     if (draggingGuide) {
-      const updatedGuide = { ...draggingGuide };
-
-      if (updatedGuide.orientation === "horizontal") {
-        updatedGuide.position = (e.clientY - canvasPosition.y) / zoomLevel;
-      } else if (updatedGuide.orientation === "vertical") {
-        updatedGuide.position = (e.clientX - canvasPosition.x) / zoomLevel;
+      if (shiftPressed && !hasRotatedGuide) {
+        setDraggingGuide((prev) => {
+          if (!prev) return prev;
+          const newOrientation = prev.orientation === "horizontal" ? "vertical" : "horizontal";
+          let newPosition;
+          if (newOrientation === "horizontal") {
+            newPosition = (e.clientY - canvasPosition.y) / zoomLevel;
+          } else {
+            newPosition = (e.clientX - canvasPosition.x) / zoomLevel;
+          }
+          return { ...prev, orientation: newOrientation, position: newPosition };
+        });
+        setHasRotatedGuide(true);
+      } else if (!shiftPressed) {
+        setHasRotatedGuide(false);
+        setDraggingGuide((prev) => {
+          if (!prev) return prev;
+          let newPosition = prev.position;
+          if (prev.orientation === "horizontal") {
+            newPosition = (e.clientY - canvasPosition.y) / zoomLevel;
+          } else if (prev.orientation === "vertical") {
+            newPosition = (e.clientX - canvasPosition.x) / zoomLevel;
+          }
+          return { ...prev, position: newPosition };
+        });
       }
-
-      setDraggingGuide(updatedGuide);
     }
     setCursorPosition({
       x: e.clientX,
@@ -802,6 +847,7 @@ const Main = () => {
               onZoomCenterPage={handleZoomCenterPage}
               onZoomPrevious={handleZoomPrevious}
               onZoomNext={handleZoomNext}
+              handleOpenFillStrokeDialog={handleOpenFillStrokeDialog}
             />
           </div>
         </div>
@@ -889,15 +935,18 @@ const Main = () => {
               key={index}
               draggable
               onMouseDown={(e) => handleGuideMouseDown(e, index)}
+              onMouseEnter={() => setHoveredGuideIndex(index)}
+              onMouseLeave={() => setHoveredGuideIndex((prev) => (prev === index ? null : prev))}
               style={{
                 position: "absolute",
                 top: guide.orientation === "horizontal" ? `${guide.position * zoomLevel}px` : "0",
                 left: guide.orientation === "vertical" ? `${guide.position * zoomLevel}px` : "0",
                 width: guide.orientation === "horizontal" ? "100%" : "1px",
                 height: guide.orientation === "vertical" ? "100%" : "1px",
-                backgroundColor: "blue",
+                backgroundColor: hoveredGuideIndex === index ? "red" : "blue",
                 cursor: "move",
                 zIndex: 1,
+                opacity: hoveredGuideIndex === index ? 0.8 : 1,
               }}
             ></div>
           ))}
@@ -1151,7 +1200,7 @@ const Main = () => {
           </div>
 
           <div style={{ flexGrow: '1', position: 'fixed', top: '125px', bottom: '50px', right: '0px' }}>
-            <RightSidebar toggleSidebar={toggleSidebar} isSidebarOpen={isSidebarOpen} handleSave={handleSave} activeTab={activeTab} setActiveTab={(tab) => console.log("Active Tab:", tab)} handleDownloadPdf={handleDownloadPdf} selectedGroupId={selectedGroupId} setSelectedGroupId={setSelectedGroupId} onZoomIn={handleZoomIn} onZoomOut={handleZoomOut} />
+            <RightSidebar toggleSidebar={toggleSidebar} isSidebarOpen={isSidebarOpen} handleSave={handleSave} activeTab={activeTab} setActiveTab={(tab) => console.log("Active Tab:", tab)} handleDownloadPdf={handleDownloadPdf} selectedGroupId={selectedGroupId} setSelectedGroupId={setSelectedGroupId} onZoomIn={handleZoomIn} onZoomOut={handleZoomOut} handleOpenFillStrokeDialog={handleOpenFillStrokeDialog} isFillStrokeDialogOpen={isFillStrokeDialogOpen} handleCloseFillStrokeDialog={handleCloseFillStrokeDialog} />
           </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'stretch' }}>

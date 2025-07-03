@@ -17,7 +17,7 @@ const toolSlice = createSlice({
     fillColor: "black",
     selectedLayerIndex: 0,
     selectedShapeId: null,
-    bezierOption: "Spiro Path",
+    bezierOption: "Straight Segments",
     spiroPoints: [],
     bsplinePoints: [],
     shapes: [],
@@ -5566,6 +5566,17 @@ const toolSlice = createSlice({
     setEmbeddedScripts: (state, action) => {
       state.embeddedScripts = action.payload;
     },
+    setLayersAndSelection: (state, action) => {
+      state.layers = action.payload.layers;
+      state.selectedLayerIndex = action.payload.selectedLayerIndex;
+      if (action.payload.selectedShapeId) {
+        state.selectedShapeId = action.payload.selectedShapeId;
+        state.selectedShapeIds = [action.payload.selectedShapeId];
+      }
+    },
+    setSelectedLayerIndex: (state, action) => {
+      state.selectedLayerIndex = action.payload;
+    },
   },
 
 });
@@ -5810,6 +5821,8 @@ export const {
   setLinkedColorProfiles,
   setExternalScripts,
   setEmbeddedScripts,
+  setLayersAndSelection,
+  setSelectedLayerIndex,
 } = toolSlice.actions;
 
 export default toolSlice.reducer;

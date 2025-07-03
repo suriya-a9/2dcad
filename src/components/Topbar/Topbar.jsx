@@ -185,6 +185,8 @@ const Topbar = ({
   const [showSvgFontEditor, setShowSvgFontEditor] = useState(false);
   const [showUnicodePanel, setShowUnicodePanel] = useState(false);
   const selectedShapeIds = useSelector((state) => state.tool.selectedShapeIds);
+  const [showMoveLayerModal, setShowMoveLayerModal] = useState(false);
+  const [targetLayerIndex, setTargetLayerIndex] = useState(null);
   const navigate = useNavigate();
 
   let selectedShapeId = useSelector((state) => state.tool.selectedShapeId);
@@ -322,13 +324,185 @@ const Topbar = ({
   };
 
   const moveLayerUpHandler = () => {
-    if (!selectedShapeId && selectedLayerIndex > 0) {
-      dispatch(moveLayerUp());
+    if (selectedLayerIndex > 0) {
+      dispatch({
+        type: "tool/setSelectedLayerIndex",
+        payload: selectedLayerIndex - 1,
+      });
     }
   };
+
   const moveLayerDownHandler = () => {
-    if (!selectedShapeId && selectedLayerIndex < layers.length - 1) {
-      dispatch(moveLayerDown());
+    if (selectedLayerIndex < layers.length - 1) {
+      dispatch({
+        type: "tool/setSelectedLayerIndex",
+        payload: selectedLayerIndex + 1,
+      });
+    }
+  };
+  const handleMoveSelectionToLayerAbove = () => {
+    if (
+      selectedShapeId != null &&
+      selectedLayerIndex != null &&
+      selectedLayerIndex < layers.length - 1
+    ) {
+      const shapeToMove = layers[selectedLayerIndex].shapes.find(s => s.id === selectedShapeId);
+      if (!shapeToMove) return;
+
+      const newLayers = layers.map((layer, idx) => {
+        if (idx === selectedLayerIndex) {
+          return {
+            ...layer,
+            shapes: layer.shapes.filter(s => s.id !== selectedShapeId)
+          };
+        }
+        if (idx === selectedLayerIndex + 1) {
+          return {
+            ...layer,
+            shapes: [shapeToMove, ...layer.shapes]
+          };
+        }
+        return layer;
+      });
+
+      dispatch({
+        type: "tool/setLayersAndSelection",
+        payload: {
+          layers: newLayers,
+          selectedLayerIndex: selectedLayerIndex + 1,
+          selectedShapeId
+        }
+      });
+    }
+  };
+  const handleMoveSelectionToLayerBelow = () => {
+    if (
+      selectedShapeId != null &&
+      selectedLayerIndex != null &&
+      selectedLayerIndex > 0
+    ) {
+      const shapeToMove = layers[selectedLayerIndex].shapes.find(s => s.id === selectedShapeId);
+      if (!shapeToMove) return;
+
+      const newLayers = layers.map((layer, idx) => {
+        if (idx === selectedLayerIndex) {
+          return {
+            ...layer,
+            shapes: layer.shapes.filter(s => s.id !== selectedShapeId)
+          };
+        }
+        if (idx === selectedLayerIndex - 1) {
+          return {
+            ...layer,
+            shapes: [shapeToMove, ...layer.shapes]
+          };
+        }
+        return layer;
+      });
+
+      dispatch({
+        type: "tool/setLayersAndSelection",
+        payload: {
+          layers: newLayers,
+          selectedLayerIndex: selectedLayerIndex - 1,
+          selectedShapeId
+        }
+      });
+    }
+  };
+  const handleMoveSelectionToLayer = () => {
+    if (
+      selectedShapeId == null ||
+      selectedLayerIndex == null ||
+      layers.length < 2
+    ) {
+      alert("Select a shape and make sure there are at least two layers.");
+      return;
+    }
+    setTargetLayerIndex(null);
+    setShowMoveLayerModal(true);
+  };
+  const handleLayerToTop = () => {
+    if (selectedLayerIndex != null && selectedLayerIndex < layers.length - 1) {
+      const layerToMove = layers[selectedLayerIndex];
+      const newLayers = [
+        ...layers.slice(0, selectedLayerIndex),
+        ...layers.slice(selectedLayerIndex + 1),
+        layerToMove
+      ];
+      dispatch({
+        type: "tool/setLayersAndSelection",
+        payload: {
+          layers: newLayers,
+          selectedLayerIndex: newLayers.length - 1
+        }
+      });
+    }
+  };
+
+  const handleLayerToBottom = () => {
+    if (selectedLayerIndex != null && selectedLayerIndex > 0) {
+      const layerToMove = layers[selectedLayerIndex];
+      const newLayers = [
+        layerToMove,
+        ...layers.slice(0, selectedLayerIndex),
+        ...layers.slice(selectedLayerIndex + 1)
+      ];
+      dispatch({
+        type: "tool/setLayersAndSelection",
+        payload: {
+          layers: newLayers,
+          selectedLayerIndex: 0
+        }
+      });
+    }
+  };
+
+  const handleRaiseLayer = () => {
+    if (selectedLayerIndex != null && selectedLayerIndex < layers.length - 1) {
+      const newLayers = [...layers];
+
+      [newLayers[selectedLayerIndex], newLayers[selectedLayerIndex + 1]] =
+        [newLayers[selectedLayerIndex + 1], newLayers[selectedLayerIndex]];
+      dispatch({
+        type: "tool/setLayersAndSelection",
+        payload: {
+          layers: newLayers,
+          selectedLayerIndex: selectedLayerIndex + 1
+        }
+      });
+    }
+  };
+
+  const handleLowerLayer = () => {
+    if (selectedLayerIndex != null && selectedLayerIndex > 0) {
+      const newLayers = [...layers];
+
+      [newLayers[selectedLayerIndex], newLayers[selectedLayerIndex - 1]] =
+        [newLayers[selectedLayerIndex - 1], newLayers[selectedLayerIndex]];
+      dispatch({
+        type: "tool/setLayersAndSelection",
+        payload: {
+          layers: newLayers,
+          selectedLayerIndex: selectedLayerIndex - 1
+        }
+      });
+    }
+  };
+  const handleToggleLayerLock = () => {
+    if (selectedLayerIndex != null) {
+      const newLayers = layers.map((layer, idx) =>
+        idx === selectedLayerIndex
+          ? { ...layer, locked: !layer.locked }
+          : layer
+      );
+      dispatch({
+        type: "tool/setLayersAndSelection",
+        payload: {
+          layers: newLayers,
+          selectedLayerIndex
+        }
+      });
     }
   };
   const handleDelete = () => {
@@ -898,19 +1072,19 @@ const Topbar = ({
       label: "Show/Hide Current Layer",
       onClick: handleToggleLayerVisibility,
     },
-    { id: 7, label: "Lock/Unlock Current Layer" },
+    { id: 7, label: "Lock/Unlock Current Layer", onClick: handleToggleLayerLock },
     { id: 8, type: "divider" },
     { id: 9, label: "Switch to Layer Above", onClick: moveLayerUpHandler },
     { id: 10, label: "Switch to Layer Below", onClick: moveLayerDownHandler },
     { id: 11, type: "divider" },
-    { id: 12, label: "Move Selection to Layer Above" },
-    { id: 13, label: "Move Selection to Layer Below" },
-    { id: 14, label: "Move Selection to Layer" },
+    { id: 12, label: "Move Selection to Layer Above", onClick: handleMoveSelectionToLayerAbove },
+    { id: 13, label: "Move Selection to Layer Below", onClick: handleMoveSelectionToLayerBelow },
+    { id: 14, label: "Move Selection to Layer", onClick: handleMoveSelectionToLayer },
     { id: 15, type: "divider" },
-    { id: 16, label: "Layer to Top", href: "#" },
-    { id: 17, label: "Raise Layer", href: "#" },
-    { id: 18, label: "Lower Layer", href: "#" },
-    { id: 19, label: "Layer to Bottom", href: "#" },
+    { id: 16, label: "Layer to Top", onClick: handleLayerToTop },
+    { id: 17, label: "Raise Layer", onClick: handleRaiseLayer },
+    { id: 18, label: "Lower Layer", onClick: handleLowerLayer },
+    { id: 19, label: "Layer to Bottom", onClick: handleLayerToBottom },
     { id: 20, type: "divider" },
     { id: 21, label: "Duplicate Current Layer", onClick: handleDuplicateLayer },
     { id: 22, label: "Delete Current Layer", onClick: handleDelete },
@@ -924,7 +1098,7 @@ const Topbar = ({
         setActiveTab("layers");
       },
     },
-    { label: "Fill and Stroke", onClick: handleFillAndStroke },
+    { label: "Fill and Stroke" },
     { label: "Object Properties" },
     { label: "Symbols" },
     { label: "Paint Servers" },
@@ -1628,6 +1802,125 @@ const Topbar = ({
                           )
                         )}
                       </ul>
+                      {showMoveLayerModal && (
+                        <div
+                          style={{
+                            position: "fixed",
+                            top: 0,
+                            left: 0,
+                            width: "100vw",
+                            height: "100vh",
+                            background: "rgba(0,0,0,0.3)",
+                            zIndex: 9999,
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center"
+                          }}
+                          onClick={() => setShowMoveLayerModal(false)}
+                        >
+                          <div
+                            style={{
+                              background: "#fff",
+                              padding: 24,
+                              borderRadius: 8,
+                              minWidth: 320,
+                              boxShadow: "0 8px 32px rgba(0,0,0,0.18)"
+                            }}
+                            onClick={e => e.stopPropagation()}
+                          >
+                            <h4>Move selection to which layer?</h4>
+                            <form
+                              onSubmit={e => {
+                                e.preventDefault();
+                                if (
+                                  targetLayerIndex === null ||
+                                  targetLayerIndex === selectedLayerIndex
+                                ) {
+                                  alert("Please select a different layer.");
+                                  return;
+                                }
+                                const shapeToMove = layers[selectedLayerIndex].shapes.find(
+                                  s => s.id === selectedShapeId
+                                );
+                                if (!shapeToMove) return;
+
+                                const newLayers = layers.map((layer, idx) => {
+                                  if (idx === selectedLayerIndex) {
+                                    return {
+                                      ...layer,
+                                      shapes: layer.shapes.filter(s => s.id !== selectedShapeId)
+                                    };
+                                  }
+                                  if (idx === targetLayerIndex) {
+                                    return {
+                                      ...layer,
+                                      shapes: [shapeToMove, ...layer.shapes]
+                                    };
+                                  }
+                                  return layer;
+                                });
+
+                                dispatch({
+                                  type: "tool/setLayersAndSelection",
+                                  payload: {
+                                    layers: newLayers,
+                                    selectedLayerIndex: targetLayerIndex,
+                                    selectedShapeId
+                                  }
+                                });
+                                setShowMoveLayerModal(false);
+                              }}
+                            >
+                              <div style={{ maxHeight: 200, overflowY: "auto", marginBottom: 16 }}>
+                                {layers.map((layer, idx) => (
+                                  <div key={idx} style={{ marginBottom: 6 }}>
+                                    <label>
+                                      <input
+                                        type="radio"
+                                        name="targetLayer"
+                                        value={idx}
+                                        checked={targetLayerIndex === idx}
+                                        disabled={idx === selectedLayerIndex}
+                                        onChange={() => setTargetLayerIndex(idx)}
+                                        style={{ marginRight: 8 }}
+                                      />
+                                      {layer.name || `Layer ${idx + 1}`}
+                                      {idx === selectedLayerIndex && (
+                                        <span style={{ color: "#888", marginLeft: 8 }}>(current)</span>
+                                      )}
+                                    </label>
+                                  </div>
+                                ))}
+                              </div>
+                              <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+                                <button
+                                  type="button"
+                                  onClick={() => setShowMoveLayerModal(false)}
+                                  style={{ border: "none", borderRadius: 4, padding: "6px 16px" }}
+                                >
+                                  Cancel
+                                </button>
+                                <button
+                                  type="submit"
+                                  style={{
+                                    background: "#007bff",
+                                    color: "#fff",
+                                    border: "none",
+                                    borderRadius: 4,
+                                    padding: "6px 16px"
+                                  }}
+                                  disabled={
+                                    targetLayerIndex === null ||
+                                    targetLayerIndex === selectedLayerIndex
+                                  }
+                                >
+                                  Move
+                                </button>
+                              </div>
+                            </form>
+                          </div>
+                        </div>
+                      )}
                     </li>
 
 

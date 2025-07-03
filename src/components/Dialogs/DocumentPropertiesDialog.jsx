@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useSelector, useDispatch } from "react-redux";
 import { setPageSize } from "../../Redux/Slice/toolSlice";
 
@@ -87,6 +87,54 @@ const DocumentPropertiesDialog = ({ isOpen, onClose }) => {
     const showCheckerboard = useSelector(state => state.tool.showCheckerboard);
     const showGuides = useSelector(state => state.tool.showGuides);
     const guideColor = useSelector(state => state.tool.guideColor);
+    const [metadata, setMetadata] = useState({
+        title: "",
+        date: "",
+        creator: "",
+        rights: "",
+        publisher: "",
+        identifier: "",
+        source: "",
+        relation: "",
+        language: "",
+        keywords: "",
+        coverage: "",
+        description: "",
+        contributors: "",
+    });
+    const [defaultMetadata, setDefaultMetadata] = useState(null);
+
+    const handleMetadataChange = (e) => {
+        const { name, value } = e.target;
+        setMetadata((prev) => ({ ...prev, [name]: value }));
+    };
+
+    useEffect(() => {
+        const saved = localStorage.getItem("defaultMetadata");
+        if (saved) setDefaultMetadata(JSON.parse(saved));
+    }, []);
+
+    const handleSaveDefaultMetadata = () => {
+        setDefaultMetadata(metadata);
+        localStorage.setItem("defaultMetadata", JSON.stringify(metadata));
+    };
+
+    const handleUseDefaultMetadata = () => {
+        const saved = localStorage.getItem("defaultMetadata");
+        if (saved) setMetadata(JSON.parse(saved));
+    };
+
+    const licenseOptions = [
+        { name: "Creative Commons Attribution 4.0", url: "https://creativecommons.org/licenses/by/4.0/" },
+        { name: "Creative Commons Attribution-ShareAlike 4.0", url: "https://creativecommons.org/licenses/by-sa/4.0/" },
+        { name: "Creative Commons Zero 1.0", url: "https://creativecommons.org/publicdomain/zero/1.0/" },
+        { name: "GNU General Public License v3.0", url: "https://www.gnu.org/licenses/gpl-3.0.html" },
+        { name: "MIT License", url: "https://opensource.org/licenses/MIT" },
+        { name: "All Rights Reserved", url: "" },
+    ];
+    const [selectedLicense, setSelectedLicense] = useState(licenseOptions[0].name);
+    const selectedLicenseUrl = licenseOptions.find(l => l.name === selectedLicense)?.url || "";
+
     if (!isOpen) return null;
 
     const handleFormatChange = (e) => {
@@ -167,8 +215,9 @@ const DocumentPropertiesDialog = ({ isOpen, onClose }) => {
                 zIndex: 3000,
                 borderRadius: 8,
                 boxShadow: "0 4px 24px rgba(0,0,0,0.25)",
-                minWidth: 480,
-                minHeight: 400,
+                width: 750,
+                height: 400,
+                overflow: 'scroll',
                 padding: 0,
             }}
         >
@@ -705,13 +754,75 @@ const DocumentPropertiesDialog = ({ isOpen, onClose }) => {
                 {activeTab === "Metadata" && (
                     <div>
                         <h3>Metadata</h3>
-                        <p>Title, author, description, etc.</p>
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: 16 }}>
+                            <div style={{ flex: 1, minWidth: 220 }}>
+                                <label>Title</label>
+                                <input name="title" value={metadata.title} onChange={handleMetadataChange} style={{ width: "100%" }} />
+                                <label>Date</label>
+                                <input name="date" value={metadata.date} onChange={handleMetadataChange} style={{ width: "100%" }} />
+                                <label>Creator</label>
+                                <input name="creator" value={metadata.creator} onChange={handleMetadataChange} style={{ width: "100%" }} />
+                                <label>Rights</label>
+                                <input name="rights" value={metadata.rights} onChange={handleMetadataChange} style={{ width: "100%" }} />
+                                <label>Publisher</label>
+                                <input name="publisher" value={metadata.publisher} onChange={handleMetadataChange} style={{ width: "100%" }} />
+                                <label>Identifier</label>
+                                <input name="identifier" value={metadata.identifier} onChange={handleMetadataChange} style={{ width: "100%" }} />
+                                <label>Source</label>
+                                <input name="source" value={metadata.source} onChange={handleMetadataChange} style={{ width: "100%" }} />
+                            </div>
+                            <div style={{ flex: 1, minWidth: 220 }}>
+                                <label>Relation</label>
+                                <input name="relation" value={metadata.relation} onChange={handleMetadataChange} style={{ width: "100%" }} />
+                                <label>Language</label>
+                                <input name="language" value={metadata.language} onChange={handleMetadataChange} style={{ width: "100%" }} />
+                                <label>Keywords</label>
+                                <input name="keywords" value={metadata.keywords} onChange={handleMetadataChange} style={{ width: "100%" }} />
+                                <label>Coverage</label>
+                                <input name="coverage" value={metadata.coverage} onChange={handleMetadataChange} style={{ width: "100%" }} />
+                                <label>Description</label>
+                                <textarea name="description" value={metadata.description} onChange={handleMetadataChange} style={{ width: "100%" }} />
+                                <label>Contributors</label>
+                                <input name="contributors" value={metadata.contributors} onChange={handleMetadataChange} style={{ width: "100%" }} />
+                            </div>
+                        </div>
+                        <div style={{ marginTop: 16, display: "flex", gap: 12 }}>
+                            <button onClick={handleSaveDefaultMetadata} style={{ background: "#444", color: "#fff", border: "none", borderRadius: 4, padding: "8px 16px", fontWeight: "bold", cursor: "pointer" }}>
+                                Save as Default
+                            </button>
+                            <button onClick={handleUseDefaultMetadata} style={{ background: "#444", color: "#fff", border: "none", borderRadius: 4, padding: "8px 16px", fontWeight: "bold", cursor: "pointer" }}>
+                                Use Default
+                            </button>
+                        </div>
                     </div>
                 )}
                 {activeTab === "License" && (
                     <div>
                         <h3>License</h3>
-                        <p>Document license information.</p>
+                        <div style={{ marginBottom: 16 }}>
+                            <label style={{ display: "block", marginBottom: 4 }}>License URL</label>
+                            <input
+                                type="text"
+                                value={selectedLicenseUrl}
+                                readOnly
+                                style={{ width: "100%", marginBottom: 12, background: "#333", color: "#fff", border: "none", borderRadius: 4, padding: 8 }}
+                            />
+                        </div>
+                        <div>
+                            {licenseOptions.map(option => (
+                                <label key={option.name} style={{ display: "block", marginBottom: 8, cursor: "pointer" }}>
+                                    <input
+                                        type="radio"
+                                        name="license"
+                                        value={option.name}
+                                        checked={selectedLicense === option.name}
+                                        onChange={() => setSelectedLicense(option.name)}
+                                        style={{ marginRight: 8 }}
+                                    />
+                                    {option.name}
+                                </label>
+                            ))}
+                        </div>
                     </div>
                 )}
             </div>

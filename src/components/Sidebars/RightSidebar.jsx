@@ -90,6 +90,9 @@ const RightSidebar = ({
   handleDownloadPdf,
   selectedGroupId,
   setSelectedGroupId,
+  handleOpenFillStrokeDialog,
+  isFillStrokeDialogOpen,
+  handleCloseFillStrokeDialog,
 }) => {
   const dispatch = useDispatch();
   const fileInputRef = useRef(null);
@@ -98,7 +101,6 @@ const RightSidebar = ({
   const selectedShapeIds = useSelector((state) => state.tool.selectedShapeIds);
   const undoHistory = useSelector((state) => state.tool.undoHistory);
   const [showPropertiesIcons, setShowPropertiesIcons] = useState(false);
-  const [isFillStrokeDialogOpen, setIsFillStrokeDialogOpen] = useState(false);
   const [isAlignPanelOpen, setIsAlignPanelOpen] = useState(false);
   const [alignTab, setAlignTab] = useState("align");
   const [horizontalSpacing, setHorizontalSpacing] = useState(10);
@@ -659,13 +661,6 @@ const RightSidebar = ({
       });
     }
   };
-  const handleOpenFillStrokeDialog = () => {
-    setIsFillStrokeDialogOpen(true);
-  };
-
-  const handleCloseFillStrokeDialog = () => {
-    setIsFillStrokeDialogOpen(false);
-  };
 
   const selectedLayerIndex = useSelector(
     (state) => state.tool.selectedLayerIndex
@@ -981,10 +976,6 @@ const RightSidebar = ({
                 onClick={handleOpenFillStrokeDialog}
               />
             </div>
-            <FillStrokeDialog
-              isOpen={isFillStrokeDialogOpen}
-              onClose={handleCloseFillStrokeDialog}
-            />
             {/* <div className="p-2 right-icon">
               <BiText
                 data-tooltip-content="Text and Font"
@@ -1427,10 +1418,6 @@ const RightSidebar = ({
                 style={{ cursor: "pointer" }}
               />
             </div>
-            <DocumentPropertiesDialog
-              isOpen={isDocPropsOpen}
-              onClose={() => setIsDocPropsOpen(false)}
-            />
             {/* <div className="p-2 right-icon">
               <FaTools
                 data-tooltip-content="Preferences"
@@ -1440,6 +1427,14 @@ const RightSidebar = ({
           </div>
         )}
 
+        <DocumentPropertiesDialog
+          isOpen={isDocPropsOpen}
+          onClose={() => setIsDocPropsOpen(false)}
+        />
+        <FillStrokeDialog
+          isOpen={isFillStrokeDialogOpen}
+          onClose={handleCloseFillStrokeDialog}
+        />
 
       </div>
 

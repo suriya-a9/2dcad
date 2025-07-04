@@ -1,6 +1,7 @@
 import "./Topbar.css";
 import { useEffect } from "react";
 import { useSelector, useDispatch } from "react-redux";
+import INKSCAPE_SYMBOL_SETS from './inkscape-symbol-sets.json';
 import { setFontSize, setFontFamily, setAlignment, setFontStyle, clearPoints, handleUnion, difference, intersection, exclusion, division, cutPath, combine, breakApart, splitPath, relinkClone, selectOriginal, fracture, flatten, inset, outset, fillBetweenPaths, simplify, reverse, setDynamicOffsetMode, setDynamicOffsetShapeId, setDynamicOffsetAmount, createLinkedOffset, applyBloomFilter, convertToText, removeManualKerns, textToGlyphs, } from "../../Redux/Slice/toolSlice";
 import { setBezierOption } from "../../Redux/Slice/toolSlice";
 import { BsVectorPen } from "react-icons/bs";
@@ -133,6 +134,7 @@ import {
   selectAllShapesInAllLayers,
   updateNodePosition,
   setSubtractionsFrame,
+  popShapesOutOfGroups,
 } from "../../Redux/Slice/toolSlice";
 import {
   TbDeselect,
@@ -152,7 +154,16 @@ import { useNavigate } from "react-router-dom";
 import { GrClone } from "react-icons/gr";
 import { FaClone } from "react-icons/fa";
 import { MdOutlineArrowRight } from "react-icons/md";
-
+const PAINT_SERVERS = [
+  {
+    name: "Diagonal Hatch",
+    svg: `<svg width="32" height="32"><defs><pattern id="diagonalHatch" width="8" height="8" patternTransform="rotate(45)" patternUnits="userSpaceOnUse"><line x1="0" y1="0" x2="0" y2="8" stroke="#000" stroke-width="2"/></pattern></defs><rect width="32" height="32" fill="url(#diagonalHatch)" /></svg>`
+  },
+  {
+    name: "Checkerboard",
+    svg: `<svg width="32" height="32"><defs><pattern id="checkerboard" width="8" height="8" patternUnits="userSpaceOnUse"><rect width="8" height="8" fill="#fff"/><rect width="4" height="4" fill="#000"/><rect x="4" y="4" width="4" height="4" fill="#000"/></pattern></defs><rect width="32" height="32" fill="url(#checkerboard)" /></svg>`
+  },
+];
 const Topbar = ({
   editorState,
   onEditorStateChange,
@@ -173,7 +184,8 @@ const Topbar = ({
   onZoomPageWidth,
   onZoomCenterPage,
   onZoomPrevious,
-  onZoomNext
+  onZoomNext,
+  handleOpenFillStrokeDialog,
 }) => {
   const selectedTool = useSelector((state) => state.tool.selectedTool);
   const dispatch = useDispatch();
@@ -187,6 +199,11 @@ const Topbar = ({
   const selectedShapeIds = useSelector((state) => state.tool.selectedShapeIds);
   const [showMoveLayerModal, setShowMoveLayerModal] = useState(false);
   const [targetLayerIndex, setTargetLayerIndex] = useState(null);
+  const [showPaintServersModal, setShowPaintServersModal] = useState(false);
+  const [paintServerTarget, setPaintServerTarget] = useState("fill");
+
+  const handleOpenPaintServers = () => setShowPaintServersModal(true);
+  const handleClosePaintServers = () => setShowPaintServersModal(false);
   const navigate = useNavigate();
 
   let selectedShapeId = useSelector((state) => state.tool.selectedShapeId);
@@ -543,9 +560,16 @@ const Topbar = ({
   };
 
   const handleUngroupShapes = () => {
-    if (selectedGroupId) {
-      dispatch(ungroupShapes({ groupId: selectedGroupId }));
+    if (selectedShapeIds && selectedShapeIds.length > 0) {
+      dispatch(ungroupShapes({ ids: selectedShapeIds }));
+    } else if (selectedGroupId) {
+      dispatch(ungroupShapes({ ids: [selectedGroupId] }));
       setSelectedGroupId(null);
+    }
+  };
+  const handlePopShapesOutOfGroups = () => {
+    if (selectedShapeIds && selectedShapeIds.length > 0) {
+      dispatch(popShapesOutOfGroups());
     }
   };
   const handleCreateNewPage = useCallback(() => {
@@ -718,6 +742,67 @@ const Topbar = ({
     img.onerror = () => {
       alert("Failed to load image for tracing.");
     };
+  };
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  const [showSymbolsModal, setShowSymbolsModal] = useState(false);
+  const [selectedSymbolSet, setSelectedSymbolSet] = useState(null);
+
+
+  const handleOpenSymbolsDialog = () => {
+    setShowSymbolsModal(true);
+    setSelectedSymbolSet(null);
+  };
+  const handleCloseSymbolsDialog = () => setShowSymbolsModal(false);
+  const pageMargin = useSelector(state => state.tool.pageMargin || { left: 0, top: 0 });
+  const handleObjectsToGuide = () => {
+    const selectedShapes = shapes.filter(s => selectedShapeIds.includes(s.id));
+    if (!selectedShapes.length) {
+      alert("Select one or more shapes to convert to guides.");
+      return;
+    }
+    const guidesToAdd = [];
+    selectedShapes.forEach(shape => {
+      if (shape.type === "Rectangle") {
+        guidesToAdd.push({ orientation: "vertical", position: shape.x - pageMargin.left });
+        guidesToAdd.push({ orientation: "vertical", position: shape.x + shape.width - pageMargin.left });
+        guidesToAdd.push({ orientation: "horizontal", position: shape.y - pageMargin.top });
+        guidesToAdd.push({ orientation: "horizontal", position: shape.y + shape.height - pageMargin.top });
+      } else if (shape.type === "Line" && Array.isArray(shape.points) && shape.points.length >= 4) {
+        guidesToAdd.push({ orientation: "vertical", position: shape.points[0] - pageMargin.left });
+        guidesToAdd.push({ orientation: "vertical", position: shape.points[2] - pageMargin.left });
+        guidesToAdd.push({ orientation: "horizontal", position: shape.points[1] - pageMargin.top });
+        guidesToAdd.push({ orientation: "horizontal", position: shape.points[3] - pageMargin.top });
+      } else if (shape.type === "Circle") {
+        guidesToAdd.push({ orientation: "vertical", position: shape.x - pageMargin.left });
+        guidesToAdd.push({ orientation: "horizontal", position: shape.y - pageMargin.top });
+        guidesToAdd.push({ orientation: "vertical", position: shape.x + shape.radius - pageMargin.left });
+        guidesToAdd.push({ orientation: "vertical", position: shape.x - shape.radius - pageMargin.left });
+        guidesToAdd.push({ orientation: "horizontal", position: shape.y + shape.radius - pageMargin.top });
+        guidesToAdd.push({ orientation: "horizontal", position: shape.y - shape.radius - pageMargin.top });
+      } else if (shape.type === "Polygon" && Array.isArray(shape.points)) {
+        shape.points.forEach(pt => {
+          guidesToAdd.push({ orientation: "vertical", position: pt.x - pageMargin.left });
+          guidesToAdd.push({ orientation: "horizontal", position: pt.y - pageMargin.top });
+        });
+      }
+    });
+
+    window.dispatchEvent(new CustomEvent("addGuides", { detail: guidesToAdd }));
+    selectedShapeIds.forEach(id => dispatch(deleteShape(id)));
   };
   const EditOptions = [
     { id: 1, label: "Undo...", onClick: () => dispatch(undo()) },
@@ -1098,15 +1183,15 @@ const Topbar = ({
         setActiveTab("layers");
       },
     },
-    { label: "Fill and Stroke" },
+    { label: "Fill and Stroke", onClick: handleOpenFillStrokeDialog },
     { label: "Object Properties" },
-    { label: "Symbols" },
-    { label: "Paint Servers" },
+    { label: "Symbols", onClick: handleOpenSymbolsDialog, },
+    { label: "Paint Servers", onClick: handleOpenPaintServers },
     { label: "Selectors and CSS" },
     "divider",
     { label: "Group", onClick: handleGroupShapes },
     { label: "UnGroup", onClick: handleUngroupShapes },
-    { label: "Pop Selected objects out of groups" },
+    { label: "Pop Selected objects out of groups", onClick: handlePopShapesOutOfGroups },
     {
       label: "Clip",
       subMenu: [
@@ -1132,7 +1217,7 @@ const Topbar = ({
     },
     "divider",
     { label: "Objects to Marker" },
-    { label: "Objects to Guide" },
+    { label: "Objects to Guide", onClick: handleObjectsToGuide },
     "divider",
     { label: "Raise to top" },
     { label: "Raise" },
@@ -1407,6 +1492,25 @@ const Topbar = ({
       </div>
     );
   }
+
+  const insertSymbolToCanvas = (svgString) => {
+    dispatch({
+      type: "tool/addShape",
+      payload: {
+        id: `svg-symbol-${Date.now()}`,
+        type: "SVG",
+        svg: svgString,
+        x: 100,
+        y: 100,
+        width: 64,
+        height: 64,
+        name: "Symbol",
+        draggable: true,
+        selected: false,
+      }
+    });
+    setShowSymbolsModal(false);
+  };
 
   return (
     <>
@@ -2188,6 +2292,209 @@ const Topbar = ({
           </div>
         </div>
       </div >
+      {showSymbolsModal && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            width: "100vw",
+            height: "100vh",
+            background: "rgba(0,0,0,0.3)",
+            zIndex: 9999,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center"
+          }}
+          onClick={handleCloseSymbolsDialog}
+        >
+          <div
+            style={{
+              background: "#fff",
+              padding: 24,
+              borderRadius: 8,
+              minWidth: 400,
+              minHeight: 300,
+              maxHeight: "80vh",
+              overflowY: "auto",
+              boxShadow: "0 8px 32px rgba(0,0,0,0.18)"
+            }}
+            onClick={e => e.stopPropagation()}
+          >
+            <h4>Symbols</h4>
+            {!selectedSymbolSet ? (
+              <div>
+                <div style={{ marginBottom: 16 }}>Select a symbol set:</div>
+                <ul style={{ listStyle: "none", padding: 0 }}>
+                  {Object.keys(INKSCAPE_SYMBOL_SETS).map(setName => (
+                    <li key={setName}>
+                      <button
+                        style={{
+                          width: "100%",
+                          textAlign: "left",
+                          padding: "8px 12px",
+                          marginBottom: 6,
+                          border: "1px solid #ccc",
+                          borderRadius: 4,
+                          background: "#f8f8f8",
+                          cursor: "pointer"
+                        }}
+                        onClick={() => setSelectedSymbolSet(setName)}
+                      >
+                        {setName}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : (
+              <div>
+                <button
+                  style={{
+                    marginBottom: 12,
+                    background: "none",
+                    border: "none",
+                    color: "#007bff",
+                    cursor: "pointer"
+                  }}
+                  onClick={() => setSelectedSymbolSet(null)}
+                >
+                  ← Back to sets
+                </button>
+                <h5>{selectedSymbolSet}</h5>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 16 }}>
+                  {INKSCAPE_SYMBOL_SETS[selectedSymbolSet].map((symbol, idx) => (
+                    <div
+                      key={idx}
+                      style={{
+                        width: 60,
+                        height: 60,
+                        border: "1px solid #ccc",
+                        borderRadius: 4,
+                        display: "flex",
+                        flexDirection: "column",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        background: "#fafafa",
+                        cursor: "pointer",
+                        overflow: "hidden",
+                        padding: 0,
+                      }}
+                      title={symbol.name}
+                      onClick={() => insertSymbolToCanvas(symbol.svg)}
+                    >
+                      <span
+                        style={{
+                          width: 48,
+                          height: 48,
+                          display: "inline-block",
+                        }}
+                        dangerouslySetInnerHTML={{
+                          __html: symbol.svg.replace(
+                            /<svg([^>]*)>/,
+                            '<svg$1 width="48" height="48" style="display:block;" preserveAspectRatio="xMidYMid meet">'
+                          ),
+                        }}
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            <div style={{ marginTop: 24, textAlign: "right" }}>
+              <button onClick={handleCloseSymbolsDialog} style={{ border: "none", borderRadius: 4, padding: "6px 16px" }}>
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {showPaintServersModal && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            width: "100vw",
+            height: "100vh",
+            background: "rgba(0,0,0,0.3)",
+            zIndex: 9999,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center"
+          }}
+          onClick={handleClosePaintServers}
+        >
+          <div
+            style={{
+              background: "#fff",
+              padding: 24,
+              borderRadius: 8,
+              minWidth: 400,
+              maxHeight: "80vh",
+              overflowY: "auto",
+              boxShadow: "0 8px 32px rgba(0,0,0,0.18)"
+            }}
+            onClick={e => e.stopPropagation()}
+          >
+            <h4>Paint Servers (Patterns & Hatches)</h4>
+            <div style={{ marginBottom: 12 }}>
+              <label>
+                <input
+                  type="radio"
+                  name="paintServerTarget"
+                  value="fill"
+                  checked={paintServerTarget === "fill"}
+                  onChange={() => setPaintServerTarget("fill")}
+                /> Fill
+              </label>
+              <label style={{ marginLeft: 16 }}>
+                <input
+                  type="radio"
+                  name="paintServerTarget"
+                  value="stroke"
+                  checked={paintServerTarget === "stroke"}
+                  onChange={() => setPaintServerTarget("stroke")}
+                /> Stroke
+              </label>
+            </div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 16 }}>
+              {PAINT_SERVERS.map((srv, idx) => (
+                <div
+                  key={idx}
+                  style={{
+                    width: 48,
+                    height: 48,
+                    border: "1px solid #ccc",
+                    borderRadius: 4,
+                    background: "#fafafa",
+                    cursor: "pointer",
+                    overflow: "hidden"
+                  }}
+                  title={srv.name}
+                  onClick={() => {
+                    if (!selectedShapeId) {
+                      alert("Select a shape first.");
+                      return;
+                    }
+                    dispatch(updateShapePosition({
+                      id: selectedShapeId,
+                      [paintServerTarget]: { type: "pattern", svg: srv.svg }
+                    }));
+                    setShowPaintServersModal(false);
+                  }}
+                  dangerouslySetInnerHTML={{ __html: srv.svg }}
+                />
+              ))}
+            </div>
+            <div style={{ marginTop: 24, textAlign: "right" }}>
+              <button onClick={handleClosePaintServers} style={{ border: "none", borderRadius: 4, padding: "6px 16px" }}>
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 };

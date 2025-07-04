@@ -22,6 +22,7 @@
     "draftjs-to-html": "^0.9.1",
     "fbjs": "^3.0.5",
     "html2canvas": "^1.4.1",
+    "jsdom": "^26.1.0",
     "jspdf": "^2.5.2",
     "konva": "^9.3.18",
     "martinez-polygon-clipping": "^0.7.4",
@@ -39,6 +40,7 @@
     "react-redux": "^9.2.0",
     "react-router-dom": "^6.27.0",
     "react-tooltip": "^5.28.0",
+    "use-image": "^1.1.4",
     "uuid": "^11.0.3"
   },
   "devDependencies": {

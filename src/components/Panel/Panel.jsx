@@ -13,6 +13,7 @@ import * as React from "react";
 import html2canvas from "html2canvas";
 import { jsPDF } from "jspdf";
 import { DropperTopbar } from "../Topbar/Topbar";
+import useImage from 'use-image';
 import './Panel.css'
 import {
   Stage,
@@ -5115,6 +5116,62 @@ const Panel = React.forwardRef(({
     }
     return [];
   }
+  function svgToBitmap(svgString, width, height) {
+    return new Promise((resolve) => {
+      const img = new window.Image();
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(img, 0, 0, width, height);
+        resolve(canvas);
+      };
+      img.src = `data:image/svg+xml;utf8,${encodeURIComponent(svgString)}`;
+    });
+  }
+  const SvgImage = React.memo(function SvgImage({ svg, x, y, width, height, draggable, onClick, id }) {
+    const processedSvg = React.useMemo(() => (
+      svg
+        .replace(/<style[\s\S]*?<\/style>/gi, '')
+        .replace(/<defs[\s\S]*?<\/defs>/gi, '')
+        .replace(/<metadata[\s\S]*?<\/metadata>/gi, '')
+        .replace(/<title[\s\S]*?<\/title>/gi, '')
+        .replace(/<desc[\s\S]*?<\/desc>/gi, '')
+        .replace(/<script[\s\S]*?<\/script>/gi, '')
+        .replace(/<!--[\s\S]*?-->/g, '')
+        .replace(/\s+xmlns(:\w+)?="[^"]*"/g, '')
+        .replace(/\s(width|height)="[^"]*"/g, '')
+        .replace(
+          /<svg([^>]*)>/,
+          `<svg$1 width="${width}" height="${height}" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg">`
+        )
+        .replace(/[\n\r\t]+/g, ' ')
+    ), [svg, width, height]);
+
+    const [bitmap, setBitmap] = React.useState(null);
+
+    React.useEffect(() => {
+      let cancelled = false;
+      svgToBitmap(processedSvg, width, height).then((canvas) => {
+        if (!cancelled) setBitmap(canvas);
+      });
+      return () => { cancelled = true; };
+    }, [processedSvg, width, height]);
+
+    return (
+      <Image
+        id={id}
+        image={bitmap}
+        x={x}
+        y={y}
+        width={width}
+        height={height}
+        draggable={draggable}
+        onClick={onClick}
+      />
+    );
+  });
   return (
     <>
       {/* {selectedTool === "Dropper" && (
@@ -8891,6 +8948,21 @@ const Panel = React.forwardRef(({
                     />
                   ))
                 }
+              </Layer>
+              <Layer>
+                {shapes.filter(s => s.type === "SVG").map(shape => (
+                  <SvgImage
+                    key={shape.id}
+                    id={shape.id}
+                    svg={shape.svg}
+                    x={shape.x}
+                    y={shape.y}
+                    width={shape.width}
+                    height={shape.height}
+                    draggable={shape.draggable}
+                    onClick={() => dispatch(selectShape(shape.id))}
+                  />
+                ))}
               </Layer>
             </Stage>
           </div>

@@ -53,7 +53,17 @@ const Main = () => {
   const showCheckerboard = useSelector(state => state.tool.showCheckerboard);
   const [isFillStrokeDialogOpen, setIsFillStrokeDialogOpen] = useState(false);
 
-  const handleOpenFillStrokeDialog = () => setIsFillStrokeDialogOpen(true);
+  const handleOpenFillStrokeDialog = () => {
+    console.log("Open Fill & Stroke dialog");
+    setIsFillStrokeDialogOpen(true);
+  };
+  useEffect(() => {
+    function handleAddGuides(e) {
+      setGuidelines(prev => [...prev, ...(e.detail || [])]);
+    }
+    window.addEventListener("addGuides", handleAddGuides);
+    return () => window.removeEventListener("addGuides", handleAddGuides);
+  }, []);
   const handleCloseFillStrokeDialog = () => setIsFillStrokeDialogOpen(false);
   // const width = useSelector(state => state.tool.width);
   // const height = useSelector(state => state.tool.height);
@@ -939,8 +949,12 @@ const Main = () => {
               onMouseLeave={() => setHoveredGuideIndex((prev) => (prev === index ? null : prev))}
               style={{
                 position: "absolute",
-                top: guide.orientation === "horizontal" ? `${guide.position * zoomLevel}px` : "0",
-                left: guide.orientation === "vertical" ? `${guide.position * zoomLevel}px` : "0",
+                top: guide.orientation === "horizontal"
+                  ? `${guide.position * zoomLevel}px`
+                  : "0",
+                left: guide.orientation === "vertical"
+                  ? `${guide.position * zoomLevel}px`
+                  : "0",
                 width: guide.orientation === "horizontal" ? "100%" : "1px",
                 height: guide.orientation === "vertical" ? "100%" : "1px",
                 backgroundColor: hoveredGuideIndex === index ? "red" : "blue",

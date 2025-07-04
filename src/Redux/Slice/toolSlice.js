@@ -5577,6 +5577,28 @@ const toolSlice = createSlice({
     setSelectedLayerIndex: (state, action) => {
       state.selectedLayerIndex = action.payload;
     },
+    popShapesOutOfGroups: (state, action) => {
+      const selectedLayer = state.layers[state.selectedLayerIndex];
+      const selectedShapeIds = state.selectedShapeIds;
+
+      selectedLayer.shapes.forEach((shape, groupIdx) => {
+        if (shape.type === "Group" && Array.isArray(shape.shapes)) {
+          const toPop = shape.shapes.filter(s => selectedShapeIds.includes(s.id));
+          if (toPop.length > 0) {
+            shape.shapes = shape.shapes.filter(s => !selectedShapeIds.includes(s.id));
+            toPop.forEach(s => {
+              const popped = { ...s };
+              delete popped.groupId;
+              selectedLayer.shapes.push(popped);
+            });
+          }
+        }
+      });
+
+      selectedLayer.shapes = selectedLayer.shapes.filter(
+        shape => shape.type !== "Group" || (shape.shapes && shape.shapes.length > 0)
+      );
+    },
   },
 
 });
@@ -5823,6 +5845,7 @@ export const {
   setEmbeddedScripts,
   setLayersAndSelection,
   setSelectedLayerIndex,
+  popShapesOutOfGroups,
 } = toolSlice.actions;
 
 export default toolSlice.reducer;

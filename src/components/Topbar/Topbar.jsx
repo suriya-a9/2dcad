@@ -201,7 +201,7 @@ const Topbar = ({
   const [targetLayerIndex, setTargetLayerIndex] = useState(null);
   const [showPaintServersModal, setShowPaintServersModal] = useState(false);
   const [paintServerTarget, setPaintServerTarget] = useState("fill");
-
+  const [customPaintServers, setCustomPaintServers] = useState([]);
   const handleOpenPaintServers = () => setShowPaintServersModal(true);
   const handleClosePaintServers = () => setShowPaintServersModal(false);
   const navigate = useNavigate();
@@ -804,6 +804,319 @@ const Topbar = ({
     window.dispatchEvent(new CustomEvent("addGuides", { detail: guidesToAdd }));
     selectedShapeIds.forEach(id => dispatch(deleteShape(id)));
   };
+  const handleSetClip = () => {
+    if (selectedShapeIds.length !== 2) {
+      alert("Select exactly two shapes: first the target (e.g. image), then the clip path (on top).");
+      return;
+    }
+    const [targetId, clipId] = selectedShapeIds;
+    const targetShape = shapes.find(s => s.id === targetId);
+    const clipShape = shapes.find(s => s.id === clipId);
+    if (!targetShape || !clipShape) return;
+
+    let clipPath = null;
+    if (clipShape.type === "Polygon" && Array.isArray(clipShape.points)) {
+      clipPath = clipShape.points.map(pt => ({
+        x: (clipShape.x ?? 0) + pt.x - targetShape.x,
+        y: (clipShape.y ?? 0) + pt.y - targetShape.y
+      }));
+    } else if (clipShape.type === "Rectangle") {
+      clipPath = [
+        { x: clipShape.x - targetShape.x, y: clipShape.y - targetShape.y },
+        { x: clipShape.x + clipShape.width - targetShape.x, y: clipShape.y - targetShape.y },
+        { x: clipShape.x + clipShape.width - targetShape.x, y: clipShape.y + clipShape.height - targetShape.y },
+        { x: clipShape.x - targetShape.x, y: clipShape.y + clipShape.height - targetShape.y }
+      ];
+    } else if (clipShape.type === "Circle") {
+      const num = 32;
+      clipPath = Array.from({ length: num }).map((_, i) => {
+        const angle = (2 * Math.PI * i) / num;
+        return {
+          x: clipShape.x + Math.cos(angle) * clipShape.radius - targetShape.x,
+          y: clipShape.y + Math.sin(angle) * clipShape.radius - targetShape.y
+        };
+      });
+    } else {
+      alert("Clip path must be a polygon, rectangle, or circle.");
+      return;
+    }
+
+    dispatch(updateShapePosition({
+      id: targetId,
+      clipPath
+    }));
+
+
+    dispatch(deleteShape(clipId));
+  };
+  const handleSetInverseClip = () => {
+    if (selectedShapeIds.length !== 2) {
+      alert("Select exactly two shapes: first the target (e.g. image), then the clip path (on top).");
+      return;
+    }
+    const [targetId, clipId] = selectedShapeIds;
+    const targetShape = shapes.find(s => s.id === targetId);
+    const clipShape = shapes.find(s => s.id === clipId);
+    if (!targetShape || !clipShape) return;
+
+
+    const rectPath = [
+      { x: 0, y: 0 },
+      { x: targetShape.width, y: 0 },
+      { x: targetShape.width, y: targetShape.height },
+      { x: 0, y: targetShape.height }
+    ];
+
+
+    let clipPath = [];
+    if (clipShape.type === "Polygon" && Array.isArray(clipShape.points)) {
+      clipPath = clipShape.points.map(pt => ({
+        x: (clipShape.x ?? 0) + pt.x - targetShape.x,
+        y: (clipShape.y ?? 0) + pt.y - targetShape.y
+      }));
+    } else if (clipShape.type === "Rectangle") {
+      clipPath = [
+        { x: clipShape.x - targetShape.x, y: clipShape.y - targetShape.y },
+        { x: clipShape.x + clipShape.width - targetShape.x, y: clipShape.y - targetShape.y },
+        { x: clipShape.x + clipShape.width - targetShape.x, y: clipShape.y + clipShape.height - targetShape.y },
+        { x: clipShape.x - targetShape.x, y: clipShape.y + clipShape.height - targetShape.y }
+      ];
+    } else if (clipShape.type === "Circle") {
+      const num = 32;
+      clipPath = Array.from({ length: num }).map((_, i) => {
+        const angle = (2 * Math.PI * i) / num;
+        return {
+          x: clipShape.x + Math.cos(angle) * clipShape.radius - targetShape.x,
+          y: clipShape.y + Math.sin(angle) * clipShape.radius - targetShape.y
+        };
+      });
+    } else {
+      alert("Clip path must be a polygon, rectangle, or circle.");
+      return;
+    }
+
+
+    dispatch(updateShapePosition({
+      id: targetId,
+      inverseClipPath: [rectPath, clipPath]
+    }));
+
+
+    dispatch(deleteShape(clipId));
+  };
+  const handleReleaseClip = () => {
+
+    const targetShape = shapes.find(
+      s =>
+        selectedShapeIds.includes(s.id) &&
+        (s.clipPath || s.inverseClipPath)
+    );
+    if (!targetShape) {
+      alert("Select a clipped object to release its clip.");
+      return;
+    }
+
+
+    let restoredShape = null;
+    if (targetShape.clipPath) {
+
+      restoredShape = {
+        id: `clip-restored-${Date.now()}`,
+        type: "Polygon",
+        x: targetShape.x,
+        y: targetShape.y,
+        points: targetShape.clipPath.map(pt => ({ x: pt.x, y: pt.y })),
+        fill: "#00bfff44",
+        stroke: "#00bfff",
+        strokeWidth: 1,
+        draggable: true,
+        selected: false,
+      };
+    } else if (targetShape.inverseClipPath) {
+
+      const inner = targetShape.inverseClipPath[1];
+      restoredShape = {
+        id: `clip-restored-${Date.now()}`,
+        type: "Polygon",
+        x: targetShape.x,
+        y: targetShape.y,
+        points: inner.map(pt => ({ x: pt.x, y: pt.y })),
+        fill: "#00bfff44",
+        stroke: "#00bfff",
+        strokeWidth: 1,
+        draggable: true,
+        selected: false,
+      };
+    }
+
+
+    dispatch(updateShapePosition({
+      id: targetShape.id,
+      clipPath: undefined,
+      inverseClipPath: undefined,
+    }));
+
+
+    if (restoredShape) {
+      dispatch({ type: "tool/addShape", payload: restoredShape });
+    }
+  };
+  const handleSetMask = () => {
+    if (selectedShapeIds.length !== 2) {
+      alert("Select exactly two shapes: first the target (e.g. image), then the mask shape (on top).");
+      return;
+    }
+    const [targetId, maskId] = selectedShapeIds;
+    const targetShape = shapes.find(s => s.id === targetId);
+    const maskShape = shapes.find(s => s.id === maskId);
+    if (!targetShape || !maskShape) return;
+
+    let maskPath = null;
+    if (maskShape.type === "Polygon" && Array.isArray(maskShape.points)) {
+      maskPath = maskShape.points.map(pt => ({
+        x: (maskShape.x ?? 0) + pt.x - targetShape.x,
+        y: (maskShape.y ?? 0) + pt.y - targetShape.y
+      }));
+    } else if (maskShape.type === "Rectangle") {
+      maskPath = [
+        { x: maskShape.x - targetShape.x, y: maskShape.y - targetShape.y },
+        { x: maskShape.x + maskShape.width - targetShape.x, y: maskShape.y - targetShape.y },
+        { x: maskShape.x + maskShape.width - targetShape.x, y: maskShape.y + maskShape.height - targetShape.y },
+        { x: maskShape.x - targetShape.x, y: maskShape.y + maskShape.height - targetShape.y }
+      ];
+    } else if (maskShape.type === "Circle") {
+      const num = 32;
+      maskPath = Array.from({ length: num }).map((_, i) => {
+        const angle = (2 * Math.PI * i) / num;
+        return {
+          x: maskShape.x + Math.cos(angle) * maskShape.radius - targetShape.x,
+          y: maskShape.y + Math.sin(angle) * maskShape.radius - targetShape.y
+        };
+      });
+    } else {
+      alert("Mask must be a polygon, rectangle, or circle.");
+      return;
+    }
+
+    dispatch(updateShapePosition({
+      id: targetId,
+      maskPath
+    }));
+
+
+    dispatch(deleteShape(maskId));
+  };
+  const handleSetInverseMask = () => {
+    if (selectedShapeIds.length !== 2) {
+      alert("Select exactly two shapes: first the target (e.g. image), then the mask shape (on top).");
+      return;
+    }
+    const [targetId, maskId] = selectedShapeIds;
+    const targetShape = shapes.find(s => s.id === targetId);
+    const maskShape = shapes.find(s => s.id === maskId);
+    if (!targetShape || !maskShape) return;
+
+
+    const rectPath = [
+      { x: 0, y: 0 },
+      { x: targetShape.width, y: 0 },
+      { x: targetShape.width, y: targetShape.height },
+      { x: 0, y: targetShape.height }
+    ];
+
+
+    let maskPath = [];
+    if (maskShape.type === "Polygon" && Array.isArray(maskShape.points)) {
+      maskPath = maskShape.points.map(pt => ({
+        x: (maskShape.x ?? 0) + pt.x - targetShape.x,
+        y: (maskShape.y ?? 0) + pt.y - targetShape.y
+      }));
+    } else if (maskShape.type === "Rectangle") {
+      maskPath = [
+        { x: maskShape.x - targetShape.x, y: maskShape.y - targetShape.y },
+        { x: maskShape.x + maskShape.width - targetShape.x, y: maskShape.y - targetShape.y },
+        { x: maskShape.x + maskShape.width - targetShape.x, y: maskShape.y + maskShape.height - targetShape.y },
+        { x: maskShape.x - targetShape.x, y: maskShape.y + maskShape.height - targetShape.y }
+      ];
+    } else if (maskShape.type === "Circle") {
+      const num = 32;
+      maskPath = Array.from({ length: num }).map((_, i) => {
+        const angle = (2 * Math.PI * i) / num;
+        return {
+          x: maskShape.x + Math.cos(angle) * maskShape.radius - targetShape.x,
+          y: maskShape.y + Math.sin(angle) * maskShape.radius - targetShape.y
+        };
+      });
+    } else {
+      alert("Mask must be a polygon, rectangle, or circle.");
+      return;
+    }
+
+
+    dispatch(updateShapePosition({
+      id: targetId,
+      inverseMaskPath: [rectPath, maskPath]
+    }));
+
+
+    dispatch(deleteShape(maskId));
+  };
+  const handleReleaseMask = () => {
+
+    const targetShape = shapes.find(
+      s =>
+        selectedShapeIds.includes(s.id) &&
+        (s.maskPath || s.inverseMaskPath)
+    );
+    if (!targetShape) {
+      alert("Select a masked object to release its mask.");
+      return;
+    }
+
+
+    let restoredShape = null;
+    if (targetShape.maskPath) {
+      restoredShape = {
+        id: `mask-restored-${Date.now()}`,
+        type: "Polygon",
+        x: targetShape.x,
+        y: targetShape.y,
+        points: targetShape.maskPath.map(pt => ({ x: pt.x, y: pt.y })),
+        fill: "#00bfff44",
+        stroke: "#00bfff",
+        strokeWidth: 1,
+        draggable: true,
+        selected: false,
+      };
+    } else if (targetShape.inverseMaskPath) {
+
+      const inner = targetShape.inverseMaskPath[1];
+      restoredShape = {
+        id: `mask-restored-${Date.now()}`,
+        type: "Polygon",
+        x: targetShape.x,
+        y: targetShape.y,
+        points: inner.map(pt => ({ x: pt.x, y: pt.y })),
+        fill: "#00bfff44",
+        stroke: "#00bfff",
+        strokeWidth: 1,
+        draggable: true,
+        selected: false,
+      };
+    }
+
+
+    dispatch(updateShapePosition({
+      id: targetShape.id,
+      maskPath: undefined,
+      inverseMaskPath: undefined,
+    }));
+
+
+    if (restoredShape) {
+      dispatch({ type: "tool/addShape", payload: restoredShape });
+    }
+  };
   const EditOptions = [
     { id: 1, label: "Undo...", onClick: () => dispatch(undo()) },
     { id: 2, label: "Redo...", onClick: () => dispatch(redo()) },
@@ -1195,23 +1508,88 @@ const Topbar = ({
     {
       label: "Clip",
       subMenu: [
-        { label: "Set Clip" },
-        { label: "Set Inverse Clip (LPE)" },
-        { label: "Release Clip" },
+        { label: "Set Clip", onClick: handleSetClip },
+        { label: "Set Inverse Clip (LPE)", onClick: handleSetInverseClip },
+        { label: "Release Clip", onClick: handleReleaseClip },
       ],
     },
     {
       label: "Mask",
       subMenu: [
-        { label: "Set Mask" },
-        { label: "Set Inverse Mask (LPE)" },
-        { label: "Release Mask" },
+        { label: "Set Mask", onClick: handleSetMask },
+        { label: "Set Inverse Mask (LPE)", onClick: handleSetInverseMask },
+        { label: "Release Mask", onClick: handleReleaseMask },
       ],
     },
     {
       label: "Pattern",
       subMenu: [
-        { label: "Objects to Pattern" },
+        {
+          label: "Objects to Pattern",
+          onClick: () => {
+            const selectedShapes = shapes.filter(s => selectedShapeIds.includes(s.id));
+            if (!selectedShapes.length) {
+              alert("Select one or more shapes to convert to a pattern.");
+              return;
+            }
+
+            let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+            selectedShapes.forEach(s => {
+              const x = s.x || 0, y = s.y || 0;
+              let w = s.width || (s.radius ? s.radius * 2 : 0);
+              let h = s.height || (s.radius ? s.radius * 2 : 0);
+              if (s.radius !== undefined) {
+                minX = Math.min(minX, x - s.radius);
+                minY = Math.min(minY, y - s.radius);
+                maxX = Math.max(maxX, x + s.radius);
+                maxY = Math.max(maxY, y + s.radius);
+              } else {
+                minX = Math.min(minX, x);
+                minY = Math.min(minY, y);
+                maxX = Math.max(maxX, x + w);
+                maxY = Math.max(maxY, y + h);
+              }
+            });
+            const tileWidth = maxX - minX;
+            const tileHeight = maxY - minY;
+
+            function shapeToSvg(s) {
+              if (s.type === "Rectangle") {
+                return `<rect x="${s.x - minX}" y="${s.y - minY}" width="${s.width}" height="${s.height}" fill="${s.fill || "black"}" stroke="${s.stroke || "none"}" stroke-width="${s.strokeWidth || 0}" />`;
+              }
+              if (s.type === "Circle") {
+                return `<circle cx="${s.x - minX}" cy="${s.y - minY}" r="${s.radius}" fill="${s.fill || "black"}" stroke="${s.stroke || "none"}" stroke-width="${s.strokeWidth || 0}" />`;
+              }
+              if (s.type === "Polygon" && Array.isArray(s.points)) {
+                const pts = s.points.map(pt => `${(pt.x ?? pt[0]) + (s.x || 0) - minX},${(pt.y ?? pt[1]) + (s.y || 0) - minY}`).join(" ");
+                return `<polygon points="${pts}" fill="${s.fill || "black"}" stroke="${s.stroke || "none"}" stroke-width="${s.strokeWidth || 0}" />`;
+              }
+              if (s.type === "Star") {
+                const num = (s.corners || 5) * 2;
+                const pts = Array.from({ length: num }).map((_, i) => {
+                  const angle = (Math.PI * 2 * i) / num - Math.PI / 2;
+                  const r = i % 2 === 0 ? s.outerRadius : s.innerRadius;
+                  return [
+                    (s.x + r * Math.cos(angle)) - minX,
+                    (s.y + r * Math.sin(angle)) - minY
+                  ].join(",");
+                }).join(" ");
+                return `<polygon points="${pts}" fill="${s.fill || "black"}" stroke="${s.stroke || "none"}" stroke-width="${s.strokeWidth || 0}" />`;
+              }
+              return "";
+            }
+            const svgContent = selectedShapes.map(shapeToSvg).join("\n");
+            const patternSvg = `<svg width="${tileWidth}" height="${tileHeight}" xmlns="http://www.w3.org/2000/svg">${svgContent}</svg>`;
+            setCustomPaintServers(prev => [
+              ...prev,
+              {
+                name: `Pattern ${prev.length + 1}`,
+                svg: patternSvg
+              }
+            ]);
+            alert("Pattern created! Now available in Paint Servers.");
+          }
+        },
         { label: "Pattern to Objects" },
       ],
     },
@@ -2058,7 +2436,15 @@ const Topbar = ({
                               <ul className="paste-dropdown-item">
                                 {item.subMenu.map((subItem, subIndex) => (
                                   <li key={subIndex}>
-                                    <a href="#">{subItem.label}</a>
+                                    <a
+                                      href="#"
+                                      onClick={e => {
+                                        e.preventDefault();
+                                        if (subItem.onClick) subItem.onClick();
+                                      }}
+                                    >
+                                      {subItem.label}
+                                    </a>
                                   </li>
                                 ))}
                               </ul>
@@ -2459,7 +2845,7 @@ const Topbar = ({
               </label>
             </div>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 16 }}>
-              {PAINT_SERVERS.map((srv, idx) => (
+              {[...PAINT_SERVERS, ...customPaintServers].map((srv, idx) => (
                 <div
                   key={idx}
                   style={{

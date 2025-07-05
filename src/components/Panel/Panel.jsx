@@ -417,6 +417,7 @@ const Panel = React.forwardRef(({
   const dynamicOffsetAmount = useSelector(state => state.tool.dynamicOffsetAmount);
   const straightPoints = useSelector((state) => state.tool.straightPoints);
   const [snapText, setSnapText] = useState(null);
+  const [patternImages, setPatternImages] = React.useState({});
   function addGuidesAtLine(x1, y1, x2, y2) {
     setGuides(prev => [
       ...prev,
@@ -5172,6 +5173,21 @@ const Panel = React.forwardRef(({
       />
     );
   });
+  React.useEffect(() => {
+    shapes.forEach(shape => {
+      if (
+        shape.fill &&
+        shape.fill.type === "pattern" &&
+        shape.fill.svg &&
+        !patternImages[shape.id]
+      ) {
+        console.log("Loading pattern SVG for shape", shape.id, shape.fill.svg);
+        svgToBitmap(shape.fill.svg, shape.width, shape.height).then(img => {
+          setPatternImages(prev => ({ ...prev, [shape.id]: img }));
+        });
+      }
+    });
+  }, [shapes]);
   return (
     <>
       {/* {selectedTool === "Dropper" && (
@@ -5886,12 +5902,16 @@ const Panel = React.forwardRef(({
                             width={shape.width}
                             height={shape.height}
                             fill={
-                              shape.gradientTarget === "fill" && shape.fill?.type === "linear-gradient"
-                                ? undefined
-                                : shape.fill?.type === "linear-gradient" || shape.fill?.type === "radial-gradient"
+                              shape.fill && shape.fill.type === "pattern"
+                                ? (patternImages[shape.id] ? undefined : "#ccc")
+                                : shape.gradientTarget === "fill" && shape.fill?.type === "linear-gradient"
                                   ? undefined
-                                  : shape.fill || "transparent"
+                                  : shape.fill?.type === "linear-gradient" || shape.fill?.type === "radial-gradient"
+                                    ? undefined
+                                    : shape.fill || "transparent"
                             }
+                            fillPatternImage={shape.fill && shape.fill.type === "pattern" ? patternImages[shape.id] : undefined}
+                            fillPatternRepeat="repeat"
                             fillLinearGradientStartPoint={
                               shape.gradientTarget === "fill" && shape.fill?.type === "linear-gradient"
                                 ? shape.fill.start
@@ -6225,26 +6245,85 @@ const Panel = React.forwardRef(({
                     const isSelected = selectedShapeIds.includes(shape.id);
                     return (
                       <React.Fragment key={shape.id}>
-                        <CanvasImage
-                          ref={node => {
-                            if (node) shapeRefs.current[shape.id] = node;
-                            else delete shapeRefs.current[shape.id];
-                          }}
-                          id={shape.id}
-                          shape={shape}
-                          draggable={selectedTool === "Select"}
-                          dash={getDashArray(shape.strokeStyle)}
-                          onClick={e => {
-                            e.cancelBubble = true;
-                            if (!selectedShapeIds.includes(shape.id)) {
-                              dispatch(selectShape(shape.id));
-                            }
-                          }}
-                          onDragEnd={e => {
-                            const { x, y } = e.target.position();
-                            dispatch(updateShapePosition({ id: shape.id, x, y }));
-                          }}
-                        />
+                        <Group
+                          x={shape.x}
+                          y={shape.y}
+                          clipFunc={
+                            shape.inverseClipPath
+                              ? ctx => {
+                                ctx.beginPath();
+                                shape.inverseClipPath[0].forEach((pt, i) => {
+                                  if (i === 0) ctx.moveTo(pt.x, pt.y);
+                                  else ctx.lineTo(pt.x, pt.y);
+                                });
+                                ctx.closePath();
+                                ctx.moveTo(shape.inverseClipPath[1][0].x, shape.inverseClipPath[1][0].y);
+                                for (let i = 1; i < shape.inverseClipPath[1].length; i++) {
+                                  ctx.lineTo(shape.inverseClipPath[1][i].x, shape.inverseClipPath[1][i].y);
+                                }
+                                ctx.closePath();
+                                ctx.clip('evenodd');
+                              }
+                              : shape.clipPath
+                                ? ctx => {
+                                  ctx.beginPath();
+                                  shape.clipPath.forEach((pt, i) => {
+                                    if (i === 0) ctx.moveTo(pt.x, pt.y);
+                                    else ctx.lineTo(pt.x, pt.y);
+                                  });
+                                  ctx.closePath();
+                                }
+                                : shape.maskPath
+                                  ? ctx => {
+                                    ctx.beginPath();
+                                    shape.maskPath.forEach((pt, i) => {
+                                      if (i === 0) ctx.moveTo(pt.x, pt.y);
+                                      else ctx.lineTo(pt.x, pt.y);
+                                    });
+                                    ctx.closePath();
+                                  }
+                                  : shape.inverseMaskPath
+                                    ? ctx => {
+                                      ctx.beginPath();
+                                      shape.inverseMaskPath[0].forEach((pt, i) => {
+                                        if (i === 0) ctx.moveTo(pt.x, pt.y);
+                                        else ctx.lineTo(pt.x, pt.y);
+                                      });
+                                      ctx.closePath();
+                                      ctx.moveTo(shape.inverseMaskPath[1][0].x, shape.inverseMaskPath[1][0].y);
+                                      shape.inverseMaskPath[1].forEach((pt, i) => {
+                                        if (i === 0) ctx.moveTo(pt.x, pt.y);
+                                        else ctx.lineTo(pt.x, pt.y);
+                                      });
+                                      ctx.closePath();
+                                      ctx.clip("evenodd");
+                                    }
+                                    : undefined
+                          }
+                        >
+                          <CanvasImage
+                            ref={node => {
+                              if (node) shapeRefs.current[shape.id] = node;
+                              else delete shapeRefs.current[shape.id];
+                            }}
+                            id={shape.id}
+                            shape={{ ...shape, x: 0, y: 0 }}
+                            x={0}
+                            y={0}
+                            draggable={selectedTool === "Select"}
+                            dash={getDashArray(shape.strokeStyle)}
+                            onClick={e => {
+                              e.cancelBubble = true;
+                              if (!selectedShapeIds.includes(shape.id)) {
+                                dispatch(selectShape(shape.id));
+                              }
+                            }}
+                            onDragEnd={e => {
+                              const { x, y } = e.target.position();
+                              dispatch(updateShapePosition({ id: shape.id, x, y }));
+                            }}
+                          />
+                        </Group>
                         {isSelected && shapeRefs.current[shape.id] && selectedTool !== "Node" && (
                           <Transformer
                             ref={transformerRef}

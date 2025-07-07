@@ -59,6 +59,7 @@ import {
 } from "react-icons/fa";
 import { MdSwapHoriz, MdSwapVert, MdClearAll } from "react-icons/md";
 import { MdVerticalAlignTop, MdVerticalAlignCenter, MdVerticalAlignBottom } from "react-icons/md";
+import { FaEye, FaEyeSlash, FaLock, FaLockOpen } from "react-icons/fa";
 import { useCallback, useRef, useState } from "react";
 import { IoMdArrowDropdown } from "react-icons/io";
 import { TbArrowsShuffle } from "react-icons/tb"
@@ -93,6 +94,8 @@ const RightSidebar = ({
   handleOpenFillStrokeDialog,
   isFillStrokeDialogOpen,
   handleCloseFillStrokeDialog,
+  isAlignPanelOpen,
+  setIsAlignPanelOpen,
 }) => {
   const dispatch = useDispatch();
   const fileInputRef = useRef(null);
@@ -101,7 +104,6 @@ const RightSidebar = ({
   const selectedShapeIds = useSelector((state) => state.tool.selectedShapeIds);
   const undoHistory = useSelector((state) => state.tool.undoHistory);
   const [showPropertiesIcons, setShowPropertiesIcons] = useState(false);
-  const [isAlignPanelOpen, setIsAlignPanelOpen] = useState(false);
   const [alignTab, setAlignTab] = useState("align");
   const [horizontalSpacing, setHorizontalSpacing] = useState(10);
   const [verticalSpacing, setVerticalSpacing] = useState(10);
@@ -123,6 +125,7 @@ const RightSidebar = ({
   const [rotateObjects, setRotateObjects] = useState(false);
   const [selectedRightIcon, setSelectedRightIcon] = useState(null);
   const [isDocPropsOpen, setIsDocPropsOpen] = useState(false);
+  console.log("isAlignPanelOpen in RightSidebar:", isAlignPanelOpen);
   const alignOptions = [
     { key: "left", label: "Align Left", icon: <FaAlignLeft /> },
     { key: "center", label: "Align Center", icon: <FaAlignCenter /> },
@@ -758,15 +761,19 @@ const RightSidebar = ({
 
   const handleSelectShape = useCallback(
     (shapeId) => {
-      if (selectedShapeIds.includes(shapeId)) {
+      const allShapes = layers.flatMap(l => l.shapes.concat(
+        l.shapes.filter(s => s.type === "Group").flatMap(g => g.shapes || [])
+      ));
+      const shape = allShapes.find(s => s.id === shapeId);
+      if (shape?.locked) return;
 
+      if (selectedShapeIds.includes(shapeId)) {
         dispatch(deselectAllShapes());
       } else {
-
         dispatch(selectShape(shapeId));
       }
     },
-    [dispatch, selectedShapeIds]
+    [dispatch, selectedShapeIds, layers]
   );
 
   const handleDragOver = (e) => {
@@ -809,7 +816,7 @@ const RightSidebar = ({
 
   return (
     <div className="right-sidebar">
-      <div className="d-flex flex-column align-items-end mb-3">
+      <div className="d-flex flex-column align-items-end mb-3" style={{ position: "relative" }}>
         <div className="right-icons">
           <div className="p-2 right-icon" onClick={() => {
             setSelectedRightIcon("layers")
@@ -1008,408 +1015,6 @@ const RightSidebar = ({
                 style={{ cursor: "pointer" }}
               />
             </div>
-            {isAlignPanelOpen && (
-              <div className="align-panel" style={{
-                position: "absolute",
-                right: 60,
-                top: -250,
-                background: "#222",
-                color: "#fff",
-                height: 250,
-                overflowX: "scroll",
-                borderRadius: 8,
-                boxShadow: "0 2px 8px rgba(0,0,0,0.2)",
-                zIndex: 2000,
-                padding: 16,
-                minWidth: 240
-              }}>
-                <div style={{ display: "flex", borderBottom: "1px solid #444", marginBottom: 8 }}>
-                  <button style={{ flex: 1, background: alignTab === "align" ? "#444" : "none", color: "#fff" }} onClick={() => setAlignTab("align")}>Align</button>
-                  <button style={{ flex: 1, background: alignTab === "grid" ? "#444" : "none", color: "#fff" }} onClick={() => setAlignTab("grid")}>Grid</button>
-                  <button style={{ flex: 1, background: alignTab === "circular" ? "#444" : "none", color: "#fff" }} onClick={() => setAlignTab("circular")}>Circular</button>
-                </div>
-                <div>
-                  {alignTab === "align" && (
-                    <>
-                      <div style={{ fontWeight: "bold", marginBottom: 4 }}>Align</div>
-                      <div style={{ display: "flex", flexWrap: "wrap", gap: 8, justifyContent: "center", marginBottom: 12 }}>
-                        {alignOptions.map(opt => (
-                          <button
-                            key={opt.key}
-                            title={opt.label}
-                            style={{
-                              width: 40,
-                              height: 40,
-                              background: "#333",
-                              color: "#fff",
-                              border: "none",
-                              borderRadius: 4,
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                              fontSize: 22,
-                              cursor: "pointer"
-                            }}
-                            onClick={() => handleAlign(opt.key)}
-                          >
-                            {opt.icon}
-                          </button>
-                        ))}
-                      </div>
-                      <div style={{ fontWeight: "bold", marginBottom: 4 }}>Distribute</div>
-                      <div style={{ display: "flex", flexWrap: "wrap", gap: 8, justifyContent: "center" }}>
-                        {distributeOptions.map(opt => (
-                          <button
-                            key={opt.key}
-                            title={opt.label}
-                            style={{
-                              width: 40,
-                              height: 40,
-                              background: "#333",
-                              color: "#fff",
-                              border: "none",
-                              borderRadius: 4,
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                              fontSize: 22,
-                              cursor: "pointer"
-                            }}
-                            onClick={() => handleAlign(opt.key)}
-                          >
-                            {opt.icon}
-                          </button>
-                        ))}
-                      </div>
-                      <div style={{ fontWeight: "bold", marginBottom: 4, marginTop: 8 }}>Rearrange</div>
-                      <div style={{ display: "flex", flexWrap: "wrap", gap: 8, justifyContent: "center" }}>
-                        {rearrangeOptions.map(opt => (
-                          <button
-                            key={opt.key}
-                            title={opt.label}
-                            style={{
-                              width: 40,
-                              height: 40,
-                              background: "#333",
-                              color: "#fff",
-                              border: "none",
-                              borderRadius: 4,
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                              fontSize: 22,
-                              cursor: "pointer"
-                            }}
-                            onClick={() => handleRearrange(opt.key)}
-                          >
-                            {opt.icon}
-                          </button>
-                        ))}
-                      </div>
-                      <div style={{ fontWeight: "bold", marginBottom: 4, marginTop: 8 }}>Remove Overlaps</div>
-                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-
-                        <input
-                          type="number"
-                          value={horizontalSpacing}
-                          min={0}
-                          onChange={e => setHorizontalSpacing(Number(e.target.value))}
-                          style={{ width: 50, marginLeft: 4, marginRight: 4 }}
-                          placeholder="H"
-                          title="Horizontal spacing"
-                        />
-                        <input
-                          type="number"
-                          value={verticalSpacing}
-                          min={0}
-                          onChange={e => setVerticalSpacing(Number(e.target.value))}
-                          style={{ width: 50, marginLeft: 4, marginRight: 4 }}
-                          placeholder="V"
-                          title="Vertical spacing"
-                        />
-                        <button
-                          title="Remove Overlaps"
-                          style={{
-                            width: 40,
-                            height: 40,
-                            background: "#333",
-                            color: "#fff",
-                            border: "none",
-                            borderRadius: 4,
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            fontSize: 22,
-                            cursor: "pointer"
-                          }}
-                          onClick={() => handleRemoveOverlaps(horizontalSpacing, verticalSpacing)}
-                        >
-                          <MdClearAll />
-                        </button>
-                      </div>
-                    </>
-                  )}
-                  {alignTab === "grid" && (
-                    <div style={{ padding: 8 }}>
-                      <div style={{ fontWeight: "bold", marginBottom: 8 }}>Arrange in Grid</div>
-                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-                        <label style={{ minWidth: 50 }}>Rows</label>
-                        <input
-                          type="number"
-                          min={1}
-                          value={gridRows}
-                          onChange={e => setGridRows(Number(e.target.value))}
-                          style={{ width: 60 }}
-                        />
-                        <label style={{ minWidth: 60 }}>Columns</label>
-                        <input
-                          type="number"
-                          min={1}
-                          value={gridCols}
-                          onChange={e => setGridCols(Number(e.target.value))}
-                          style={{ width: 60 }}
-                        />
-                      </div>
-                      <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 12 }}>
-                        <label>
-                          <input
-                            type="checkbox"
-                            checked={equalWidth}
-                            onChange={e => setEqualWidth(e.target.checked)}
-                            style={{ marginRight: 4 }}
-                          />
-                          Equal Width
-                        </label>
-                        <label>
-                          <input
-                            type="checkbox"
-                            checked={equalHeight}
-                            onChange={e => setEqualHeight(e.target.checked)}
-                            style={{ marginRight: 4 }}
-                          />
-                          Equal Height
-                        </label>
-                      </div>
-                      <div style={{ marginBottom: 12 }}>
-                        <label>
-                          <input
-                            type="radio"
-                            name="gridMode"
-                            value="fit"
-                            checked={gridMode === "fit"}
-                            onChange={() => setGridMode("fit")}
-                            style={{ marginRight: 4 }}
-                          />
-                          Fit into selection box
-                        </label>
-                        <label style={{ marginLeft: 16 }}>
-                          <input
-                            type="radio"
-                            name="gridMode"
-                            value="spacing"
-                            checked={gridMode === "spacing"}
-                            onChange={() => setGridMode("spacing")}
-                            style={{ marginRight: 4 }}
-                          />
-                          Set spacing
-                        </label>
-                      </div>
-                      {gridMode === "spacing" && (
-                        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-                          <label>
-                            x:
-                            <input
-                              type="number"
-                              value={gridSpacingX}
-                              min={0}
-                              onChange={e => setGridSpacingX(Number(e.target.value))}
-                              style={{ width: 50, marginLeft: 4, marginRight: 8 }}
-                              placeholder="Horizontal"
-                              title="Horizontal spacing"
-                            />
-                          </label>
-                          <label>
-                            y:
-                            <input
-                              type="number"
-                              value={gridSpacingY}
-                              min={0}
-                              onChange={e => setGridSpacingY(Number(e.target.value))}
-                              style={{ width: 50, marginLeft: 4 }}
-                              placeholder="Vertical"
-                              title="Vertical spacing"
-                            />
-                          </label>
-                        </div>
-                      )}
-                      <button
-                        style={{
-                          width: "100%",
-                          background: "#333",
-                          color: "#fff",
-                          border: "none",
-                          borderRadius: 4,
-                          padding: 8,
-                          fontWeight: "bold",
-                          cursor: "pointer"
-                        }}
-                        onClick={handleGridArrange}
-                      >
-                        Arrange
-                      </button>
-                    </div>
-                  )}
-                  {alignTab === "circular" && (
-                    <div style={{ padding: 8 }}>
-                      <div style={{ fontWeight: "bold", marginBottom: 8 }}>Arrange in Circle</div>
-                      <div style={{ fontWeight: "bold", marginBottom: 4 }}>Anchor point</div>
-                      <div style={{ marginBottom: 12 }}>
-                        <label>
-                          <input
-                            type="radio"
-                            name="circularAnchor"
-                            value="bbox"
-                            checked={circularAnchor === "bbox"}
-                            onChange={() => setCircularAnchor("bbox")}
-                            style={{ marginRight: 4 }}
-                          />
-                          Objects bounding boxes
-                        </label>
-                        <label style={{ marginLeft: 16 }}>
-                          <input
-                            type="radio"
-                            name="circularAnchor"
-                            value="center"
-                            checked={circularAnchor === "center"}
-                            onChange={() => setCircularAnchor("center")}
-                            style={{ marginRight: 4 }}
-                          />
-                          Objects rotational center
-                        </label>
-                      </div>
-                      <div style={{ fontWeight: "bold", marginBottom: 4 }}>Arrange On</div>
-                      <div style={{ marginBottom: 12 }}>
-                        <label>
-                          <input
-                            type="radio"
-                            name="arrangeOn"
-                            value="first"
-                            checked={arrangeOn === "first"}
-                            onChange={() => setArrangeOn("first")}
-                            style={{ marginRight: 4 }}
-                          />
-                          First selected circle, ellipse or arc
-                        </label>
-                        <label style={{ marginLeft: 16 }}>
-                          <input
-                            type="radio"
-                            name="arrangeOn"
-                            value="last"
-                            checked={arrangeOn === "last"}
-                            onChange={() => setArrangeOn("last")}
-                            style={{ marginRight: 4 }}
-                          />
-                          Last selected circle, ellipse or arc
-                        </label>
-                        <label style={{ marginLeft: 16 }}>
-                          <input
-                            type="radio"
-                            name="arrangeOn"
-                            value="param"
-                            checked={arrangeOn === "param"}
-                            onChange={() => setArrangeOn("param")}
-                            style={{ marginRight: 4 }}
-                          />
-                          Parameterized
-                        </label>
-                      </div>
-                      {arrangeOn === "param" && (
-                        <div style={{ marginBottom: 12 }}>
-                          <div style={{ marginBottom: 4, fontWeight: "bold" }}>Center</div>
-                          <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
-                            <input
-                              type="number"
-                              value={paramCenterX}
-                              onChange={e => setParamCenterX(Number(e.target.value))}
-                              style={{ width: 60 }}
-                              placeholder="X"
-                            />
-                            <input
-                              type="number"
-                              value={paramCenterY}
-                              onChange={e => setParamCenterY(Number(e.target.value))}
-                              style={{ width: 60 }}
-                              placeholder="Y"
-                            />
-                          </div>
-                          <div style={{ marginBottom: 4, fontWeight: "bold" }}>Radius</div>
-                          <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
-                            <input
-                              type="number"
-                              value={paramRadiusX}
-                              onChange={e => setParamRadiusX(Number(e.target.value))}
-                              style={{ width: 60 }}
-                              placeholder="X"
-                            />
-                            <input
-                              type="number"
-                              value={paramRadiusY}
-                              onChange={e => setParamRadiusY(Number(e.target.value))}
-                              style={{ width: 60 }}
-                              placeholder="Y"
-                            />
-                          </div>
-                          <div style={{ marginBottom: 4, fontWeight: "bold" }}>Angle</div>
-                          <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
-                            <input
-                              type="number"
-                              value={paramAngleStart}
-                              onChange={e => setParamAngleStart(Number(e.target.value))}
-                              style={{ width: 60 }}
-                              placeholder="Start"
-                            />
-                            <input
-                              type="number"
-                              value={paramAngleEnd}
-                              onChange={e => setParamAngleEnd(Number(e.target.value))}
-                              style={{ width: 60 }}
-                              placeholder="End"
-                            />
-                          </div>
-                        </div>
-                      )}
-                      <div style={{ marginBottom: 12 }}>
-                        <label>
-                          <input
-                            type="checkbox"
-                            checked={rotateObjects}
-                            onChange={e => setRotateObjects(e.target.checked)}
-                            style={{ marginRight: 4 }}
-                          />
-                          Rotate objects
-                        </label>
-                      </div>
-                      <button
-                        style={{
-                          width: "100%",
-                          background: "#333",
-                          color: "#fff",
-                          border: "none",
-                          borderRadius: 4,
-                          padding: 8,
-                          fontWeight: "bold",
-                          cursor: "pointer"
-                        }}
-                        onClick={handleCircularArrange}
-                      >
-                        Arrange
-                      </button>
-                    </div>
-                  )}
-                </div>
-                <button onClick={() => setIsAlignPanelOpen(false)} style={{ marginTop: 8 }}>Close</button>
-              </div>
-            )}
             <div className="p-2 right-icon">
               <RiFileSettingsLine
                 data-tooltip-content="Document Properties"
@@ -1438,6 +1043,408 @@ const RightSidebar = ({
 
       </div>
 
+      {isAlignPanelOpen && (
+        <div className="align-panel" style={{
+          position: "absolute",
+          right: 60,
+          top: 40,
+          background: "#222",
+          color: "#fff",
+          height: 250,
+          overflowX: "scroll",
+          borderRadius: 8,
+          boxShadow: "0 2px 8px rgba(0,0,0,0.2)",
+          zIndex: 2000,
+          padding: 16,
+          minWidth: 240
+        }}>
+          <div style={{ display: "flex", borderBottom: "1px solid #444", marginBottom: 8 }}>
+            <button style={{ flex: 1, background: alignTab === "align" ? "#444" : "none", color: "#fff" }} onClick={() => setAlignTab("align")}>Align</button>
+            <button style={{ flex: 1, background: alignTab === "grid" ? "#444" : "none", color: "#fff" }} onClick={() => setAlignTab("grid")}>Grid</button>
+            <button style={{ flex: 1, background: alignTab === "circular" ? "#444" : "none", color: "#fff" }} onClick={() => setAlignTab("circular")}>Circular</button>
+          </div>
+          <div>
+            {alignTab === "align" && (
+              <>
+                <div style={{ fontWeight: "bold", marginBottom: 4 }}>Align</div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 8, justifyContent: "center", marginBottom: 12 }}>
+                  {alignOptions.map(opt => (
+                    <button
+                      key={opt.key}
+                      title={opt.label}
+                      style={{
+                        width: 40,
+                        height: 40,
+                        background: "#333",
+                        color: "#fff",
+                        border: "none",
+                        borderRadius: 4,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        fontSize: 22,
+                        cursor: "pointer"
+                      }}
+                      onClick={() => handleAlign(opt.key)}
+                    >
+                      {opt.icon}
+                    </button>
+                  ))}
+                </div>
+                <div style={{ fontWeight: "bold", marginBottom: 4 }}>Distribute</div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 8, justifyContent: "center" }}>
+                  {distributeOptions.map(opt => (
+                    <button
+                      key={opt.key}
+                      title={opt.label}
+                      style={{
+                        width: 40,
+                        height: 40,
+                        background: "#333",
+                        color: "#fff",
+                        border: "none",
+                        borderRadius: 4,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        fontSize: 22,
+                        cursor: "pointer"
+                      }}
+                      onClick={() => handleAlign(opt.key)}
+                    >
+                      {opt.icon}
+                    </button>
+                  ))}
+                </div>
+                <div style={{ fontWeight: "bold", marginBottom: 4, marginTop: 8 }}>Rearrange</div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 8, justifyContent: "center" }}>
+                  {rearrangeOptions.map(opt => (
+                    <button
+                      key={opt.key}
+                      title={opt.label}
+                      style={{
+                        width: 40,
+                        height: 40,
+                        background: "#333",
+                        color: "#fff",
+                        border: "none",
+                        borderRadius: 4,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        fontSize: 22,
+                        cursor: "pointer"
+                      }}
+                      onClick={() => handleRearrange(opt.key)}
+                    >
+                      {opt.icon}
+                    </button>
+                  ))}
+                </div>
+                <div style={{ fontWeight: "bold", marginBottom: 4, marginTop: 8 }}>Remove Overlaps</div>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+
+                  <input
+                    type="number"
+                    value={horizontalSpacing}
+                    min={0}
+                    onChange={e => setHorizontalSpacing(Number(e.target.value))}
+                    style={{ width: 50, marginLeft: 4, marginRight: 4 }}
+                    placeholder="H"
+                    title="Horizontal spacing"
+                  />
+                  <input
+                    type="number"
+                    value={verticalSpacing}
+                    min={0}
+                    onChange={e => setVerticalSpacing(Number(e.target.value))}
+                    style={{ width: 50, marginLeft: 4, marginRight: 4 }}
+                    placeholder="V"
+                    title="Vertical spacing"
+                  />
+                  <button
+                    title="Remove Overlaps"
+                    style={{
+                      width: 40,
+                      height: 40,
+                      background: "#333",
+                      color: "#fff",
+                      border: "none",
+                      borderRadius: 4,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      fontSize: 22,
+                      cursor: "pointer"
+                    }}
+                    onClick={() => handleRemoveOverlaps(horizontalSpacing, verticalSpacing)}
+                  >
+                    <MdClearAll />
+                  </button>
+                </div>
+              </>
+            )}
+            {alignTab === "grid" && (
+              <div style={{ padding: 8 }}>
+                <div style={{ fontWeight: "bold", marginBottom: 8 }}>Arrange in Grid</div>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                  <label style={{ minWidth: 50 }}>Rows</label>
+                  <input
+                    type="number"
+                    min={1}
+                    value={gridRows}
+                    onChange={e => setGridRows(Number(e.target.value))}
+                    style={{ width: 60 }}
+                  />
+                  <label style={{ minWidth: 60 }}>Columns</label>
+                  <input
+                    type="number"
+                    min={1}
+                    value={gridCols}
+                    onChange={e => setGridCols(Number(e.target.value))}
+                    style={{ width: 60 }}
+                  />
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 12 }}>
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={equalWidth}
+                      onChange={e => setEqualWidth(e.target.checked)}
+                      style={{ marginRight: 4 }}
+                    />
+                    Equal Width
+                  </label>
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={equalHeight}
+                      onChange={e => setEqualHeight(e.target.checked)}
+                      style={{ marginRight: 4 }}
+                    />
+                    Equal Height
+                  </label>
+                </div>
+                <div style={{ marginBottom: 12 }}>
+                  <label>
+                    <input
+                      type="radio"
+                      name="gridMode"
+                      value="fit"
+                      checked={gridMode === "fit"}
+                      onChange={() => setGridMode("fit")}
+                      style={{ marginRight: 4 }}
+                    />
+                    Fit into selection box
+                  </label>
+                  <label style={{ marginLeft: 16 }}>
+                    <input
+                      type="radio"
+                      name="gridMode"
+                      value="spacing"
+                      checked={gridMode === "spacing"}
+                      onChange={() => setGridMode("spacing")}
+                      style={{ marginRight: 4 }}
+                    />
+                    Set spacing
+                  </label>
+                </div>
+                {gridMode === "spacing" && (
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+                    <label>
+                      x:
+                      <input
+                        type="number"
+                        value={gridSpacingX}
+                        min={0}
+                        onChange={e => setGridSpacingX(Number(e.target.value))}
+                        style={{ width: 50, marginLeft: 4, marginRight: 8 }}
+                        placeholder="Horizontal"
+                        title="Horizontal spacing"
+                      />
+                    </label>
+                    <label>
+                      y:
+                      <input
+                        type="number"
+                        value={gridSpacingY}
+                        min={0}
+                        onChange={e => setGridSpacingY(Number(e.target.value))}
+                        style={{ width: 50, marginLeft: 4 }}
+                        placeholder="Vertical"
+                        title="Vertical spacing"
+                      />
+                    </label>
+                  </div>
+                )}
+                <button
+                  style={{
+                    width: "100%",
+                    background: "#333",
+                    color: "#fff",
+                    border: "none",
+                    borderRadius: 4,
+                    padding: 8,
+                    fontWeight: "bold",
+                    cursor: "pointer"
+                  }}
+                  onClick={handleGridArrange}
+                >
+                  Arrange
+                </button>
+              </div>
+            )}
+            {alignTab === "circular" && (
+              <div style={{ padding: 8 }}>
+                <div style={{ fontWeight: "bold", marginBottom: 8 }}>Arrange in Circle</div>
+                <div style={{ fontWeight: "bold", marginBottom: 4 }}>Anchor point</div>
+                <div style={{ marginBottom: 12 }}>
+                  <label>
+                    <input
+                      type="radio"
+                      name="circularAnchor"
+                      value="bbox"
+                      checked={circularAnchor === "bbox"}
+                      onChange={() => setCircularAnchor("bbox")}
+                      style={{ marginRight: 4 }}
+                    />
+                    Objects bounding boxes
+                  </label>
+                  <label style={{ marginLeft: 16 }}>
+                    <input
+                      type="radio"
+                      name="circularAnchor"
+                      value="center"
+                      checked={circularAnchor === "center"}
+                      onChange={() => setCircularAnchor("center")}
+                      style={{ marginRight: 4 }}
+                    />
+                    Objects rotational center
+                  </label>
+                </div>
+                <div style={{ fontWeight: "bold", marginBottom: 4 }}>Arrange On</div>
+                <div style={{ marginBottom: 12 }}>
+                  <label>
+                    <input
+                      type="radio"
+                      name="arrangeOn"
+                      value="first"
+                      checked={arrangeOn === "first"}
+                      onChange={() => setArrangeOn("first")}
+                      style={{ marginRight: 4 }}
+                    />
+                    First selected circle, ellipse or arc
+                  </label>
+                  <label style={{ marginLeft: 16 }}>
+                    <input
+                      type="radio"
+                      name="arrangeOn"
+                      value="last"
+                      checked={arrangeOn === "last"}
+                      onChange={() => setArrangeOn("last")}
+                      style={{ marginRight: 4 }}
+                    />
+                    Last selected circle, ellipse or arc
+                  </label>
+                  <label style={{ marginLeft: 16 }}>
+                    <input
+                      type="radio"
+                      name="arrangeOn"
+                      value="param"
+                      checked={arrangeOn === "param"}
+                      onChange={() => setArrangeOn("param")}
+                      style={{ marginRight: 4 }}
+                    />
+                    Parameterized
+                  </label>
+                </div>
+                {arrangeOn === "param" && (
+                  <div style={{ marginBottom: 12 }}>
+                    <div style={{ marginBottom: 4, fontWeight: "bold" }}>Center</div>
+                    <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+                      <input
+                        type="number"
+                        value={paramCenterX}
+                        onChange={e => setParamCenterX(Number(e.target.value))}
+                        style={{ width: 60 }}
+                        placeholder="X"
+                      />
+                      <input
+                        type="number"
+                        value={paramCenterY}
+                        onChange={e => setParamCenterY(Number(e.target.value))}
+                        style={{ width: 60 }}
+                        placeholder="Y"
+                      />
+                    </div>
+                    <div style={{ marginBottom: 4, fontWeight: "bold" }}>Radius</div>
+                    <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+                      <input
+                        type="number"
+                        value={paramRadiusX}
+                        onChange={e => setParamRadiusX(Number(e.target.value))}
+                        style={{ width: 60 }}
+                        placeholder="X"
+                      />
+                      <input
+                        type="number"
+                        value={paramRadiusY}
+                        onChange={e => setParamRadiusY(Number(e.target.value))}
+                        style={{ width: 60 }}
+                        placeholder="Y"
+                      />
+                    </div>
+                    <div style={{ marginBottom: 4, fontWeight: "bold" }}>Angle</div>
+                    <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+                      <input
+                        type="number"
+                        value={paramAngleStart}
+                        onChange={e => setParamAngleStart(Number(e.target.value))}
+                        style={{ width: 60 }}
+                        placeholder="Start"
+                      />
+                      <input
+                        type="number"
+                        value={paramAngleEnd}
+                        onChange={e => setParamAngleEnd(Number(e.target.value))}
+                        style={{ width: 60 }}
+                        placeholder="End"
+                      />
+                    </div>
+                  </div>
+                )}
+                <div style={{ marginBottom: 12 }}>
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={rotateObjects}
+                      onChange={e => setRotateObjects(e.target.checked)}
+                      style={{ marginRight: 4 }}
+                    />
+                    Rotate objects
+                  </label>
+                </div>
+                <button
+                  style={{
+                    width: "100%",
+                    background: "#333",
+                    color: "#fff",
+                    border: "none",
+                    borderRadius: 4,
+                    padding: 8,
+                    fontWeight: "bold",
+                    cursor: "pointer"
+                  }}
+                  onClick={handleCircularArrange}
+                >
+                  Arrange
+                </button>
+              </div>
+            )}
+          </div>
+          <button onClick={() => setIsAlignPanelOpen(false)} style={{ marginTop: 8 }}>Close</button>
+        </div>
+      )}
       {/* Sidebar */}
       <div className={`sidebar ${isSidebarOpen ? "open" : ""}`}>
         <div className="undo-history undo-history-effect-scale undo-history-theme-1">
@@ -1551,6 +1558,9 @@ const RightSidebar = ({
                               return (
                                 <div
                                   key={shape.id}
+                                  onClick={() => handleSelectShape(shape.id)}
+                                  draggable
+                                  onDragStart={(e) => handleDragStart(e, shape.id)}
                                   onDrop={(e) => handleDropShape(e, shape.id)}
                                   onDragOver={(e) => e.preventDefault()}
                                   style={{
@@ -1582,34 +1592,56 @@ const RightSidebar = ({
                                   </strong>
                                   <div style={{ paddingLeft: "10px" }}>
                                     {shape.shapes.map((subShape) => {
-                                      const isSubShapeSelected =
-                                        selectedShapeIds.includes(subShape.id);
+                                      const isSubShapeSelected = selectedShapeIds.includes(subShape.id);
                                       return (
                                         <div
                                           key={subShape.id}
-                                          onClick={() =>
-                                            handleSelectShape(subShape.id)
-                                          }
+                                          onClick={() => handleSelectShape(subShape.id)}
                                           draggable
-                                          onDragStart={(e) =>
-                                            handleDragStart(e, subShape.id)
-                                          }
+                                          onDragStart={(e) => handleDragStart(e, subShape.id)}
                                           style={{
+                                            display: "flex",
+                                            alignItems: "center",
+                                            gap: 8,
                                             cursor: "pointer",
                                             fontSize: "15px",
                                             padding: "5px 10px",
                                             backgroundColor:
-                                              isSubShapeSelected ||
-                                                subShape.id === selectedShapeId
+                                              isSubShapeSelected || subShape.id === selectedShapeId
                                                 ? "#222222"
                                                 : "transparent",
                                             color:
-                                              isSubShapeSelected ||
-                                                subShape.id === selectedShapeId
+                                              isSubShapeSelected || subShape.id === selectedShapeId
                                                 ? "white"
                                                 : "black",
                                           }}
                                         >
+                                          <span
+                                            style={{ cursor: "pointer" }}
+                                            title={subShape.visible === false ? "Show" : "Hide"}
+                                            onClick={e => {
+                                              e.stopPropagation();
+                                              dispatch({
+                                                type: "tool/updateShapePosition",
+                                                payload: { id: subShape.id, visible: !(subShape.visible !== false) }
+                                              });
+                                            }}
+                                          >
+                                            {subShape.visible === false ? <FaEyeSlash /> : <FaEye />}
+                                          </span>
+                                          <span
+                                            style={{ cursor: "pointer" }}
+                                            title={subShape.locked ? "Unlock" : "Lock"}
+                                            onClick={e => {
+                                              e.stopPropagation();
+                                              dispatch({
+                                                type: "tool/updateShapePosition",
+                                                payload: { id: subShape.id, locked: !subShape.locked }
+                                              });
+                                            }}
+                                          >
+                                            {subShape.locked ? <FaLock /> : <FaLockOpen />}
+                                          </span>
                                           {subShape.name}
                                         </div>
                                       );
@@ -1623,10 +1655,11 @@ const RightSidebar = ({
                                   key={shape.id}
                                   onClick={() => handleSelectShape(shape.id)}
                                   draggable
-                                  onDragStart={(e) =>
-                                    handleDragStart(e, shape.id)
-                                  }
+                                  onDragStart={(e) => handleDragStart(e, shape.id)}
                                   style={{
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: 8,
                                     cursor: "pointer",
                                     fontSize: "15px",
                                     padding: "5px 10px",
@@ -1640,6 +1673,32 @@ const RightSidebar = ({
                                         : "black",
                                   }}
                                 >
+                                  <span
+                                    style={{ cursor: "pointer" }}
+                                    title={shape.visible === false ? "Show" : "Hide"}
+                                    onClick={e => {
+                                      e.stopPropagation();
+                                      dispatch({
+                                        type: "tool/updateShapePosition",
+                                        payload: { id: shape.id, visible: !(shape.visible !== false) }
+                                      });
+                                    }}
+                                  >
+                                    {shape.visible === false ? <FaEyeSlash /> : <FaEye />}
+                                  </span>
+                                  <span
+                                    style={{ cursor: "pointer" }}
+                                    title={shape.locked ? "Unlock" : "Lock"}
+                                    onClick={e => {
+                                      e.stopPropagation();
+                                      dispatch({
+                                        type: "tool/updateShapePosition",
+                                        payload: { id: shape.id, locked: !shape.locked }
+                                      });
+                                    }}
+                                  >
+                                    {shape.locked ? <FaLock /> : <FaLockOpen />}
+                                  </span>
                                   {shape.name}
                                 </div>
                               );

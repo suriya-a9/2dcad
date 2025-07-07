@@ -4251,6 +4251,7 @@ const Panel = React.forwardRef(({
   }
 
   function blendWithWhite(hex, factor = 0.5) {
+    if (typeof hex !== "string") return "#ccc";
     hex = hex.replace(/^#/, "");
     if (hex.length === 3) {
       hex = hex.split("").map(x => x + x).join("");
@@ -4268,6 +4269,7 @@ const Panel = React.forwardRef(({
   }
 
   function averageColor(color) {
+    if (typeof color !== "string") return "#ccc";
     return blendWithWhite(color, 0.5);
   }
   const assignAverage = useSelector(state => state.tool.assignAverage);
@@ -5175,15 +5177,19 @@ const Panel = React.forwardRef(({
   });
   React.useEffect(() => {
     shapes.forEach(shape => {
+      if (shape.fill && shape.fill.type === "pattern") {
+        console.log("Pattern fill detected for", shape.id, shape.fill);
+      }
       if (
         shape.fill &&
         shape.fill.type === "pattern" &&
         shape.fill.svg &&
-        !patternImages[shape.id]
+        !patternImages[shape.id + ":fill"]
       ) {
-        console.log("Loading pattern SVG for shape", shape.id, shape.fill.svg);
+        console.log("Calling svgToBitmap for", shape.id, shape.fill.svg, shape.width, shape.height);
         svgToBitmap(shape.fill.svg, shape.width, shape.height).then(img => {
-          setPatternImages(prev => ({ ...prev, [shape.id]: img }));
+          console.log("Pattern bitmap generated for", shape.id, img);
+          setPatternImages(prev => ({ ...prev, [shape.id + ":fill"]: img }));
         });
       }
     });
@@ -5441,6 +5447,7 @@ const Panel = React.forwardRef(({
                         draggable
                         onClick={(e) => {
                           e.cancelBubble = true;
+                          if (shape.locked) return;
                           if (!selectedShapeIds.includes(shape.id)) {
                             dispatch(selectShape(shape.id));
                           }
@@ -5606,7 +5613,7 @@ const Panel = React.forwardRef(({
                             }));
                           }}
                         />
-                        {isSelected && shapeRefs.current[shape.id] && selectedTool !== "Node" && (
+                        {isSelected && !shape.locked && shapeRefs.current[shape.id] && selectedTool !== "Node" && (
                           <Transformer
                             ref={transformerRef}
                             nodes={selectedShapeIds.map(id => shapeRefs.current[id]).filter(Boolean)}
@@ -5902,16 +5909,23 @@ const Panel = React.forwardRef(({
                             width={shape.width}
                             height={shape.height}
                             fill={
-                              shape.fill && shape.fill.type === "pattern"
-                                ? (patternImages[shape.id] ? undefined : "#ccc")
-                                : shape.gradientTarget === "fill" && shape.fill?.type === "linear-gradient"
-                                  ? undefined
-                                  : shape.fill?.type === "linear-gradient" || shape.fill?.type === "radial-gradient"
-                                    ? undefined
-                                    : shape.fill || "transparent"
+                              typeof shape.fill === "string"
+                                ? shape.fill
+                                : (shape.fill && shape.fill.type === "pattern"
+                                  ? (patternImages[shape.id + ":fill"] ? undefined : "#ccc")
+                                  : "transparent")
                             }
-                            fillPatternImage={shape.fill && shape.fill.type === "pattern" ? patternImages[shape.id] : undefined}
+                            fillPatternImage={
+                              shape.fill && shape.fill.type === "pattern"
+                                ? patternImages[shape.id + ":fill"]
+                                : undefined
+                            }
                             fillPatternRepeat="repeat"
+                            strokePatternImage={
+                              shape.stroke && shape.stroke.type === "pattern"
+                                ? patternImages[shape.id + ":stroke"]
+                                : undefined
+                            }
                             fillLinearGradientStartPoint={
                               shape.gradientTarget === "fill" && shape.fill?.type === "linear-gradient"
                                 ? shape.fill.start
@@ -5975,7 +5989,7 @@ const Panel = React.forwardRef(({
                             blur={shape.blur || 0}
                             shadowBlur={shape.blur || 0}
                             shadowColor={shape.fill || "#fff"}
-                            draggable={selectedTool !== "Node" && selectedTool !== "Mesh" && selectedTool !== "Connector"}
+                            draggable={!shape.locked && selectedTool !== "Node" && selectedTool !== "Mesh" && selectedTool !== "Connector"}
                             onDragMove={handleDragMove}
                             onDragEnd={(e) => handleDragEnd(e, shape.id)}
                             onTransformEnd={(e) => handleResizeEnd(e, shape.id)}
@@ -5989,6 +6003,7 @@ const Panel = React.forwardRef(({
                             skewY={shape.skewY || 0}
                             onClick={(e) => {
                               e.cancelBubble = true;
+                              if (shape.locked) return;
                               handleShapeClick(shape);
                               if (selectedTool !== "Dropper") {
                                 if (e.evt.ctrlKey && selectedShape) {
@@ -6015,7 +6030,7 @@ const Panel = React.forwardRef(({
                             }}
                           />
                         )}
-                        {isSelected && shapeRefs.current[shape.id] && selectedTool !== "Node" && (
+                        {isSelected && !shape.locked && shapeRefs.current[shape.id] && selectedTool !== "Node" && (
                           <Transformer
                             ref={transformerRef}
                             nodes={selectedShapeIds.map(id => shapeRefs.current[id]).filter(Boolean)}
@@ -6122,11 +6137,12 @@ const Panel = React.forwardRef(({
                           fill={shape.fill || (shape.closed ? shape.fillColor : "transparent")}
                           closed={shape.closed}
                           rotation={shape.rotation || 0}
-                          draggable
+                          draggable={!shape.locked && selectedTool !== "Node" && selectedTool !== "Mesh" && selectedTool !== "Connector"}
                           onDragMove={handleDragMove}
                           dash={getDashArray(shape.strokeStyle)}
                           onClick={(e) => {
                             e.cancelBubble = true;
+                            if (shape.locked) return;
                             if (!selectedShapeIds.includes(shape.id)) {
                               dispatch(selectShape(shape.id));
                             }
@@ -6143,7 +6159,7 @@ const Panel = React.forwardRef(({
                             dispatch(updateShapePosition({ id: shape.id, x, y }));
                           }}
                         />
-                        {isSelected && shapeRefs.current[shape.id] && selectedTool !== "Node" && (
+                        {isSelected && !shape.locked && shapeRefs.current[shape.id] && selectedTool !== "Node" && (
                           <Transformer
                             ref={transformerRef}
                             nodes={selectedShapeIds.map(id => shapeRefs.current[id]).filter(Boolean)}
@@ -6184,12 +6200,12 @@ const Panel = React.forwardRef(({
                           fill={shape.fill || (shape.closed ? shape.fill : "black")}
                           closed={shape.closed || false}
                           rotation={shape.rotation || 0}
-                          draggable={selectedTool !== "Node"}
+                          draggable={!shape.locked && selectedTool !== "Node"}
                           onDragMove={handleDragMove}
                           dash={getDashArray(shape.strokeStyle)}
                           onClick={(e) => {
                             e.cancelBubble = true;
-
+                            if (shape.locked) return;
                             if (e.evt.ctrlKey && selectedShape) {
 
                               dispatch(
@@ -6215,7 +6231,7 @@ const Panel = React.forwardRef(({
                             dispatch(updateShapePosition({ id: shape.id, x, y }));
                           }}
                         />
-                        {isSelected && shapeRefs.current[shape.id] && selectedTool !== "Node" && (
+                        {isSelected && !shape.locked && shapeRefs.current[shape.id] && selectedTool !== "Node" && (
                           <Transformer
                             ref={transformerRef}
                             nodes={selectedShapeIds.map(id => shapeRefs.current[id]).filter(Boolean)}
@@ -6310,7 +6326,7 @@ const Panel = React.forwardRef(({
                             shape={{ ...shape, x: 0, y: 0 }}
                             x={0}
                             y={0}
-                            draggable={selectedTool === "Select"}
+                            draggable={!shape.locked && selectedTool === "Select"}
                             dash={getDashArray(shape.strokeStyle)}
                             onClick={e => {
                               e.cancelBubble = true;
@@ -6324,7 +6340,7 @@ const Panel = React.forwardRef(({
                             }}
                           />
                         </Group>
-                        {isSelected && shapeRefs.current[shape.id] && selectedTool !== "Node" && (
+                        {isSelected && !shape.locked && shapeRefs.current[shape.id] && selectedTool !== "Node" && (
                           <Transformer
                             ref={transformerRef}
                             nodes={selectedShapeIds.map(id => shapeRefs.current[id]).filter(Boolean)}
@@ -6371,7 +6387,7 @@ const Panel = React.forwardRef(({
                           rotation={shape.rotation || 0}
                           closed={false}
                           dash={[10, 10]}
-                          draggable={selectedTool !== "Node" && selectedTool !== "Connector"}
+                          draggable={!shape.locked && selectedTool !== "Node" && selectedTool !== "Connector"}
                           onDragMove={handleDragMove}
                           onDragEnd={(e) => {
                             const { x, y } = e.target.position();
@@ -6399,7 +6415,7 @@ const Panel = React.forwardRef(({
                           strokeWidth={shape.strokeWidth || 1}
                           rotation={shape.rotation || 0}
                           closed={true}
-                          draggable={selectedTool !== "Node" && selectedTool !== "Connector"}
+                          draggable={!shape.locked && selectedTool !== "Node" && selectedTool !== "Connector"}
                           onDragMove={handleDragMove}
                           onDragEnd={(e) => {
                             const { x, y } = e.target.position();
@@ -6425,7 +6441,7 @@ const Panel = React.forwardRef(({
                           stroke={shape.stroke || "black"}
                           strokeWidth={shape.strokeWidth || 1}
                           rotation={shape.rotation || 0}
-                          draggable={selectedTool !== "Node" && selectedTool !== "Connector"}
+                          draggable={!shape.locked && selectedTool !== "Node" && selectedTool !== "Connector"}
                           onDragMove={handleDragMove}
                           onDragEnd={e => {
                             const { x, y } = e.target.position();
@@ -6475,7 +6491,7 @@ const Panel = React.forwardRef(({
                           rotation={shape.rotation || 0}
                           scaleX={shape.horizontalRadius / shape.radius || 1}
                           scaleY={shape.verticalRadius / shape.radius || 1}
-                          draggable={selectedTool !== "Node" && selectedTool !== "Connector" && selectedTool !== "Gradient"}
+                          draggable={!shape.locked && selectedTool !== "Node" && selectedTool !== "Connector" && selectedTool !== "Gradient"}
                           onDragMove={handleDragMove}
                           skewX={shape.skewX || 0}
                           blur={shape.blur || 0}
@@ -6491,6 +6507,7 @@ const Panel = React.forwardRef(({
                           }}
                           onClick={(e) => {
                             e.cancelBubble = true;
+                            if (shape.locked) return;
                             handleShapeClick(shape);
                             if (selectedTool !== "Dropper") {
                               if (e.evt.ctrlKey && selectedShape) {
@@ -6521,7 +6538,7 @@ const Panel = React.forwardRef(({
                             dispatch(updateShapePosition({ id: shape.id, x, y }));
                           }}
                         />
-                        {isSelected && shapeRefs.current[shape.id] && selectedTool !== "Node" && (
+                        {isSelected && !shape.locked && shapeRefs.current[shape.id] && selectedTool !== "Node" && (
                           <Transformer
                             ref={transformerRef}
                             nodes={selectedShapeIds.map(id => shapeRefs.current[id]).filter(Boolean)}
@@ -6611,7 +6628,7 @@ const Panel = React.forwardRef(({
                           strokeRadialGradientEndPoint={shape.stroke?.type === "radial-gradient" ? { x: shape.stroke.center.x, y: shape.stroke.center.y + shape.stroke.radius } : undefined}
                           strokeRadialGradientColorStops={shape.stroke?.type === "radial-gradient" ? shape.stroke.colors.flatMap(stop => [stop.pos, stop.color]) : undefined}
                           strokeWidth={shape.strokeWidth || 1}
-                          draggable={selectedTool !== "Node" && selectedTool !== "Connector" && selectedTool !== "Gradient"}
+                          draggable={!shape.locked && selectedTool !== "Node" && selectedTool !== "Connector" && selectedTool !== "Gradient"}
                           onDragMove={handleDragMove}
                           skewX={shape.skewX || 0}
                           skewY={shape.skewY || 0}
@@ -6627,6 +6644,7 @@ const Panel = React.forwardRef(({
                           }}
                           onClick={(e) => {
                             e.cancelBubble = true;
+                            if (shape.locked) return;
                             handleShapeClick(shape);
                             if (selectedTool !== "Dropper") {
                               if (e.evt.ctrlKey && selectedShape) {
@@ -6656,7 +6674,7 @@ const Panel = React.forwardRef(({
                             dispatch(updateShapePosition({ id: shape.id, x, y }));
                           }}
                         />
-                        {isSelected && shapeRefs.current[shape.id] && selectedTool !== "Node" && (
+                        {isSelected && !shape.locked && shapeRefs.current[shape.id] && selectedTool !== "Node" && (
                           <Transformer
                             ref={transformerRef}
                             nodes={selectedShapeIds.map(id => shapeRefs.current[id]).filter(Boolean)}
@@ -6785,7 +6803,7 @@ const Panel = React.forwardRef(({
                           shadowBlur={shape.blur || 0}
                           shadowColor={shape.fill || "#fff"}
                           closed
-                          draggable={selectedTool !== "Node" && selectedTool !== "Connector" && selectedTool !== "Gradient"}
+                          draggable={!shape.locked && selectedTool !== "Node" && selectedTool !== "Connector" && selectedTool !== "Gradient"}
                           onDragMove={handleDragMove}
                           skewX={shape.skewX || 0}
                           skewY={shape.skewY || 0}
@@ -6797,6 +6815,7 @@ const Panel = React.forwardRef(({
                           }}
                           onClick={(e) => {
                             e.cancelBubble = true;
+                            if (shape.locked) return;
                             handleShapeClick(shape);
                             if (selectedTool !== "Dropper") {
                               if (e.evt.ctrlKey && selectedShape) {
@@ -6826,7 +6845,7 @@ const Panel = React.forwardRef(({
                             dispatch(updateShapePosition({ id: shape.id, x, y }));
                           }}
                         />
-                        {isSelected && shapeRefs.current[shape.id] && selectedTool !== "Node" && (
+                        {isSelected && !shape.locked && shapeRefs.current[shape.id] && selectedTool !== "Node" && (
                           <Transformer
                             ref={transformerRef}
                             nodes={selectedShapeIds.map(id => shapeRefs.current[id]).filter(Boolean)}
@@ -6884,9 +6903,10 @@ const Panel = React.forwardRef(({
                         dash={getDashArray(shape.strokeStyle)}
                         scaleX={shape.scaleX || 1}
                         scaleY={shape.scaleY || 1}
-                        draggable={selectedTool !== "Node" && selectedTool !== "Connector"}
+                        draggable={!shape.locked && selectedTool !== "Node" && selectedTool !== "Connector"}
                         onClick={(e) => {
                           e.cancelBubble = true;
+                          if (shape.locked) return;
                           handleShapeClick(shape);
                           if (selectedTool !== "Dropper") {
                             if (e.evt.ctrlKey && selectedShape) {
@@ -6984,7 +7004,7 @@ const Panel = React.forwardRef(({
                           stroke={shape.strokeColor || "black"}
                           strokeWidth={1}
                           closed
-                          draggable={selectedTool !== "Node"}
+                          draggable={!shape.locked && selectedTool !== "Node"}
                           onDragMove={handleDragMove}
                           onDragEnd={(e) => {
                             const { x, y } = e.target.position();
@@ -7009,7 +7029,7 @@ const Panel = React.forwardRef(({
                           lineJoin="round"
                           lineCap="round"
                           closed={shape.closed || false}
-                          draggable={selectedTool !== "Node" && selectedTool !== "Connector" && selectedTool === "Select"}
+                          draggable={!shape.locked && selectedTool !== "Node" && selectedTool !== "Connector" && selectedTool === "Select"}
                           dash={getDashArray(shape.strokeStyle)}
                           rotation={shape.rotation || 0}
                           onDragMove={handleDragMove}
@@ -7029,6 +7049,7 @@ const Panel = React.forwardRef(({
                           }}
                           onClick={(e) => {
                             e.cancelBubble = true;
+                            if (shape.locked) return;
                             handleShapeClick(shape);
                             if (selectedTool !== "Dropper") {
                               if (e.evt.ctrlKey && selectedShape) {
@@ -7058,7 +7079,7 @@ const Panel = React.forwardRef(({
                             dispatch(updateShapePosition({ id: shape.id, x, y }));
                           }}
                         />
-                        {isSelected && shapeRefs.current[shape.id] && selectedTool !== "Node" && (
+                        {isSelected && !shape.locked && shapeRefs.current[shape.id] && selectedTool !== "Node" && (
                           <Transformer
                             ref={transformerRef}
                             nodes={selectedShapeIds.map(id => shapeRefs.current[id]).filter(Boolean)}
@@ -7170,7 +7191,7 @@ const Panel = React.forwardRef(({
                           lineJoin="round"
                           lineCap="round"
                           closed={false}
-                          draggable={selectedTool === "Select"}
+                          draggable={!shape.locked && selectedTool === "Select"}
                           dash={getDashArray(shape.strokeStyle)}
                           listening={true}
                           onDragMove={handleDragMove}
@@ -7192,6 +7213,7 @@ const Panel = React.forwardRef(({
                           }}
                           onClick={(e) => {
                             e.cancelBubble = true;
+                            if (shape.locked) return;
                             handleShapeClick(shape);
                             if (selectedTool !== "Dropper") {
                               if (e.evt.ctrlKey && selectedShape) {
@@ -7221,7 +7243,7 @@ const Panel = React.forwardRef(({
                             dispatch(updateShapePosition({ id: shape.id, x, y }));
                           }}
                         />
-                        {isSelected && shapeRefs.current[shape.id] && selectedTool !== "Node" && (
+                        {isSelected && !shape.locked && shapeRefs.current[shape.id] && selectedTool !== "Node" && (
                           <Transformer
                             ref={transformerRef}
                             nodes={selectedShapeIds.map(id => shapeRefs.current[id]).filter(Boolean)}
@@ -7319,7 +7341,7 @@ const Panel = React.forwardRef(({
                             stroke={shape.stroke || "black"}
                             strokeWidth={shape.strokeWidth || 1}
                             fill={shape.fill || "none"}
-                            draggable={selectedTool === "Select"}
+                            draggable={!shape.locked && selectedTool === "Select"}
                             onDragMove={handleDragMove}
                             onDragEnd={e => {
                               const { x, y } = e.target.position();
@@ -7332,7 +7354,7 @@ const Panel = React.forwardRef(({
                               }
                             }}
                           />
-                          {isSelected && shapeRefs.current[shape.id] && selectedTool !== "Node" && (
+                          {isSelected && !shape.locked && shapeRefs.current[shape.id] && selectedTool !== "Node" && (
                             <Transformer
                               ref={transformerRef}
                               nodes={selectedShapeIds.map(id => shapeRefs.current[id]).filter(Boolean)}
@@ -7423,7 +7445,7 @@ const Panel = React.forwardRef(({
                         stroke={shape.stroke || "black"}
                         strokeWidth={1}
                         closed
-                        draggable={selectedTool === "Select"}
+                        draggable={!shape.locked && selectedTool === "Select"}
                         onDragMove={handleDragMove}
                       />
                     );
@@ -7464,7 +7486,7 @@ const Panel = React.forwardRef(({
                         stroke={shape.stroke || "black"}
                         strokeWidth={1}
                         closed
-                        draggable={selectedTool === "Select"}
+                        draggable={!shape.locked && selectedTool === "Select"}
                         onDragMove={handleDragMove}
                       />
                     );
@@ -7486,7 +7508,7 @@ const Panel = React.forwardRef(({
                           fill="transparent"
                           skewX={shape.skewX || 0}
                           skewY={shape.skewY || 0}
-                          draggable={selectedShapeId === shape.id}
+                          draggable={!shape.locked && selectedShapeId === shape.id}
                           dash={getDashArray(shape.strokeStyle)}
                           rotation={shape.rotation || 0}
                           scaleX={shape.scaleX || 1}
@@ -7494,7 +7516,7 @@ const Panel = React.forwardRef(({
                           scaleY={shape.scaleY || 1}
                           onClick={(e) => {
                             e.cancelBubble = true;
-
+                            if (shape.locked) return;
                             if (e.evt.ctrlKey && selectedShape) {
 
                               dispatch(
@@ -7518,7 +7540,7 @@ const Panel = React.forwardRef(({
                           }}
 
                         />
-                        {isSelected && shapeRefs.current[shape.id] && selectedTool !== "Node" && (
+                        {isSelected && !shape.locked && shapeRefs.current[shape.id] && selectedTool !== "Node" && (
                           <Transformer
                             ref={transformerRef}
                             nodes={selectedShapeIds.map(id => shapeRefs.current[id]).filter(Boolean)}
@@ -7806,7 +7828,7 @@ const Panel = React.forwardRef(({
                                 fill={shape.fill || "#000"}
                                 align="center"
                                 verticalAlign="middle"
-                                draggable
+                                draggable={!shape.locked && selectedTool !== "Node" && selectedTool !== "Mesh" && selectedTool !== "Connector"}
                               />
                             </Group>
                           );
@@ -7834,7 +7856,7 @@ const Panel = React.forwardRef(({
                                 fill={shape.fill || "#000"}
                                 align={shape.alignment || "left"}
                                 verticalAlign="top"
-                                draggable
+                                draggable={!shape.locked && selectedTool !== "Node" && selectedTool !== "Mesh" && selectedTool !== "Connector"}
                               />
                             </Group>
                           );
@@ -7856,10 +7878,11 @@ const Panel = React.forwardRef(({
                           id={shape.id}
                           x={textDirection === "rtl" ? shape.x + shape.width : shape.x}
                           y={shape.y}
-                          draggable
+                          draggable={!shape.locked && selectedTool !== "Node" && selectedTool !== "Mesh" && selectedTool !== "Connector"}
                           onDragMove={handleDragMove}
                           onClick={(e) => {
                             e.cancelBubble = true;
+                            if (shape.locked) return;
                             setTextAreaPosition({
                               x: shape.x * scale + position.x,
                               y: shape.y * scale + position.y,
@@ -7884,7 +7907,7 @@ const Panel = React.forwardRef(({
                               width={fontSize}
                             />
                           ))}
-                          {isSelected && shapeRefs.current[shape.id] && selectedTool !== "Node" && (
+                          {isSelected && !shape.locked && shapeRefs.current[shape.id] && selectedTool !== "Node" && (
                             <Transformer
                               ref={transformerRef}
                               nodes={selectedShapeIds.map(id => shapeRefs.current[id]).filter(Boolean)}
@@ -7934,10 +7957,11 @@ const Panel = React.forwardRef(({
                           fill={shape.fill || "black"}
                           rotation={shape.rotation || 0}
                           letterSpacing={shape.letterSpacing || 0}
-                          draggable
+                          draggable={!shape.locked && selectedTool !== "Node" && selectedTool !== "Mesh" && selectedTool !== "Connector"}
                           onDragMove={handleDragMove}
                           onClick={(e) => {
                             e.cancelBubble = true;
+                            if (shape.locked) return;
                             setTextAreaPosition({
                               x: shape.x * scale + position.x,
                               y: shape.y * scale + position.y,
@@ -7947,7 +7971,7 @@ const Panel = React.forwardRef(({
                             setTextAreaVisible(true);
                           }}
                         />
-                        {isSelected && shapeRefs.current[shape.id] && selectedTool !== "Node" && (
+                        {isSelected && !shape.locked && shapeRefs.current[shape.id] && selectedTool !== "Node" && (
                           <Transformer
                             ref={transformerRef}
                             nodes={selectedShapeIds.map(id => shapeRefs.current[id]).filter(Boolean)}
@@ -8066,7 +8090,7 @@ const Panel = React.forwardRef(({
                         draggable
                         onClick={(e) => {
                           e.cancelBubble = true;
-
+                          if (shape.locked) return;
                           if (e.evt.ctrlKey && selectedShape) {
 
                             dispatch(

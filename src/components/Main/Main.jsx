@@ -52,7 +52,7 @@ const Main = () => {
   const showGrids = true;
   const showCheckerboard = useSelector(state => state.tool.showCheckerboard);
   const [isFillStrokeDialogOpen, setIsFillStrokeDialogOpen] = useState(false);
-
+  const [isAlignPanelOpen, setIsAlignPanelOpen] = useState(false);
   const handleOpenFillStrokeDialog = () => {
     console.log("Open Fill & Stroke dialog");
     setIsFillStrokeDialogOpen(true);
@@ -858,6 +858,7 @@ const Main = () => {
               onZoomPrevious={handleZoomPrevious}
               onZoomNext={handleZoomNext}
               handleOpenFillStrokeDialog={handleOpenFillStrokeDialog}
+              setIsAlignPanelOpen={setIsAlignPanelOpen}
             />
           </div>
         </div>
@@ -1214,7 +1215,7 @@ const Main = () => {
           </div>
 
           <div style={{ flexGrow: '1', position: 'fixed', top: '125px', bottom: '50px', right: '0px' }}>
-            <RightSidebar toggleSidebar={toggleSidebar} isSidebarOpen={isSidebarOpen} handleSave={handleSave} activeTab={activeTab} setActiveTab={(tab) => console.log("Active Tab:", tab)} handleDownloadPdf={handleDownloadPdf} selectedGroupId={selectedGroupId} setSelectedGroupId={setSelectedGroupId} onZoomIn={handleZoomIn} onZoomOut={handleZoomOut} handleOpenFillStrokeDialog={handleOpenFillStrokeDialog} isFillStrokeDialogOpen={isFillStrokeDialogOpen} handleCloseFillStrokeDialog={handleCloseFillStrokeDialog} />
+            <RightSidebar toggleSidebar={toggleSidebar} isSidebarOpen={isSidebarOpen} handleSave={handleSave} activeTab={activeTab} setActiveTab={(tab) => console.log("Active Tab:", tab)} handleDownloadPdf={handleDownloadPdf} selectedGroupId={selectedGroupId} setSelectedGroupId={setSelectedGroupId} onZoomIn={handleZoomIn} onZoomOut={handleZoomOut} handleOpenFillStrokeDialog={handleOpenFillStrokeDialog} isFillStrokeDialogOpen={isFillStrokeDialogOpen} handleCloseFillStrokeDialog={handleCloseFillStrokeDialog} isAlignPanelOpen={isAlignPanelOpen} setIsAlignPanelOpen={setIsAlignPanelOpen} />
           </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'stretch' }}>

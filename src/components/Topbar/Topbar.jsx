@@ -10,7 +10,7 @@ import { FaBezierCurve, FaProjectDiagram, FaDrawPolygon, FaPlus, FaLink, FaUnlin
 import { RxCheckCircled } from "react-icons/rx";
 import { RxCrossCircled } from "react-icons/rx";
 import { MdRoundedCorner, MdOutlineVerticalAlignTop, MdOutlineAltRoute } from "react-icons/md";
-import { FaMousePointer, FaStepForward, FaArrowsAltH, FaEyeSlash, FaLayerGroup, FaBullseye, FaCompressAlt, FaRandom, FaSyncAlt, FaArrowCircleUp, FaCompress, FaPaintBrush, FaPalette } from "react-icons/fa";
+import { FaMousePointer, FaStepForward, FaArrowsAltH, FaEyeSlash, FaLayerGroup, FaEye, FaBullseye, FaLock, FaCompressAlt, FaRandom, FaSyncAlt, FaArrowCircleUp, FaCompress, FaPaintBrush, FaPalette, FaLockOpen } from "react-icons/fa";
 import { AiOutlineVerticalAlignBottom } from "react-icons/ai";
 import { VscDebugReverseContinue } from "react-icons/vsc";
 import { FaSearchPlus, FaUndo, FaRedo, FaEdit, FaCheck, FaTimes, FaArrowLeft, FaArrowRight, FaArrowsAlt, FaRegObjectGroup } from "react-icons/fa";
@@ -186,6 +186,7 @@ const Topbar = ({
   onZoomPrevious,
   onZoomNext,
   handleOpenFillStrokeDialog,
+  setIsAlignPanelOpen,
 }) => {
   const selectedTool = useSelector((state) => state.tool.selectedTool);
   const dispatch = useDispatch();
@@ -204,6 +205,9 @@ const Topbar = ({
   const [customPaintServers, setCustomPaintServers] = useState([]);
   const handleOpenPaintServers = () => setShowPaintServersModal(true);
   const handleClosePaintServers = () => setShowPaintServersModal(false);
+  const [showTransformModal, setShowTransformModal] = useState(false);
+  const [moveX, setMoveX] = useState(0);
+  const [moveY, setMoveY] = useState(0);
   const navigate = useNavigate();
 
   let selectedShapeId = useSelector((state) => state.tool.selectedShapeId);
@@ -335,7 +339,39 @@ const Topbar = ({
       console.error("No shape selected for vertical flipping.");
     }
   };
+  const handleUnhideAll = () => {
+    const newLayers = layers.map((layer, idx) => {
+      if (idx !== selectedLayerIndex) return layer;
+      return {
+        ...layer,
+        shapes: layer.shapes.map(shape => ({
+          ...shape,
+          visible: true
+        }))
+      };
+    });
+    dispatch({
+      type: "tool/setLayersAndSelection",
+      payload: { layers: newLayers, selectedLayerIndex }
+    });
+  };
 
+  const handleUnlockAll = () => {
+    const newLayers = layers.map((layer, idx) => {
+      if (idx !== selectedLayerIndex) return layer;
+      return {
+        ...layer,
+        shapes: layer.shapes.map(shape => ({
+          ...shape,
+          locked: false
+        }))
+      };
+    });
+    dispatch({
+      type: "tool/setLayersAndSelection",
+      payload: { layers: newLayers, selectedLayerIndex }
+    });
+  };
   const handleAddLayer = () => {
     dispatch(addLayer());
   };
@@ -1117,6 +1153,92 @@ const Topbar = ({
       dispatch({ type: "tool/addShape", payload: restoredShape });
     }
   };
+  function moveShapeInLayer(shapes, shapeId, toIndex) {
+    const idx = shapes.findIndex(s => s.id === shapeId);
+    if (idx === -1 || toIndex < 0 || toIndex >= shapes.length) return shapes;
+    const arr = shapes.slice();
+    const [item] = arr.splice(idx, 1);
+    arr.splice(toIndex, 0, item);
+    return arr;
+  }
+  const handleRaiseToTop = () => {
+    if (!selectedShapeId) return;
+    const layer = layers[selectedLayerIndex];
+    const idx = layer.shapes.findIndex(s => s.id === selectedShapeId);
+    if (idx === -1 || idx === layer.shapes.length - 1) return;
+    const newShapes = moveShapeInLayer(layer.shapes, selectedShapeId, layer.shapes.length - 1);
+    const newLayers = layers.map((l, i) =>
+      i === selectedLayerIndex ? { ...l, shapes: newShapes } : l
+    );
+    dispatch({
+      type: "tool/setLayersAndSelection",
+      payload: { layers: newLayers, selectedLayerIndex, selectedShapeId }
+    });
+  };
+  const handleLowerToBottom = () => {
+    if (!selectedShapeId) return;
+    const layer = layers[selectedLayerIndex];
+    const idx = layer.shapes.findIndex(s => s.id === selectedShapeId);
+    if (idx <= 0) return;
+    const newShapes = moveShapeInLayer(layer.shapes, selectedShapeId, 0);
+    const newLayers = layers.map((l, i) =>
+      i === selectedLayerIndex ? { ...l, shapes: newShapes } : l
+    );
+    dispatch({
+      type: "tool/setLayersAndSelection",
+      payload: { layers: newLayers, selectedLayerIndex, selectedShapeId }
+    });
+  };
+  const handleRaise = () => {
+    if (!selectedShapeId) return;
+    const layer = layers[selectedLayerIndex];
+    const idx = layer.shapes.findIndex(s => s.id === selectedShapeId);
+    if (idx === -1 || idx === layer.shapes.length - 1) return;
+    const newShapes = moveShapeInLayer(layer.shapes, selectedShapeId, idx + 1);
+    const newLayers = layers.map((l, i) =>
+      i === selectedLayerIndex ? { ...l, shapes: newShapes } : l
+    );
+    dispatch({
+      type: "tool/setLayersAndSelection",
+      payload: { layers: newLayers, selectedLayerIndex, selectedShapeId }
+    });
+  };
+  const handleLower = () => {
+    if (!selectedShapeId) return;
+    const layer = layers[selectedLayerIndex];
+    const idx = layer.shapes.findIndex(s => s.id === selectedShapeId);
+    if (idx <= 0) return;
+    const newShapes = moveShapeInLayer(layer.shapes, selectedShapeId, idx - 1);
+    const newLayers = layers.map((l, i) =>
+      i === selectedLayerIndex ? { ...l, shapes: newShapes } : l
+    );
+    dispatch({
+      type: "tool/setLayersAndSelection",
+      payload: { layers: newLayers, selectedLayerIndex, selectedShapeId }
+    });
+  };
+  const [scaleX, setScaleX] = useState(1);
+  const [scaleY, setScaleY] = useState(1);
+  const handleApplyTransform = () => {
+    if (selectedShapeId) {
+      dispatch({
+        type: "tool/updateShapePosition",
+        payload: {
+          id: selectedShapeId,
+          scaleX: scaleX,
+          scaleY: scaleY,
+        },
+      });
+    }
+    setShowTransformModal(false);
+  };
+
+  useEffect(() => {
+    if (showTransformModal && selectedShape) {
+      setMoveX(0);
+      setMoveY(0);
+    }
+  }, [showTransformModal, selectedShape]);
   const EditOptions = [
     { id: 1, label: "Undo...", onClick: () => dispatch(undo()) },
     { id: 2, label: "Redo...", onClick: () => dispatch(redo()) },
@@ -1590,29 +1712,66 @@ const Topbar = ({
             alert("Pattern created! Now available in Paint Servers.");
           }
         },
-        { label: "Pattern to Objects" },
+        {
+          label: "Pattern to Objects",
+          onClick: () => {
+            const shape = shapes.find(
+              s => selectedShapeIds.includes(s.id) &&
+                s.fill && s.fill.type === "pattern" && s.fill.svg
+            );
+            if (!shape) {
+              alert("Select a shape with a pattern fill.");
+              return;
+            }
+
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(shape.fill.svg, "image/svg+xml");
+            const svgElem = doc.querySelector("svg");
+            let w = 32, h = 32;
+            if (svgElem) {
+              w = parseFloat(svgElem.getAttribute("width")) || w;
+              h = parseFloat(svgElem.getAttribute("height")) || h;
+            }
+
+            dispatch({
+              type: "tool/addShape",
+              payload: {
+                id: `pattern-object-${Date.now()}`,
+                type: "SVG",
+                svg: shape.fill.svg,
+                x: shape.x || 0,
+                y: shape.y || 0,
+                width: w,
+                height: h,
+                name: "Pattern Object",
+                draggable: true,
+                selected: false,
+              }
+            });
+            alert("Pattern tile placed as object.");
+          }
+        }
       ],
     },
     "divider",
     { label: "Objects to Marker" },
     { label: "Objects to Guide", onClick: handleObjectsToGuide },
     "divider",
-    { label: "Raise to top" },
-    { label: "Raise" },
-    { label: "Lower" },
-    { label: "Lower to bottom" },
+    { label: "Raise to top", onClick: handleRaiseToTop },
+    { label: "Raise", onClick: handleRaise },
+    { label: "Lower", onClick: handleLower },
+    { label: "Lower to bottom", onClick: handleLowerToBottom },
     "divider",
     { label: "Rotate 90 CW", onClick: handleRotateClockwise },
     { label: "Rotate 90 ACW", onClick: handleRotateCounterClockwise },
     { label: "Flip Horizontal", onClick: handleFlipHorizontal },
     { label: "Flip Vertical", onClick: handleFlipVertical },
     "divider",
-    { label: "Unhide All" },
-    { label: "Unlock All" },
+    { label: "Unhide All", onClick: handleUnhideAll },
+    { label: "Unlock All", onClick: handleUnlockAll },
     "divider",
-    { label: "Transform" },
-    { label: "Align & Distribute" },
-    "divider",
+    { label: "Transform", onClick: () => setShowTransformModal(true) },
+    { label: "Align & Distribute", onClick: () => setIsAlignPanelOpen(true) },
   ];
 
   const PathOptions = [
@@ -2419,7 +2578,7 @@ const Topbar = ({
                       >
                         Object
                       </a>
-                      <ul className="dropdown-menu" style={{ cursor: "pointer" }}>
+                      <ul className="dropdown-menu" style={{ cursor: "pointer", height: '500px', overflow: 'scroll' }}>
                         {ObjectOptions.map((item, index) =>
                           item === "divider" ? (
                             <hr key={index} style={{ margin: "0px" }} />
@@ -2472,7 +2631,7 @@ const Topbar = ({
                       >
                         Path
                       </a>
-                      <ul className="dropdown-menu" style={{ cursor: "pointer" }}>
+                      <ul className="dropdown-menu" style={{ cursor: "pointer", height: '500px', overflow: 'scroll' }}>
                         {PathOptions.map((item) =>
                           item.type === "divider" ? (
                             <hr key={item.id} style={{ margin: "0px" }} />
@@ -2876,6 +3035,98 @@ const Topbar = ({
             <div style={{ marginTop: 24, textAlign: "right" }}>
               <button onClick={handleClosePaintServers} style={{ border: "none", borderRadius: 4, padding: "6px 16px" }}>
                 Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {showTransformModal && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            width: "100vw",
+            height: "100vh",
+            background: "rgba(0,0,0,0.3)",
+            zIndex: 9999,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center"
+          }}
+          onClick={() => setShowTransformModal(false)}
+        >
+          <div
+            style={{
+              background: "#fff",
+              padding: 24,
+              borderRadius: 8,
+              minWidth: 320,
+              boxShadow: "0 8px 32px rgba(0,0,0,0.18)"
+            }}
+            onClick={e => e.stopPropagation()}
+          >
+            <h4>Transform (Move)</h4>
+            <div style={{ marginBottom: 16 }}>
+              <label>
+                Horizontal (X):&nbsp;
+                <button onClick={() => setMoveX(x => x - 1)}>-</button>
+                <input
+                  type="number"
+                  value={moveX}
+                  step={1}
+                  onChange={e => setMoveX(Number(e.target.value))}
+                  style={{ width: 60, margin: "0 8px" }}
+                />
+                <button onClick={() => setMoveX(x => x + 1)}>+</button>
+              </label>
+            </div>
+            <div style={{ marginBottom: 16 }}>
+              <label>
+                Vertical (Y):&nbsp;
+                <button onClick={() => setMoveY(y => y - 1)}>-</button>
+                <input
+                  type="number"
+                  value={moveY}
+                  step={1}
+                  onChange={e => setMoveY(Number(e.target.value))}
+                  style={{ width: 60, margin: "0 8px" }}
+                />
+                <button onClick={() => setMoveY(y => y + 1)}>+</button>
+              </label>
+            </div>
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+              <button
+                type="button"
+                onClick={() => setShowTransformModal(false)}
+                style={{ border: "none", borderRadius: 4, padding: "6px 16px" }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (selectedShapeId) {
+                    dispatch({
+                      type: "tool/updateShapePosition",
+                      payload: {
+                        id: selectedShapeId,
+                        x: (selectedShape.x || 0) + moveX,
+                        y: (selectedShape.y || 0) + moveY,
+                      },
+                    });
+                  }
+                  setShowTransformModal(false);
+                }}
+                style={{
+                  background: "#007bff",
+                  color: "#fff",
+                  border: "none",
+                  borderRadius: 4,
+                  padding: "6px 16px"
+                }}
+              >
+                Apply
               </button>
             </div>
           </div>
@@ -6019,11 +6270,11 @@ function TextEditorTopbar({ onStyleChange, selectedShapeId }) {
 
     let transformedText = currentText;
 
-    if (transformType === "uppercase") {
+    if (transformType === "uppercase" && typeof currentText === "string") {
       transformedText = currentText.toUpperCase();
-    } else if (transformType === "lowercase") {
+    } else if (transformType === "lowercase" && typeof currentText === "string") {
       transformedText = currentText.toLowerCase();
-    } else if (transformType === "capitalize") {
+    } else if (transformType === "capitalize" && typeof currentText === "string") {
       transformedText = currentText
         .split(" ")
         .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())

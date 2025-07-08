@@ -1601,8 +1601,8 @@ const RightSidebar = ({
                                           onDragStart={(e) => handleDragStart(e, subShape.id)}
                                           style={{
                                             display: "flex",
-                                            alignItems: "center",
-                                            gap: 8,
+                                            alignItems: "start",
+                                            gap: 0,
                                             cursor: "pointer",
                                             fontSize: "15px",
                                             padding: "5px 10px",
@@ -1614,35 +1614,52 @@ const RightSidebar = ({
                                               isSubShapeSelected || subShape.id === selectedShapeId
                                                 ? "white"
                                                 : "black",
+                                            justifyContent: "space-between"
                                           }}
                                         >
-                                          <span
-                                            style={{ cursor: "pointer" }}
-                                            title={subShape.visible === false ? "Show" : "Hide"}
-                                            onClick={e => {
-                                              e.stopPropagation();
-                                              dispatch({
-                                                type: "tool/updateShapePosition",
-                                                payload: { id: subShape.id, visible: !(subShape.visible !== false) }
-                                              });
-                                            }}
-                                          >
-                                            {subShape.visible === false ? <FaEyeSlash /> : <FaEye />}
-                                          </span>
-                                          <span
-                                            style={{ cursor: "pointer" }}
-                                            title={subShape.locked ? "Unlock" : "Lock"}
-                                            onClick={e => {
-                                              e.stopPropagation();
-                                              dispatch({
-                                                type: "tool/updateShapePosition",
-                                                payload: { id: subShape.id, locked: !subShape.locked }
-                                              });
-                                            }}
-                                          >
-                                            {subShape.locked ? <FaLock /> : <FaLockOpen />}
-                                          </span>
-                                          {subShape.name}
+                                          <div style={{ display: 'flex', gap: '10px' }}>
+                                            <span
+                                              style={{ cursor: "pointer" }}
+                                              title={subShape.visible === false ? "Show" : "Hide"}
+                                              onClick={e => {
+                                                e.stopPropagation();
+                                                dispatch({
+                                                  type: "tool/updateShapePosition",
+                                                  payload: { id: subShape.id, visible: !(subShape.visible !== false) }
+                                                });
+                                              }}
+                                            >
+                                              {subShape.visible === false ? <FaEyeSlash /> : <FaEye />}
+                                            </span>
+                                            <span
+                                              style={{ cursor: "pointer" }}
+                                              title={subShape.locked ? "Unlock" : "Lock"}
+                                              onClick={e => {
+                                                e.stopPropagation();
+                                                dispatch({
+                                                  type: "tool/updateShapePosition",
+                                                  payload: { id: subShape.id, locked: !subShape.locked }
+                                                });
+                                              }}
+                                            >
+                                              {subShape.locked ? <FaLock /> : <FaLockOpen />}
+                                            </span>
+                                          </div>
+                                          <div>
+                                            {subShape.name}
+                                          </div>
+                                          <div>
+                                            <span
+                                              style={{ cursor: "pointer", float: 'right', }}
+                                              title="Delete"
+                                              onClick={e => {
+                                                e.stopPropagation();
+                                                dispatch(deleteShape(subShape.id));
+                                              }}
+                                            >
+                                              <BsFillTrashFill />
+                                            </span>
+                                          </div>
                                         </div>
                                       );
                                     })}
@@ -1658,8 +1675,8 @@ const RightSidebar = ({
                                   onDragStart={(e) => handleDragStart(e, shape.id)}
                                   style={{
                                     display: "flex",
-                                    alignItems: "center",
-                                    gap: 8,
+                                    alignItems: "start",
+                                    gap: 0,
                                     cursor: "pointer",
                                     fontSize: "15px",
                                     padding: "5px 10px",
@@ -1671,35 +1688,52 @@ const RightSidebar = ({
                                       isSelected || shape.id === selectedShapeId
                                         ? "white"
                                         : "black",
+                                    justifyContent: "space-between"
                                   }}
                                 >
-                                  <span
-                                    style={{ cursor: "pointer" }}
-                                    title={shape.visible === false ? "Show" : "Hide"}
-                                    onClick={e => {
-                                      e.stopPropagation();
-                                      dispatch({
-                                        type: "tool/updateShapePosition",
-                                        payload: { id: shape.id, visible: !(shape.visible !== false) }
-                                      });
-                                    }}
-                                  >
-                                    {shape.visible === false ? <FaEyeSlash /> : <FaEye />}
-                                  </span>
-                                  <span
-                                    style={{ cursor: "pointer" }}
-                                    title={shape.locked ? "Unlock" : "Lock"}
-                                    onClick={e => {
-                                      e.stopPropagation();
-                                      dispatch({
-                                        type: "tool/updateShapePosition",
-                                        payload: { id: shape.id, locked: !shape.locked }
-                                      });
-                                    }}
-                                  >
-                                    {shape.locked ? <FaLock /> : <FaLockOpen />}
-                                  </span>
-                                  {shape.name}
+                                  <div style={{ display: 'flex', gap: '10px' }}>
+                                    <span
+                                      style={{ cursor: "pointer" }}
+                                      title={shape.visible === false ? "Show" : "Hide"}
+                                      onClick={e => {
+                                        e.stopPropagation();
+                                        dispatch({
+                                          type: "tool/updateShapePosition",
+                                          payload: { id: shape.id, visible: !(shape.visible !== false) }
+                                        });
+                                      }}
+                                    >
+                                      {shape.visible === false ? <FaEyeSlash /> : <FaEye />}
+                                    </span>
+                                    <span
+                                      style={{ cursor: "pointer" }}
+                                      title={shape.locked ? "Unlock" : "Lock"}
+                                      onClick={e => {
+                                        e.stopPropagation();
+                                        dispatch({
+                                          type: "tool/updateShapePosition",
+                                          payload: { id: shape.id, locked: !shape.locked }
+                                        });
+                                      }}
+                                    >
+                                      {shape.locked ? <FaLock /> : <FaLockOpen />}
+                                    </span>
+                                  </div>
+                                  <div>
+                                    {shape.name}
+                                  </div>
+                                  <div>
+                                    <span
+                                      style={{ cursor: "pointer", float: 'right', }}
+                                      title="Delete"
+                                      onClick={e => {
+                                        e.stopPropagation();
+                                        dispatch(deleteShape(shape.id));
+                                      }}
+                                    >
+                                      <BsFillTrashFill />
+                                    </span>
+                                  </div>
                                 </div>
                               );
                             }

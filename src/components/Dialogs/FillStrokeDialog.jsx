@@ -5,9 +5,41 @@ import {
     setStrokeColorForSelectedShape,
     setStrokeWidthForSelectedShape,
     setStrokeStyleForSelectedShape,
+    setMarkerForSelectedShape,
 } from "../../Redux/Slice/toolSlice";
 import "./FillStrokeDialog.css";
+const MARKERS = [
+    {
+        id: "none",
+        label: "None",
+        svg: null,
+    },
+    {
+        id: "arrow",
+        label: "Arrow",
+        svg: (
+            <svg width="24" height="24">
+                <marker id="arrow" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto" markerUnits="strokeWidth">
+                    <path d="M0,0 L10,3.5 L0,7 Z" fill="#222" />
+                </marker>
+                <line x1="2" y1="12" x2="22" y2="12" stroke="#222" strokeWidth="2" markerEnd="url(#arrow)" />
+            </svg>
+        ),
+    },
+    {
+        id: "dot",
+        label: "Dot",
+        svg: (
+            <svg width="24" height="24">
+                <marker id="dot" markerWidth="6" markerHeight="6" refX="3" refY="3" orient="auto" markerUnits="strokeWidth">
+                    <circle cx="3" cy="3" r="3" fill="#222" />
+                </marker>
+                <line x1="2" y1="12" x2="22" y2="12" stroke="#222" strokeWidth="2" markerEnd="url(#dot)" />
+            </svg>
+        ),
+    },
 
+];
 const FillStrokeDialog = ({ isOpen, onClose }) => {
     const dispatch = useDispatch();
     const selectedShapeId = useSelector((state) => state.tool.selectedShapeId);
@@ -19,12 +51,29 @@ const FillStrokeDialog = ({ isOpen, onClose }) => {
     const [strokeWidth, setStrokeWidthState] = useState(selectedShape?.strokeWidth || 1);
     const [strokeStyle, setStrokeStyleState] = useState(selectedShape?.strokeStyle || "line");
 
+    const [markerStart, setMarkerStart] = useState(selectedShape?.markerStart || "none");
+    const [markerMid, setMarkerMid] = useState(selectedShape?.markerMid || "none");
+    const [markerEnd, setMarkerEnd] = useState(selectedShape?.markerEnd || "none");
+    const customMarkers = useSelector(state => state.tool.markers || []);
+    const allMarkers = [
+        ...MARKERS,
+        ...customMarkers.map(m => ({
+            id: m.id,
+            label: m.id,
+            svg: <span dangerouslySetInnerHTML={{ __html: `<svg width="24" height="24"><defs>${m.svg}</defs><line x1="2" y1="12" x2="22" y2="12" stroke="#222" strokeWidth="2" markerEnd="url(#${m.id})" /></svg>` }} />
+        }))
+    ];
     const handleApply = () => {
         if (selectedShapeId) {
             dispatch(setFillColorForSelectedShape(fillColor));
             dispatch(setStrokeColorForSelectedShape(strokeColor));
             dispatch(setStrokeWidthForSelectedShape(strokeWidth));
             dispatch(setStrokeStyleForSelectedShape(strokeStyle));
+            dispatch(setMarkerForSelectedShape({
+                markerStart,
+                markerMid,
+                markerEnd,
+            }));
         }
         onClose();
     };
@@ -76,6 +125,68 @@ const FillStrokeDialog = ({ isOpen, onClose }) => {
                         <option value="dotted">Dotted</option>
                         <option value="dashed">Dashed</option>
                     </select>
+                </div>
+                <div className="form-group">
+                    <label>Markers:</label>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                        <div>
+                            <span style={{ marginRight: 8 }}>Start:</span>
+                            {allMarkers.map(marker => (
+                                <button
+                                    key={marker.id}
+                                    style={{
+                                        border: markerStart === marker.id ? "2px solid #007bff" : "1px solid #ccc",
+                                        background: "#fff",
+                                        marginRight: 4,
+                                        padding: 2,
+                                        borderRadius: 4,
+                                    }}
+                                    onClick={() => setMarkerStart(marker.id)}
+                                    title={marker.label}
+                                >
+                                    {marker.svg || <span style={{ padding: "0 8px" }}>None</span>}
+                                </button>
+                            ))}
+                        </div>
+                        <div>
+                            <span style={{ marginRight: 8 }}>Mid:</span>
+                            {allMarkers.map(marker => (
+                                <button
+                                    key={marker.id}
+                                    style={{
+                                        border: markerMid === marker.id ? "2px solid #007bff" : "1px solid #ccc",
+                                        background: "#fff",
+                                        marginRight: 4,
+                                        padding: 2,
+                                        borderRadius: 4,
+                                    }}
+                                    onClick={() => setMarkerMid(marker.id)}
+                                    title={marker.label}
+                                >
+                                    {marker.svg || <span style={{ padding: "0 8px" }}>None</span>}
+                                </button>
+                            ))}
+                        </div>
+                        <div>
+                            <span style={{ marginRight: 8 }}>End:</span>
+                            {allMarkers.map(marker => (
+                                <button
+                                    key={marker.id}
+                                    style={{
+                                        border: markerEnd === marker.id ? "2px solid #007bff" : "1px solid #ccc",
+                                        background: "#fff",
+                                        marginRight: 4,
+                                        padding: 2,
+                                        borderRadius: 4,
+                                    }}
+                                    onClick={() => setMarkerEnd(marker.id)}
+                                    title={marker.label}
+                                >
+                                    {marker.svg || <span style={{ padding: "0 8px" }}>None</span>}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
                 </div>
                 <div className="dialog-actions">
                     <button onClick={handleApply}>Apply</button>

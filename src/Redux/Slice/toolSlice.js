@@ -155,6 +155,7 @@ const toolSlice = createSlice({
     linkedColorProfiles: ["sRGB"],
     externalScripts: [],
     embeddedScripts: [],
+    markers: [],
   },
 
   reducers: {
@@ -5599,6 +5600,21 @@ const toolSlice = createSlice({
         shape => shape.type !== "Group" || (shape.shapes && shape.shapes.length > 0)
       );
     },
+    setMarkerForSelectedShape: (state, action) => {
+      const selectedLayer = state.layers[state.selectedLayerIndex];
+      const selectedShape = selectedLayer.shapes.find(
+        (shape) => shape.id === state.selectedShapeId
+      );
+      if (selectedShape) {
+        const { markerStart, markerMid, markerEnd } = action.payload || {};
+        if (markerStart !== undefined) selectedShape.markerStart = markerStart;
+        if (markerMid !== undefined) selectedShape.markerMid = markerMid;
+        if (markerEnd !== undefined) selectedShape.markerEnd = markerEnd;
+      }
+    },
+    addMarker: (state, action) => {
+      state.markers.push(action.payload);
+    },
   },
 
 });
@@ -5846,6 +5862,8 @@ export const {
   setLayersAndSelection,
   setSelectedLayerIndex,
   popShapesOutOfGroups,
+  setMarkerForSelectedShape,
+  addMarker,
 } = toolSlice.actions;
 
 export default toolSlice.reducer;

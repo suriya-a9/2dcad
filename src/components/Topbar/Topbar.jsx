@@ -135,6 +135,7 @@ import {
   updateNodePosition,
   setSubtractionsFrame,
   popShapesOutOfGroups,
+  addMarker,
 } from "../../Redux/Slice/toolSlice";
 import {
   TbDeselect,
@@ -673,51 +674,6 @@ const Topbar = ({
       );
     }
   };
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
   const handleTraceBitmap = async () => {
     const selectedShape = shapes.find(s => s.id === selectedShapeId && s.type === "Image");
     if (!selectedShape) {
@@ -779,21 +735,6 @@ const Topbar = ({
       alert("Failed to load image for tracing.");
     };
   };
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
   const [showSymbolsModal, setShowSymbolsModal] = useState(false);
   const [selectedSymbolSet, setSelectedSymbolSet] = useState(null);
 
@@ -1239,6 +1180,134 @@ const Topbar = ({
       setMoveY(0);
     }
   }, [showTransformModal, selectedShape]);
+  const [showSelectorsModal, setShowSelectorsModal] = useState(false);
+  const handleOpenSelectors = () => setShowSelectorsModal(true);
+  const handleCloseSelectors = () => setShowSelectorsModal(false);
+  function shapeToSVGElement(shape) {
+    if (!shape) return "";
+    if (shape.type === "Rectangle") {
+      return `<rect x="${shape.x}" y="${shape.y}" width="${shape.width}" height="${shape.height}" fill="${typeof shape.fill === "string" ? shape.fill : "none"}" stroke="${typeof shape.stroke === "string" ? shape.stroke : "none"}" stroke-width="${shape.strokeWidth || 1}" />`;
+    }
+    if (shape.type === "Circle") {
+      return `<circle cx="${shape.x}" cy="${shape.y}" r="${shape.radius}" fill="${typeof shape.fill === "string" ? shape.fill : "none"}" stroke="${typeof shape.stroke === "string" ? shape.stroke : "none"}" stroke-width="${shape.strokeWidth || 1}" />`;
+    }
+    if (shape.type === "Polygon" && Array.isArray(shape.points)) {
+      const pts = shape.points.map(pt => `${(pt.x ?? pt[0]) + (shape.x || 0)},${(pt.y ?? pt[1]) + (shape.y || 0)}`).join(" ");
+      return `<polygon points="${pts}" fill="${typeof shape.fill === "string" ? shape.fill : "none"}" stroke="${typeof shape.stroke === "string" ? shape.stroke : "none"}" stroke-width="${shape.strokeWidth || 1}" />`;
+    }
+    if (shape.type === "Star") {
+      const num = (shape.corners || 5) * 2;
+      const pts = Array.from({ length: num }).map((_, i) => {
+        const angle = (Math.PI * 2 * i) / num - Math.PI / 2;
+        const r = i % 2 === 0 ? shape.outerRadius : shape.innerRadius;
+        return [
+          (shape.x + r * Math.cos(angle)),
+          (shape.y + r * Math.sin(angle))
+        ].join(",");
+      }).join(" ");
+      return `<polygon points="${pts}" fill="${typeof shape.fill === "string" ? shape.fill : "none"}" stroke="${typeof shape.stroke === "string" ? shape.stroke : "none"}" stroke-width="${shape.strokeWidth || 1}" />`;
+    }
+    if (shape.type === "Path" && shape.path) {
+      return `<path d="${shape.path}" fill="${typeof shape.fill === "string" ? shape.fill : "none"}" stroke="${typeof shape.stroke === "string" ? shape.stroke : "none"}" stroke-width="${shape.strokeWidth || 1}" />`;
+    }
+    if ((shape.type === "Pencil" || shape.type === "Calligraphy") && Array.isArray(shape.points)) {
+      const pts = shape.points.map(pt => `${pt.x},${pt.y}`).join(" ");
+      return `<polyline points="${pts}" fill="none" stroke="${typeof shape.stroke === "string" ? shape.stroke : "#000"}" stroke-width="${shape.strokeWidth || 2}" />`;
+    }
+    if (shape.type === "Bezier" && Array.isArray(shape.points) && shape.points.length >= 4) {
+      let d = `M ${shape.points[0].x},${shape.points[0].y}`;
+      for (let i = 1; i + 2 < shape.points.length; i += 3) {
+        d += ` C ${shape.points[i].x},${shape.points[i].y} ${shape.points[i + 1].x},${shape.points[i + 1].y} ${shape.points[i + 2].x},${shape.points[i + 2].y}`;
+      }
+      return `<path d="${d}" fill="none" stroke="${typeof shape.stroke === "string" ? shape.stroke : "#000"}" stroke-width="${shape.strokeWidth || 2}" />`;
+    }
+    if (shape.type === "Image" && (shape.url || shape.src)) {
+      return `<image x="${shape.x}" y="${shape.y}" width="${shape.width}" height="${shape.height}" href="${shape.url || shape.src}" />`;
+    }
+    if (shape.type === "Text") {
+      return `<text x="${shape.x}" y="${shape.y}" font-size="${shape.fontSize || 16}" fill="${typeof shape.fill === "string" ? shape.fill : "black"}">${shape.text || ""}</text>`;
+    }
+    if (shape.type === "Spiral" && shape.path) {
+      return `<path d="${shape.path}" fill="none" stroke="${typeof shape.stroke === "string" ? shape.stroke : "#000"}" stroke-width="${shape.strokeWidth || 2}" />`;
+    }
+    let markerAttrs = "";
+    if (shape.markerStart && shape.markerStart !== "none")
+      markerAttrs += ` marker-start="url(#${shape.markerStart})"`;
+    if (shape.markerMid && shape.markerMid !== "none")
+      markerAttrs += ` marker-mid="url(#${shape.markerMid})"`;
+    if (shape.markerEnd && shape.markerEnd !== "none")
+      markerAttrs += ` marker-end="url(#${shape.markerEnd})"`;
+    return "";
+  }
+  const [showObjectPropertiesModal, setShowObjectPropertiesModal] = useState(false);
+  const handleOpenObjectProperties = () => setShowObjectPropertiesModal(true);
+  const handleCloseObjectProperties = () => setShowObjectPropertiesModal(false);
+  function renderShapeProperties(shape) {
+    if (!shape) return null;
+    const entries = Object.entries(shape)
+      .filter(([key]) => key !== "id" && key !== "selected" && key !== "draggable");
+    return (
+      <table style={{ width: "100%", fontSize: 14, borderCollapse: "collapse" }}>
+        <tbody>
+          {entries.map(([key, value]) => (
+            <tr key={key}>
+              <td style={{ fontWeight: 500, padding: "4px 8px", borderBottom: "1px solid #eee" }}>{key}</td>
+              <td style={{ padding: "4px 8px", borderBottom: "1px solid #eee" }}>
+                {typeof value === "object"
+                  ? <pre style={{ margin: 0, fontSize: 13, background: "#f8f8f8", borderRadius: 3, padding: 4 }}>{JSON.stringify(value, null, 2)}</pre>
+                  : String(value)}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    );
+  }
+  const handleObjectsToMarker = () => {
+    const selectedShapes = shapes.filter(s => selectedShapeIds.includes(s.id));
+    if (!selectedShapes.length) {
+      alert("Select one or more shapes to convert to marker.");
+      return;
+    }
+
+    const markerId = `custom-marker-${Date.now()}`;
+    const bbox = selectedShapes[0];
+    const minX = bbox.x || 0;
+    const minY = bbox.y || 0;
+    const width = bbox.width || 32;
+    const height = bbox.height || 32;
+
+    function shapeToSvg(s) {
+      if (s.type === "Rectangle") {
+        return `<rect x="${(s.x || 0) - minX}" y="${(s.y || 0) - minY}" width="${s.width}" height="${s.height}" fill="${s.fill || "black"}" stroke="${s.stroke || "none"}" stroke-width="${s.strokeWidth || 0}" />`;
+      }
+      if (s.type === "Circle") {
+        return `<circle cx="${(s.x || 0) - minX}" cy="${(s.y || 0) - minY}" r="${s.radius}" fill="${s.fill || "black"}" stroke="${s.stroke || "none"}" stroke-width="${s.strokeWidth || 0}" />`;
+      }
+      if (s.type === "Polygon" && Array.isArray(s.points)) {
+        const pts = s.points.map(pt => `${(pt.x ?? pt[0]) + (s.x || 0) - minX},${(pt.y ?? pt[1]) + (s.y || 0) - minY}`).join(" ");
+        return `<polygon points="${pts}" fill="${s.fill || "black"}" stroke="${s.stroke || "none"}" stroke-width="${s.strokeWidth || 0}" />`;
+      }
+      if (s.type === "Path" && s.path) {
+        return `<path d="${s.path}" fill="${s.fill || "none"}" stroke="${s.stroke || "black"}" stroke-width="${s.strokeWidth || 1}" />`;
+      }
+      return "";
+    }
+
+    const svgContent = selectedShapes.map(shapeToSvg).join("\n");
+
+    const markerSvg = `
+    <marker id="${markerId}" markerWidth="${width}" markerHeight="${height}" refX="${width / 2}" refY="${height / 2}" orient="auto" markerUnits="strokeWidth">
+      <svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
+        ${svgContent}
+      </svg>
+    </marker>
+  `;
+
+    dispatch(addMarker({ id: markerId, svg: markerSvg }));
+
+    alert("Marker created! You can now use it in Fill & Stroke dialog.");
+  };
   const EditOptions = [
     { id: 1, label: "Undo...", onClick: () => dispatch(undo()) },
     { id: 2, label: "Redo...", onClick: () => dispatch(redo()) },
@@ -1619,10 +1688,10 @@ const Topbar = ({
       },
     },
     { label: "Fill and Stroke", onClick: handleOpenFillStrokeDialog },
-    { label: "Object Properties" },
+    { label: "Object Properties", onClick: handleOpenObjectProperties },
     { label: "Symbols", onClick: handleOpenSymbolsDialog, },
     { label: "Paint Servers", onClick: handleOpenPaintServers },
-    { label: "Selectors and CSS" },
+    { label: "Selectors and CSS", onClick: handleOpenSelectors },
     "divider",
     { label: "Group", onClick: handleGroupShapes },
     { label: "UnGroup", onClick: handleUngroupShapes },
@@ -1754,7 +1823,7 @@ const Topbar = ({
       ],
     },
     "divider",
-    { label: "Objects to Marker" },
+    { label: "Objects to Marker", onClick: handleObjectsToMarker },
     { label: "Objects to Guide", onClick: handleObjectsToGuide },
     "divider",
     { label: "Raise to top", onClick: handleRaiseToTop },
@@ -3127,6 +3196,95 @@ const Topbar = ({
                 }}
               >
                 Apply
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {showSelectorsModal && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            width: "100vw",
+            height: "100vh",
+            background: "rgba(0,0,0,0.3)",
+            zIndex: 9999,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center"
+          }}
+          onClick={handleCloseSelectors}
+        >
+          <div
+            style={{
+              background: "#fff",
+              padding: 24,
+              borderRadius: 8,
+              minWidth: 400,
+              maxWidth: 700,
+              maxHeight: "80vh",
+              overflowY: "auto",
+              boxShadow: "0 8px 32px rgba(0,0,0,0.18)"
+            }}
+            onClick={e => e.stopPropagation()}
+          >
+            <h4>Selectors and CSS (SVG Element)</h4>
+            <pre
+              style={{
+                background: "#f4f4f4",
+                padding: 12,
+                borderRadius: 4,
+                fontSize: 14,
+                overflowX: "auto"
+              }}
+            >{shapeToSVGElement(selectedShape)}</pre>
+            <div style={{ marginTop: 24, textAlign: "right" }}>
+              <button onClick={handleCloseSelectors} style={{ border: "none", borderRadius: 4, padding: "6px 16px" }}>
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {showObjectPropertiesModal && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            width: "100vw",
+            height: "100vh",
+            background: "rgba(0,0,0,0.3)",
+            zIndex: 9999,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center"
+          }}
+          onClick={handleCloseObjectProperties}
+        >
+          <div
+            style={{
+              background: "#fff",
+              padding: 24,
+              borderRadius: 8,
+              minWidth: 400,
+              maxWidth: 700,
+              maxHeight: "80vh",
+              overflowY: "auto",
+              boxShadow: "0 8px 32px rgba(0,0,0,0.18)"
+            }}
+            onClick={e => e.stopPropagation()}
+          >
+            <h4>Object Properties</h4>
+            <div style={{ marginBottom: 16 }}>
+              <b>Type:</b> {selectedShape.type || "Unknown"}
+            </div>
+            {renderShapeProperties(selectedShape)}
+            <div style={{ marginTop: 24, textAlign: "right" }}>
+              <button onClick={handleCloseObjectProperties} style={{ border: "none", borderRadius: 4, padding: "6px 16px" }}>
+                Close
               </button>
             </div>
           </div>

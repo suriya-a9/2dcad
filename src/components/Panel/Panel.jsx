@@ -20,6 +20,7 @@ import {
   Layer,
   FastLayer,
   Rect,
+  Arrow,
   Circle,
   Arc,
   Star,
@@ -305,6 +306,41 @@ const CanvasImage = React.forwardRef(({ shape, ...props }, ref) => {
     />
   );
 });
+function renderMarker(markerId, x, y, angle, color = "#222") {
+  if (markerId === "arrow") {
+    const len = 18;
+    return (
+      <Arrow
+        key={`marker-arrow-${x}-${y}`}
+        points={[
+          x - len * Math.cos(angle), y - len * Math.sin(angle),
+          x, y
+        ]}
+        pointerLength={12}
+        pointerWidth={12}
+        fill={color}
+        stroke={color}
+        strokeWidth={0}
+        listening={false}
+      />
+    );
+  }
+  if (markerId === "dot") {
+    return (
+      <Circle
+        key={`marker-dot-${x}-${y}`}
+        x={x}
+        y={y}
+        radius={6}
+        fill={color}
+        stroke={color}
+        strokeWidth={0}
+        listening={false}
+      />
+    );
+  }
+  return null;
+}
 const Panel = React.forwardRef(({
   textValue,
   isSidebarOpen,
@@ -8114,6 +8150,40 @@ const Panel = React.forwardRef(({
                         }}
                       />
                     );
+                  }
+                  else if (
+                    shape.type === "Pencil" ||
+                    shape.type === "Calligraphy" ||
+                    shape.type === "Path" ||
+                    shape.type === "Bezier" ||
+                    shape.type === "Spiral"
+                  ) {
+                    const pts = shape.points
+                      ? shape.points.map(p => [p.x, p.y])
+                      : [];
+                    if (pts.length >= 2) {
+                      const [x1, y1] = pts[0];
+                      const [x2, y2] = pts[pts.length - 1];
+                      const angleEnd = Math.atan2(y2 - pts[pts.length - 2][1], x2 - pts[pts.length - 2][0]);
+                      const angleStart = Math.atan2(pts[1][1] - y1, pts[1][0] - x1);
+
+                      return (
+                        <Group key={shape.id}>
+                          <Line
+                            points={pts.flat()}
+                            stroke={shape.stroke || shape.strokeColor || "#222"}
+                            strokeWidth={shape.strokeWidth || 2}
+                            lineJoin="round"
+                            lineCap="round"
+                            closed={shape.closed || false}
+                          />
+                          {shape.markerEnd && shape.markerEnd !== "none" &&
+                            renderMarker(shape.markerEnd, x2, y2, angleEnd, shape.stroke || shape.strokeColor || "#222")}
+                          {shape.markerStart && shape.markerStart !== "none" &&
+                            renderMarker(shape.markerStart, x1, y1, angleStart + Math.PI, shape.stroke || shape.strokeColor || "#222")}
+                        </Group>
+                      );
+                    }
                   }
                   return null;
                 })}

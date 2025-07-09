@@ -1541,7 +1541,7 @@ const Panel = React.forwardRef(({
       const angleStep = (2 * Math.PI) / corners;
 
       setNewShape({
-        id: `polygon-${Date.now()}`,
+        id: `polygon-${Date.now()}-${Math.floor(Math.random() * 100000)}`,
         type: "Polygon",
         x,
         y,
@@ -5230,6 +5230,23 @@ const Panel = React.forwardRef(({
       }
     });
   }, [shapes]);
+  function applyBendEffect(points, bendAmount = 40, frequency = 1) {
+    if (!Array.isArray(points) || points.length < 2) return points;
+    const minX = Math.min(...points.map(p => p.x));
+    const maxX = Math.max(...points.map(p => p.x));
+    const width = maxX - minX || 1;
+    return points.map(p => ({
+      x: p.x,
+      y: p.y + Math.sin(((p.x - minX) / width) * Math.PI * frequency) * bendAmount
+    }));
+  }
+  function applyPathEffect(points, effectName) {
+    if (!points || !effectName) return points;
+    if (effectName === "Bend") {
+      return applyBendEffect(points, 40, 1);
+    }
+    return points;
+  }
   return (
     <>
       {/* {selectedTool === "Dropper" && (
@@ -6769,6 +6786,10 @@ const Panel = React.forwardRef(({
                       </Group>
                     );
                   } else if (shape.type === "Polygon") {
+                    let points = shape.points.map(p => ({ x: p.x, y: p.y }));
+                    if (shape.lpeEffect === "Bend") {
+                      points = applyBendEffect(points, 40, 1);
+                    }
                     if (!shape.points || shape.points.length === 0) return null;
                     const isSelected = selectedShapeIds.includes(shape.id);
                     return (
@@ -6807,7 +6828,7 @@ const Panel = React.forwardRef(({
                           id={shape.id}
                           x={shape.x}
                           y={shape.y}
-                          points={shape.points.flatMap(pt => [pt.x, pt.y])}
+                          points={points.flatMap(p => [p.x, p.y])}
                           data={generatePolygonPath(shape.points)}
                           stroke={
                             shape.stroke?.type === "linear-gradient" || shape.stroke?.type === "radial-gradient"
@@ -6995,8 +7016,14 @@ const Panel = React.forwardRef(({
                     const scaledPoints = scaleShapePoints(shape.points.map(p => [p.x, p.y]), 1 + pencilScale, centerX, centerY);
                     const isSelected = selectedShapeIds.includes(shape.id);
                     const pencilOption = shape.pencilOption || "None";
-                    const points = shape.points.map(p => [p.x, p.y]);
+                    let points = shape.points.map(p => [p.x, p.y]);
                     const width = (shape.strokeWidth || 10) * (1 + (shape.pencilScale ?? pencilScale ?? 0));
+                    if (shape.lpeEffect === "Bend") {
+                      points = applyBendEffect(points.map(([x, y]) => ({ x, y })), 40, 1);
+                      points = points.flatMap(p => [p.x, p.y]);
+                    } else {
+                      points = points.flat();
+                    }
                     function getPerp([x1, y1], [x2, y2], w) {
                       const dx = x2 - x1, dy = y2 - y1;
                       const len = Math.hypot(dx, dy) || 1;
@@ -7058,7 +7085,7 @@ const Panel = React.forwardRef(({
                           }}
                           key={shape.id}
                           id={shape.id}
-                          points={shape.points.flatMap((p) => [p.x, p.y])}
+                          points={points}
                           stroke={shape.strokeColor}
                           fill={shape.fill || "transparent"}
                           strokeWidth={(shape.strokeWidth || 1) * (shape.pencilScale ?? pencilScale ?? 1)}
@@ -8161,6 +8188,9 @@ const Panel = React.forwardRef(({
                     const pts = shape.points
                       ? shape.points.map(p => [p.x, p.y])
                       : [];
+                    if (shape.lpeEffect === "Bend") {
+                      pts = applyBendEffect(pts, 40, 1);
+                    }
                     if (pts.length >= 2) {
                       const [x1, y1] = pts[0];
                       const [x2, y2] = pts[pts.length - 1];

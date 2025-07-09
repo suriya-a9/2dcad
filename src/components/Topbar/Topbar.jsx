@@ -21,6 +21,7 @@ import { MdGridOn, MdOutlineGradient, MdOutlineFormatColorFill, MdOutlineBorderC
 import { textToGlyphsHandler } from "../Panel/Panel";
 import { setSelectedTool } from "../../Redux/Slice/toolSlice";
 import { GiPerspectiveDiceSixFacesRandom, GiPaintBrush, GiJigsawBox } from "react-icons/gi";
+import PathEffectsDialog from "../Dialogs/PathEffectsDialog";
 import { EditorState, ContentState } from "draft-js";
 import { MdCenterFocusStrong } from "react-icons/md";
 import {
@@ -136,6 +137,7 @@ import {
   setSubtractionsFrame,
   popShapesOutOfGroups,
   addMarker,
+  applyPathEffectToSelectedShape,
 } from "../../Redux/Slice/toolSlice";
 import {
   TbDeselect,
@@ -209,6 +211,7 @@ const Topbar = ({
   const [showTransformModal, setShowTransformModal] = useState(false);
   const [moveX, setMoveX] = useState(0);
   const [moveY, setMoveY] = useState(0);
+  const [showPathEffectsDialog, setShowPathEffectsDialog] = useState(false);
   const navigate = useNavigate();
 
   let selectedShapeId = useSelector((state) => state.tool.selectedShapeId);
@@ -239,7 +242,21 @@ const Topbar = ({
     if (handleSave) handleSave();
     alert("Design saved successfully!");
   };
-
+  const handlePathEffects = () => {
+    if (!selectedShapeId) {
+      alert("Select a shape first.");
+      return;
+    }
+    setShowPathEffectsDialog(true);
+  };
+  const handleApplyPathEffect = (effectName) => {
+    if (!selectedShapeId) {
+      alert("Select a shape first.");
+      return;
+    }
+    dispatch(applyPathEffectToSelectedShape(effectName));
+    setShowPathEffectsDialog(false);
+  };
   const handleSaveAsClick = () => {
     const name = prompt("Enter a name for the file:") || "design";
     const savedData = {
@@ -1886,7 +1903,7 @@ const Topbar = ({
     "divider",
     { label: "Simplify", onClick: () => dispatch(simplify()) },
     { label: "Reverse", onClick: () => dispatch(reverse()) },
-    { label: "Path Effects..." },
+    { label: "Path Effects...", onClick: handlePathEffects },
     { label: "Paste Path Effect" },
     { label: "Remove Path Effect" },
   ];
@@ -3290,6 +3307,11 @@ const Topbar = ({
           </div>
         </div>
       )}
+      <PathEffectsDialog
+        isOpen={showPathEffectsDialog}
+        onClose={() => setShowPathEffectsDialog(false)}
+        onApply={handleApplyPathEffect}
+      />
     </>
   );
 };

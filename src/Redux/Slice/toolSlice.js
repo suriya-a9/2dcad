@@ -5615,6 +5615,15 @@ const toolSlice = createSlice({
     addMarker: (state, action) => {
       state.markers.push(action.payload);
     },
+    applyPathEffectToSelectedShape: (state, action) => {
+      const selectedLayer = state.layers[state.selectedLayerIndex];
+      const selectedShape = selectedLayer.shapes.find(
+        (shape) => shape.id === state.selectedShapeId
+      );
+      if (selectedShape) {
+        selectedShape.lpeEffect = action.payload;
+      }
+    },
   },
 
 });
@@ -5864,6 +5873,7 @@ export const {
   popShapesOutOfGroups,
   setMarkerForSelectedShape,
   addMarker,
+  applyPathEffectToSelectedShape,
 } = toolSlice.actions;
 
 export default toolSlice.reducer;

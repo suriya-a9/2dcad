@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useLayoutEffect, useImperativeHandle, forwardRef } from "react";
+import paper from 'paper';
 import Offset from "polygon-offset";
 import polygonClipping from "polygon-clipping";
 import opentype from "opentype.js";
@@ -97,7 +98,39 @@ import {
   addStraightPoint,
   clearStraightPoints,
 } from "../../Redux/Slice/toolSlice";
+function generateKnotEffectPath(points, gapLength = 10) {
+  if (!paper.project) {
+    const canvas = document.createElement('canvas');
+    paper.setup(canvas);
+  }
+  const path = new paper.Path();
+  points.forEach((pt, i) => {
+    if (i === 0) path.moveTo(new paper.Point(pt.x, pt.y));
+    else path.lineTo(new paper.Point(pt.x, pt.y));
+  });
+  path.closed = false;
 
+  const intersections = [];
+  for (let i = 0; i < path.segments.length - 1; i++) {
+    for (let j = i + 2; j < path.segments.length - 1; j++) {
+      const inter = path.getIntersections(path);
+      intersections.push(...inter);
+    }
+  }
+
+  intersections.forEach(inter => {
+    const loc = inter;
+    const offset = gapLength / 2;
+    const t1 = Math.max(0, loc.offset - offset);
+    const t2 = Math.min(path.length, loc.offset + offset);
+    path.divideAt(t1);
+    path.divideAt(t2);
+  });
+
+  const svgPath = path.exportSVG({ asString: true });
+  const dMatch = svgPath.match(/d="([^"]+)"/);
+  return dMatch ? dMatch[1] : '';
+}
 export const generateSpiralPath = (x, y, turns = 5, radius = 50, divergence = 1) => {
   const path = [];
   const angleStep = (Math.PI * 2 * turns) / 100;
@@ -111,6 +144,31 @@ export const generateSpiralPath = (x, y, turns = 5, radius = 50, divergence = 1)
 
   return path.join(" ");
 };
+
+function generateKnotPath(x, y, width, height, knotSize = 10, gapLength = 5) {
+  const minSide = Math.min(width, height);
+  knotSize = Math.max(1, Math.min(knotSize, minSide / 2));
+  gapLength = Math.max(0, gapLength);
+
+  let path = "";
+  for (let px = x; px < x + width; px += knotSize + gapLength) {
+    const seg = Math.min(knotSize, x + width - px);
+    path += `M${px},${y}h${seg} `;
+  }
+  for (let py = y; py < y + height; py += knotSize + gapLength) {
+    const seg = Math.min(knotSize, y + height - py);
+    path += `M${x + width},${py}v${seg} `;
+  }
+  for (let px = x + width; px > x; px -= knotSize + gapLength) {
+    const seg = Math.min(knotSize, px - x);
+    path += `M${px},${y + height}h-${seg} `;
+  }
+  for (let py = y + height; py > y; py -= knotSize + gapLength) {
+    const seg = Math.min(knotSize, py - y);
+    path += `M${x},${py}v-${seg} `;
+  }
+  return path.trim();
+}
 
 export async function textToGlyphsHandler(dispatch, textShape, layerIndex) {
   const response = await fetch('/fonts/Arial.ttf');
@@ -5476,6 +5534,256 @@ const Panel = React.forwardRef(({
                       />
                     );
                   }
+                  if (shape.lpeEffect === "Offset" && shape.type === "Rectangle") {
+                    const offset = shape.offsetAmount || 0;
+                    return (
+                      <Rect
+                        key={shape.id}
+                        id={shape.id}
+                        x={shape.x - offset}
+                        y={shape.y - offset}
+                        width={shape.width + offset * 2}
+                        height={shape.height + offset * 2}
+                        fill={shape.fill}
+                        stroke={shape.stroke}
+                        strokeWidth={shape.strokeWidth}
+                        draggable={!shape.locked}
+                        onDragEnd={e => handleDragEnd(e, shape.id)}
+                        onClick={e => {
+                          e.cancelBubble = true;
+                          if (!selectedShapeIds.includes(shape.id)) {
+                            dispatch(selectShape(shape.id));
+                          }
+                        }}
+                      />
+                    );
+                  }
+
+                  if (shape.lpeEffect === "Offset" && shape.type === "Circle") {
+                    const offset = shape.offsetAmount || 0;
+                    return (
+                      <Circle
+                        key={shape.id}
+                        id={shape.id}
+                        x={shape.x}
+                        y={shape.y}
+                        radius={shape.radius + offset}
+                        fill={shape.fill}
+                        stroke={shape.stroke}
+                        strokeWidth={shape.strokeWidth}
+                        draggable={!shape.locked}
+                        onDragEnd={e => handleDragEnd(e, shape.id)}
+                        onClick={e => {
+                          e.cancelBubble = true;
+                          if (!selectedShapeIds.includes(shape.id)) {
+                            dispatch(selectShape(shape.id));
+                          }
+                        }}
+                      />
+                    );
+                  }
+                  if (
+                    shape.lpeEffect === "Offset" &&
+                    (shape.type === "Polygon" || shape.type === "Star") &&
+                    Array.isArray(shape.points)
+                  ) {
+                    const offset = shape.offsetAmount || 0;
+                    const cx = shape.x || 0;
+                    const cy = shape.y || 0;
+                    const points = shape.points.map(pt => {
+                      const dx = pt.x - cx;
+                      const dy = pt.y - cy;
+                      const len = Math.sqrt(dx * dx + dy * dy) || 1;
+                      const scale = (len + offset) / len;
+                      return {
+                        x: cx + dx * scale,
+                        y: cy + dy * scale
+                      };
+                    });
+                    return (
+                      <Path
+                        key={shape.id}
+                        id={shape.id}
+                        x={shape.x}
+                        y={shape.y}
+                        data={generatePolygonPath(points)}
+                        stroke={shape.stroke}
+                        strokeWidth={shape.strokeWidth}
+                        fill={shape.fill}
+                        closed
+                        draggable={!shape.locked}
+                        onDragEnd={e => handleDragEnd(e, shape.id)}
+                        onClick={e => {
+                          e.cancelBubble = true;
+                          if (!selectedShapeIds.includes(shape.id)) {
+                            dispatch(selectShape(shape.id));
+                          }
+                        }}
+                      />
+                    );
+                  }
+
+                  if (
+                    shape.lpeEffect === "Offset" &&
+                    (shape.type === "Pencil" || shape.type === "Calligraphy") &&
+                    Array.isArray(shape.points)
+                  ) {
+                    const offset = shape.offsetAmount || 0;
+                    const offsetPts = getOffsetPoints(shape.points, offset);
+                    return (
+                      <Line
+                        key={shape.id}
+                        id={shape.id}
+                        points={offsetPts.flatMap(p => [p.x, p.y])}
+                        stroke={shape.stroke || shape.strokeColor || "black"}
+                        strokeWidth={shape.strokeWidth || 2}
+                        fill={shape.fill || "transparent"}
+                        closed={shape.closed || false}
+                        draggable={!shape.locked}
+                        onDragEnd={e => handleDragEnd(e, shape.id)}
+                        onClick={e => {
+                          e.cancelBubble = true;
+                          if (!selectedShapeIds.includes(shape.id)) {
+                            dispatch(selectShape(shape.id));
+                          }
+                        }}
+                      />
+                    );
+                  }
+                  if (
+                    shape.lpeEffect === "Power stroke" &&
+                    shape.type === "Rectangle"
+                  ) {
+                    return (
+                      <Rect
+                        key={shape.id}
+                        id={shape.id}
+                        x={shape.x}
+                        y={shape.y}
+                        width={shape.width}
+                        height={shape.height}
+                        fill={shape.fill}
+                        stroke={shape.stroke}
+                        strokeWidth={shape.powerStrokeWidth || shape.strokeWidth || 10}
+                        draggable={!shape.locked}
+                        onDragEnd={e => handleDragEnd(e, shape.id)}
+                        onClick={e => {
+                          e.cancelBubble = true;
+                          if (!selectedShapeIds.includes(shape.id)) {
+                            dispatch(selectShape(shape.id));
+                          }
+                        }}
+                      />
+                    );
+                  }
+                  if (
+                    shape.lpeEffect === "Power stroke" &&
+                    shape.type === "Circle"
+                  ) {
+                    return (
+                      <Circle
+                        key={shape.id}
+                        id={shape.id}
+                        x={shape.x}
+                        y={shape.y}
+                        radius={shape.radius}
+                        fill={shape.fill}
+                        stroke={shape.stroke}
+                        strokeWidth={shape.powerStrokeWidth || shape.strokeWidth || 10}
+                        draggable={!shape.locked}
+                        onDragEnd={e => handleDragEnd(e, shape.id)}
+                        onClick={e => {
+                          e.cancelBubble = true;
+                          if (!selectedShapeIds.includes(shape.id)) {
+                            dispatch(selectShape(shape.id));
+                          }
+                        }}
+                      />
+                    );
+                  }
+
+                  if (
+                    shape.lpeEffect === "Power stroke" &&
+                    shape.type === "Star"
+                  ) {
+                    return (
+                      <Star
+                        key={shape.id}
+                        id={shape.id}
+                        x={shape.x}
+                        y={shape.y}
+                        numPoints={shape.corners}
+                        innerRadius={shape.innerRadius}
+                        outerRadius={shape.outerRadius}
+                        fill={shape.fill}
+                        stroke={shape.stroke}
+                        strokeWidth={shape.powerStrokeWidth || shape.strokeWidth || 10}
+                        draggable={!shape.locked}
+                        onDragEnd={e => handleDragEnd(e, shape.id)}
+                        onClick={e => {
+                          e.cancelBubble = true;
+                          if (!selectedShapeIds.includes(shape.id)) {
+                            dispatch(selectShape(shape.id));
+                          }
+                        }}
+                      />
+                    );
+                  }
+
+                  if (
+                    shape.lpeEffect === "Power stroke" &&
+                    shape.type === "Polygon" &&
+                    Array.isArray(shape.points)
+                  ) {
+                    return (
+                      <Path
+                        key={shape.id}
+                        id={shape.id}
+                        x={shape.x}
+                        y={shape.y}
+                        data={generatePolygonPath(shape.points)}
+                        fill={shape.fill}
+                        stroke={shape.stroke}
+                        strokeWidth={shape.powerStrokeWidth || shape.strokeWidth || 10}
+                        closed
+                        draggable={!shape.locked}
+                        onDragEnd={e => handleDragEnd(e, shape.id)}
+                        onClick={e => {
+                          e.cancelBubble = true;
+                          if (!selectedShapeIds.includes(shape.id)) {
+                            dispatch(selectShape(shape.id));
+                          }
+                        }}
+                      />
+                    );
+                  }
+                  if (
+                    shape.lpeEffect === "Power stroke" &&
+                    (shape.type === "Pencil" || shape.type === "Calligraphy" || shape.type === "Polygon" || shape.type === "Path") &&
+                    Array.isArray(shape.points)
+                  ) {
+                    return (
+                      <Line
+                        key={shape.id}
+                        id={shape.id}
+                        points={shape.points.flatMap(p => [p.x, p.y])}
+                        stroke={shape.stroke || "black"}
+                        strokeWidth={shape.powerStrokeWidth || 10}
+                        fill={shape.fill}
+                        closed={shape.closed || false}
+                        lineCap="round"
+                        lineJoin="round"
+                        draggable={!shape.locked}
+                        onDragEnd={e => handleDragEnd(e, shape.id)}
+                        onClick={e => {
+                          e.cancelBubble = true;
+                          if (!selectedShapeIds.includes(shape.id)) {
+                            dispatch(selectShape(shape.id));
+                          }
+                        }}
+                      />
+                    );
+                  }
                   if (shape.type === "polyline") {
                     return (
                       <Line
@@ -7002,6 +7310,28 @@ const Panel = React.forwardRef(({
                       />
                     );
                   } else if (shape.type === "Pencil") {
+                    if (shape.lpeEffect === "Knot") {
+                      const points = shape.points.map(p => ({ x: p.x, y: p.y }));
+                      return (
+                        <Path
+                          key={shape.id}
+                          id={shape.id}
+                          data={generateKnotEffectPath(points, shape.knotGapLength || 10)}
+                          stroke={shape.stroke || shape.strokeColor || "black"}
+                          strokeWidth={shape.strokeWidth || 2}
+                          fill="none"
+                          draggable={!shape.locked}
+                          onDragMove={handleDragMove}
+                          onDragEnd={e => handleDragEnd(e, shape.id)}
+                          onClick={e => {
+                            e.cancelBubble = true;
+                            if (!selectedShapeIds.includes(shape.id)) {
+                              dispatch(selectShape(shape.id));
+                            }
+                          }}
+                        />
+                      );
+                    }
                     if (!Array.isArray(shape.points) || !shape.points.every((p) => typeof p.x === "number" && typeof p.y === "number")) {
                       console.error("Invalid points structure for Pencil shape:", shape);
                       return null;

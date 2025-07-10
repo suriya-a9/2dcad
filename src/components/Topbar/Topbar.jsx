@@ -3311,6 +3311,19 @@ const Topbar = ({
         isOpen={showPathEffectsDialog}
         onClose={() => setShowPathEffectsDialog(false)}
         onApply={handleApplyPathEffect}
+        selectedShape={selectedShape}
+        onSetCornerRadius={(id, radius) => {
+          dispatch(updateShapePosition({ id, cornerRadius: radius }));
+        }}
+        onSetKnotOptions={(id, opts) => {
+          dispatch(updateShapePosition({ id, knotSize: opts.knotSize, knotGapLength: opts.gapLength }));
+        }}
+        onSetOffset={(id, offsetAmount) => {
+          dispatch(updateShapePosition({ id, offsetAmount, lpeEffect: "Offset" }));
+        }}
+        onSetPowerStroke={(id, width) => {
+          dispatch(updateShapePosition({ id, powerStrokeWidth: width, lpeEffect: "Power stroke" }));
+        }}
       />
     </>
   );

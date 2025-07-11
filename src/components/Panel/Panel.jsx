@@ -5784,6 +5784,195 @@ const Panel = React.forwardRef(({
                       />
                     );
                   }
+                  if (
+                    shape.lpeEffect === "Taper stroke" &&
+                    (shape.type === "Pencil" || shape.type === "Calligraphy" || shape.type === "Bezier") &&
+                    Array.isArray(shape.points)
+                  ) {
+                    const points = shape.points;
+                    const maxWidth = shape.taperStrokeWidth || 10;
+                    const startTaper = shape.taperStart ?? 1;
+                    const endTaper = shape.taperEnd ?? 1;
+                    const isClosed = shape.closed || false;
+
+                    if (isClosed) {
+                      return (
+                        <Line
+                          key={shape.id}
+                          id={shape.id}
+                          points={points.flatMap(p => [p.x, p.y])}
+                          stroke={shape.stroke || "black"}
+                          strokeWidth={maxWidth}
+                          fill={shape.fill || "black"}
+                          closed={true}
+                          lineCap="round"
+                          lineJoin="round"
+                          draggable={!shape.locked}
+                          onDragEnd={e => handleDragEnd(e, shape.id)}
+                          onClick={e => {
+                            e.cancelBubble = true;
+                            if (!selectedShapeIds.includes(shape.id)) {
+                              dispatch(selectShape(shape.id));
+                            }
+                          }}
+                        />
+                      );
+                    }
+
+                    const lines = [];
+                    for (let i = 1; i < points.length; i++) {
+                      const t = i / (points.length - 1);
+                      const width = maxWidth * ((1 - t) * startTaper + t * endTaper);
+                      lines.push(
+                        <Line
+                          key={shape.id + "-taper-" + i}
+                          points={[
+                            points[i - 1].x, points[i - 1].y,
+                            points[i].x, points[i].y
+                          ]}
+                          stroke={shape.stroke || "black"}
+                          strokeWidth={Math.max(1, width)}
+                          lineCap="round"
+                          lineJoin="round"
+                          draggable={!shape.locked}
+                          onDragEnd={e => handleDragEnd(e, shape.id)}
+                          onClick={e => {
+                            e.cancelBubble = true;
+                            if (!selectedShapeIds.includes(shape.id)) {
+                              dispatch(selectShape(shape.id));
+                            }
+                          }}
+                        />
+                      );
+                    }
+                    return <>{lines}</>;
+                  }
+                  if (
+                    shape.lpeEffect === "Envelope Deformation" &&
+                    ["Pencil", "Calligraphy", "Bezier"].includes(shape.type) &&
+                    shape.envelopeTop && shape.envelopeBottom && shape.envelopeLeft && shape.envelopeRight &&
+                    Array.isArray(shape.points)
+                  ) {
+                    const [x1, y1, x2, y2] = shape.envelopeTop;
+                    const [bx1, by1, bx2, by2] = shape.envelopeBottom;
+                    const [lx1, ly1, lx2, ly2] = shape.envelopeLeft;
+                    const [rx1, ry1, rx2, ry2] = shape.envelopeRight;
+
+                    // Normalize points to {x, y}
+                    const normPoints = shape.points.map(p =>
+                      Array.isArray(p) ? { x: p[0], y: p[1] } : { x: p.x, y: p.y }
+                    );
+
+                    const minX = Math.min(...normPoints.map(p => p.x));
+                    const maxX = Math.max(...normPoints.map(p => p.x));
+                    const minY = Math.min(...normPoints.map(p => p.y));
+                    const maxY = Math.max(...normPoints.map(p => p.y));
+
+                    const mappedPoints = normPoints.map((pt) => {
+                      const u = (pt.x - minX) / (maxX - minX || 1);
+                      const v = (pt.y - minY) / (maxY - minY || 1);
+
+                      const topX = x1 + (x2 - x1) * u;
+                      const topY = y1 + (y2 - y1) * u;
+                      const botX = bx1 + (bx2 - bx1) * u;
+                      const botY = by1 + (by2 - by1) * u;
+
+                      const leftX = lx1 + (lx2 - lx1) * v;
+                      const leftY = ly1 + (ly2 - ly1) * v;
+                      const rightX = rx1 + (rx2 - rx1) * v;
+                      const rightY = ry1 + (ry2 - ry1) * v;
+
+                      const x = (1 - v) * topX + v * botX + (1 - u) * leftX + u * rightX - ((1 - u) * (1 - v) * x1 + u * (1 - v) * x2 + (1 - u) * v * bx1 + u * v * bx2);
+                      const y = (1 - v) * topY + v * botY + (1 - u) * leftY + u * rightY - ((1 - u) * (1 - v) * y1 + u * (1 - v) * y2 + (1 - u) * v * by1 + u * v * by2);
+
+                      return { x, y };
+                    });
+
+                    return (
+                      <>
+                        <Line
+                          key={shape.id + "-env-main"}
+                          points={mappedPoints.flatMap(p => [p.x, p.y])}
+                          stroke={shape.stroke || "black"}
+                          strokeWidth={shape.strokeWidth || 2}
+                          fill={shape.fill || "transparent"}
+                          closed={shape.closed || false}
+                        />
+                        <Line key={shape.id + "-env-top"} points={[x1, y1, x2, y2]} stroke="red" strokeWidth={2} />
+                        <Line key={shape.id + "-env-bottom"} points={[bx1, by1, bx2, by2]} stroke="blue" strokeWidth={2} />
+                        <Line key={shape.id + "-env-left"} points={[lx1, ly1, lx2, ly2]} stroke="green" strokeWidth={2} />
+                        <Line key={shape.id + "-env-right"} points={[rx1, ry1, rx2, ry2]} stroke="orange" strokeWidth={2} />
+                      </>
+                    );
+                  }
+                  if (
+                    shape.lpeEffect === "Lattice Deformation" &&
+                    ["Pencil", "Calligraphy", "Bezier"].includes(shape.type) &&
+                    Array.isArray(shape.points) &&
+                    Array.isArray(shape.latticePoints) &&
+                    shape.latticeRows && shape.latticeCols
+                  ) {
+                    const normPoints = shape.points.map(p =>
+                      Array.isArray(p) ? { x: p[0], y: p[1] } : { x: p.x, y: p.y }
+                    );
+                    const minX = Math.min(...normPoints.map(p => p.x));
+                    const maxX = Math.max(...normPoints.map(p => p.x));
+                    const minY = Math.min(...normPoints.map(p => p.y));
+                    const maxY = Math.max(...normPoints.map(p => p.y));
+
+                    const getLatticePoint = (row, col) => {
+                      const idx = row * shape.latticeCols + col;
+                      return shape.latticePoints[idx] || [0, 0];
+                    };
+
+                    function latticeMap(x, y) {
+                      const u = (x - minX) / (maxX - minX || 1);
+                      const v = (y - minY) / (maxY - minY || 1);
+
+                      const fx = u * (shape.latticeCols - 1);
+                      const fy = v * (shape.latticeRows - 1);
+
+                      const col = Math.floor(fx);
+                      const row = Math.floor(fy);
+
+                      const du = fx - col;
+                      const dv = fy - row;
+
+                      const col1 = Math.min(col, shape.latticeCols - 2);
+                      const row1 = Math.min(row, shape.latticeRows - 2);
+
+                      const p00 = getLatticePoint(row1, col1);
+                      const p10 = getLatticePoint(row1, col1 + 1);
+                      const p01 = getLatticePoint(row1 + 1, col1);
+                      const p11 = getLatticePoint(row1 + 1, col1 + 1);
+
+                      const xMapped =
+                        (1 - du) * (1 - dv) * p00[0] +
+                        du * (1 - dv) * p10[0] +
+                        (1 - du) * dv * p01[0] +
+                        du * dv * p11[0];
+                      const yMapped =
+                        (1 - du) * (1 - dv) * p00[1] +
+                        du * (1 - dv) * p10[1] +
+                        (1 - du) * dv * p01[1] +
+                        du * dv * p11[1];
+
+                      return { x: xMapped, y: yMapped };
+                    }
+
+                    const mappedPoints = normPoints.map(pt => latticeMap(pt.x, pt.y));
+
+                    return (
+                      <Line
+                        key={shape.id + "-lattice"}
+                        points={mappedPoints.flatMap(p => [p.x, p.y])}
+                        stroke={shape.stroke || "black"}
+                        strokeWidth={shape.strokeWidth || 2}
+                        fill={shape.fill || "transparent"}
+                        closed={shape.closed || false}
+                      />
+                    );
+                  }
                   if (shape.type === "polyline") {
                     return (
                       <Line

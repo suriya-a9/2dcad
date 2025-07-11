@@ -249,12 +249,34 @@ const Topbar = ({
     }
     setShowPathEffectsDialog(true);
   };
-  const handleApplyPathEffect = (effectName) => {
+  const handleApplyPathEffect = (effect, params) => {
     if (!selectedShapeId) {
       alert("Select a shape first.");
       return;
     }
-    dispatch(applyPathEffectToSelectedShape(effectName));
+    if (effect === "Taper stroke" && params) {
+      dispatch(updateShapePosition({
+        id: params.id,
+        lpeEffect: "Taper stroke",
+        taperStrokeWidth: params.taperStrokeWidth,
+        taperStart: params.taperStart,
+        taperEnd: params.taperEnd,
+      }));
+    } else if (effect === "Envelope Deformation" && params) {
+      dispatch({
+        type: "tool/updateShapePosition",
+        payload: {
+          id: selectedShapeId,
+          lpeEffect: "Envelope Deformation",
+          envelopeTop: params.envelopeTop,
+          envelopeBottom: params.envelopeBottom,
+          envelopeLeft: params.envelopeLeft,
+          envelopeRight: params.envelopeRight,
+        }
+      });
+    } else {
+      dispatch(applyPathEffectToSelectedShape(effect));
+    }
     setShowPathEffectsDialog(false);
   };
   const handleSaveAsClick = () => {
@@ -295,15 +317,6 @@ const Topbar = ({
       setNewLayerName("");
     }
   };
-
-
-
-
-
-
-
-
-
   const handleCut = useCallback(() => {
     dispatch(cut());
   }, [dispatch]);
@@ -3342,6 +3355,7 @@ function convertFromPx(value, unit) {
   return value / unitConversionFactors[unit];
 }
 function convertToPx(value, unit) {
+  -+62
   return value * unitConversionFactors[unit];
 }
 function DefaultTopbar() {

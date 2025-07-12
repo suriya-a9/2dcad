@@ -274,6 +274,20 @@ const Topbar = ({
           envelopeRight: params.envelopeRight,
         }
       });
+    } else if (effect === "Lattice Deformation" && params) {
+      dispatch(updateShapePosition({
+        id: params.id,
+        lpeEffect: "Lattice Deformation",
+        latticeRows: params.latticeRows,
+        latticeCols: params.latticeCols,
+        latticePoints: params.latticePoints,
+      }));
+    } else if (effect === "Perspective/Envelope" && params) {
+      dispatch(updateShapePosition({
+        id: params.id,
+        lpeEffect: "Perspective/Envelope",
+        perspectiveCorners: params.perspectiveCorners,
+      }));
     } else {
       dispatch(applyPathEffectToSelectedShape(effect));
     }
@@ -1918,7 +1932,25 @@ const Topbar = ({
     { label: "Reverse", onClick: () => dispatch(reverse()) },
     { label: "Path Effects...", onClick: handlePathEffects },
     { label: "Paste Path Effect" },
-    { label: "Remove Path Effect" },
+    {
+      label: "Remove Path Effect", onClick: () => {
+        if (!selectedShapeId) {
+          alert("Select a shape first.");
+          return;
+        }
+        dispatch(updateShapePosition({
+          id: selectedShapeId,
+          lpeEffect: null,
+          envelopeTop: undefined,
+          envelopeBottom: undefined,
+          envelopeLeft: undefined,
+          envelopeRight: undefined,
+          latticePoints: undefined,
+          latticeRows: undefined,
+          latticeCols: undefined,
+        }));
+      }
+    },
   ];
   const handlePutOnPath = () => {
     const selectedShapes = shapes.filter(s => s.selected || selectedShapeIds?.includes(s.id));

@@ -98,6 +98,68 @@ import {
   addStraightPoint,
   clearStraightPoints,
 } from "../../Redux/Slice/toolSlice";
+function applyRoughenEffect(points, amplitude = 10, frequency = 3) {
+  if (!Array.isArray(points) || points.length < 2) return points;
+  const roughened = [];
+  for (let i = 0; i < points.length; i++) {
+    const p = points[i];
+    const prev = points[i - 1] || points[0];
+    const next = points[i + 1] || points[points.length - 1];
+    const dx = next.x - prev.x;
+    const dy = next.y - prev.y;
+    const len = Math.hypot(dx, dy) || 1;
+    const nx = -dy / len, ny = dx / len;
+    const t = i * frequency;
+    const offset = Math.sin(t) * amplitude + (Math.random() - 0.5) * amplitude;
+    roughened.push({
+      x: p.x + nx * offset,
+      y: p.y + ny * offset,
+    });
+  }
+  return roughened;
+}
+export function shapeToPoints(shape) {
+  if (shape.type === "Polygon" && Array.isArray(shape.points)) {
+    return shape.points.map(p => ({ x: p.x ?? p[0], y: p.y ?? p[1] }));
+  }
+  if (shape.type === "Pencil" && Array.isArray(shape.points)) {
+    return shape.points.map(p => ({ x: p.x ?? p[0], y: p.y ?? p[1] }));
+  }
+  if (shape.type === "Calligraphy" && Array.isArray(shape.points)) {
+    return shape.points.map(p => ({ x: p.x, y: p.y }));
+  }
+  if (shape.type === "Circle") {
+
+    const num = 60;
+    return Array.from({ length: num }).map((_, i) => {
+      const angle = (i / num) * 2 * Math.PI;
+      return {
+        x: shape.x + shape.radius * Math.cos(angle),
+        y: shape.y + shape.radius * Math.sin(angle),
+      };
+    });
+  }
+  if (shape.type === "Rectangle") {
+    return [
+      { x: shape.x, y: shape.y },
+      { x: shape.x + shape.width, y: shape.y },
+      { x: shape.x + shape.width, y: shape.y + shape.height },
+      { x: shape.x, y: shape.y + shape.height },
+    ];
+  }
+  if (shape.type === "Star") {
+    const num = (shape.corners || 5) * 2;
+    return Array.from({ length: num }).map((_, i) => {
+      const angle = (i / num) * 2 * Math.PI - Math.PI / 2;
+      const r = i % 2 === 0 ? shape.outerRadius : shape.innerRadius;
+      return {
+        x: shape.x + r * Math.cos(angle),
+        y: shape.y + r * Math.sin(angle),
+      };
+    });
+  }
+  return [];
+}
 function generateKnotEffectPath(points, gapLength = 10) {
   if (!paper.project) {
     const canvas = document.createElement('canvas');
@@ -5171,48 +5233,6 @@ const Panel = React.forwardRef(({
     );
   }
 
-  function shapeToPoints(shape) {
-    if (shape.type === "Polygon" && Array.isArray(shape.points)) {
-      return shape.points.map(p => ({ x: p.x ?? p[0], y: p.y ?? p[1] }));
-    }
-    if (shape.type === "Pencil" && Array.isArray(shape.points)) {
-      return shape.points.map(p => ({ x: p.x ?? p[0], y: p.y ?? p[1] }));
-    }
-    if (shape.type === "Calligraphy" && Array.isArray(shape.points)) {
-      return shape.points.map(p => ({ x: p.x, y: p.y }));
-    }
-    if (shape.type === "Circle") {
-
-      const num = 60;
-      return Array.from({ length: num }).map((_, i) => {
-        const angle = (i / num) * 2 * Math.PI;
-        return {
-          x: shape.x + shape.radius * Math.cos(angle),
-          y: shape.y + shape.radius * Math.sin(angle),
-        };
-      });
-    }
-    if (shape.type === "Rectangle") {
-      return [
-        { x: shape.x, y: shape.y },
-        { x: shape.x + shape.width, y: shape.y },
-        { x: shape.x + shape.width, y: shape.y + shape.height },
-        { x: shape.x, y: shape.y + shape.height },
-      ];
-    }
-    if (shape.type === "Star") {
-      const num = (shape.corners || 5) * 2;
-      return Array.from({ length: num }).map((_, i) => {
-        const angle = (i / num) * 2 * Math.PI - Math.PI / 2;
-        const r = i % 2 === 0 ? shape.outerRadius : shape.innerRadius;
-        return {
-          x: shape.x + r * Math.cos(angle),
-          y: shape.y + r * Math.sin(angle),
-        };
-      });
-    }
-    return [];
-  }
   function svgToBitmap(svgString, width, height) {
     return new Promise((resolve) => {
       const img = new window.Image();
@@ -5858,7 +5878,6 @@ const Panel = React.forwardRef(({
                     const [lx1, ly1, lx2, ly2] = shape.envelopeLeft;
                     const [rx1, ry1, rx2, ry2] = shape.envelopeRight;
 
-                    // Normalize points to {x, y}
                     const normPoints = shape.points.map(p =>
                       Array.isArray(p) ? { x: p[0], y: p[1] } : { x: p.x, y: p.y }
                     );
@@ -5887,7 +5906,39 @@ const Panel = React.forwardRef(({
 
                       return { x, y };
                     });
-
+                    const isSelected = selectedShapeIds.includes(shape.id);
+                    const renderEnvelopeHandle = (curve, idx, color, label) => (
+                      <Circle
+                        key={shape.id + "-env-handle-" + label + idx}
+                        x={curve[idx * 2]}
+                        y={curve[idx * 2 + 1]}
+                        radius={8}
+                        fill="#fff"
+                        stroke={color}
+                        strokeWidth={2}
+                        draggable
+                        onDragMove={e => {
+                          const newCurve = [...curve];
+                          newCurve[idx * 2] = e.target.x();
+                          newCurve[idx * 2 + 1] = e.target.y();
+                          let payload = { id: shape.id };
+                          if (label === "top") payload.envelopeTop = newCurve;
+                          if (label === "bottom") payload.envelopeBottom = newCurve;
+                          if (label === "left") payload.envelopeLeft = newCurve;
+                          if (label === "right") payload.envelopeRight = newCurve;
+                          dispatch({
+                            type: "tool/updateShapePosition",
+                            payload
+                          });
+                        }}
+                        onMouseEnter={e => {
+                          e.target.getStage().container().style.cursor = "pointer";
+                        }}
+                        onMouseLeave={e => {
+                          e.target.getStage().container().style.cursor = "default";
+                        }}
+                      />
+                    );
                     return (
                       <>
                         <Line
@@ -5902,6 +5953,18 @@ const Panel = React.forwardRef(({
                         <Line key={shape.id + "-env-bottom"} points={[bx1, by1, bx2, by2]} stroke="blue" strokeWidth={2} />
                         <Line key={shape.id + "-env-left"} points={[lx1, ly1, lx2, ly2]} stroke="green" strokeWidth={2} />
                         <Line key={shape.id + "-env-right"} points={[rx1, ry1, rx2, ry2]} stroke="orange" strokeWidth={2} />
+                        {isSelected && (
+                          <>
+                            {renderEnvelopeHandle(shape.envelopeTop, 0, "red", "top")}
+                            {renderEnvelopeHandle(shape.envelopeTop, 1, "red", "top")}
+                            {renderEnvelopeHandle(shape.envelopeBottom, 0, "blue", "bottom")}
+                            {renderEnvelopeHandle(shape.envelopeBottom, 1, "blue", "bottom")}
+                            {renderEnvelopeHandle(shape.envelopeLeft, 0, "green", "left")}
+                            {renderEnvelopeHandle(shape.envelopeLeft, 1, "green", "left")}
+                            {renderEnvelopeHandle(shape.envelopeRight, 0, "orange", "right")}
+                            {renderEnvelopeHandle(shape.envelopeRight, 1, "orange", "right")}
+                          </>
+                        )}
                       </>
                     );
                   }
@@ -5961,17 +6024,304 @@ const Panel = React.forwardRef(({
                     }
 
                     const mappedPoints = normPoints.map(pt => latticeMap(pt.x, pt.y));
+                    const isSelected = selectedShapeIds.includes(shape.id);
+                    return (
+                      <>
+                        <Line
+                          key={shape.id + "-lattice"}
+                          points={mappedPoints.flatMap(p => [p.x, p.y])}
+                          stroke={shape.stroke || "black"}
+                          strokeWidth={shape.strokeWidth || 2}
+                          fill={shape.fill || "transparent"}
+                          closed={shape.closed || false}
+                        />
+                        {isSelected && shape.latticePoints.map(([x, y], idx) => (
+                          <Circle
+                            key={shape.id + "-lattice-handle-" + idx}
+                            x={x}
+                            y={y}
+                            radius={7}
+                            fill="#fff"
+                            stroke="#007bff"
+                            strokeWidth={2}
+                            draggable
+                            onDragMove={e => {
+                              const newX = e.target.x();
+                              const newY = e.target.y();
+                              const newLatticePoints = [...shape.latticePoints];
+                              newLatticePoints[idx] = [newX, newY];
+                              dispatch({
+                                type: "tool/updateShapePosition",
+                                payload: {
+                                  id: shape.id,
+                                  latticePoints: newLatticePoints,
+                                }
+                              });
+                            }}
+                            onMouseEnter={e => {
+                              e.target.getStage().container().style.cursor = "pointer";
+                            }}
+                            onMouseLeave={e => {
+                              e.target.getStage().container().style.cursor = "default";
+                            }}
+                          />
+                        ))}
+                      </>
+                    );
+                  }
+                  if (
+                    shape.lpeEffect === "Perspective/Envelope" &&
+                    Array.isArray(shape.perspectiveCorners) &&
+                    shape.perspectiveCorners.length === 4
+                  ) {
+                    const isSelected = selectedShapeIds.includes(shape.id);
+
+                    const normPoints = shape.points.map(p =>
+                      Array.isArray(p) ? { x: p[0], y: p[1] } : { x: p.x, y: p.y }
+                    );
+                    const minX = Math.min(...normPoints.map(p => p.x));
+                    const maxX = Math.max(...normPoints.map(p => p.x));
+                    const minY = Math.min(...normPoints.map(p => p.y));
+                    const maxY = Math.max(...normPoints.map(p => p.y));
+
+                    const [tl, tr, br, bl] = shape.perspectiveCorners;
+
+                    function mapPoint(pt) {
+                      const u = (pt.x - minX) / (maxX - minX || 1);
+                      const v = (pt.y - minY) / (maxY - minY || 1);
+
+                      const x =
+                        (1 - u) * (1 - v) * tl[0] +
+                        u * (1 - v) * tr[0] +
+                        u * v * br[0] +
+                        (1 - u) * v * bl[0];
+                      const y =
+                        (1 - u) * (1 - v) * tl[1] +
+                        u * (1 - v) * tr[1] +
+                        u * v * br[1] +
+                        (1 - u) * v * bl[1];
+                      return { x, y };
+                    }
+
+                    const mappedPoints = normPoints.map(mapPoint);
+
+                    const isClosed = shape.closed !== undefined ? shape.closed : true;
 
                     return (
-                      <Line
-                        key={shape.id + "-lattice"}
-                        points={mappedPoints.flatMap(p => [p.x, p.y])}
-                        stroke={shape.stroke || "black"}
-                        strokeWidth={shape.strokeWidth || 2}
-                        fill={shape.fill || "transparent"}
-                        closed={shape.closed || false}
-                      />
+                      <>
+                        <Line
+                          points={mappedPoints.flatMap(p => [p.x, p.y])}
+                          stroke={shape.stroke || "black"}
+                          strokeWidth={shape.strokeWidth || 2}
+                          fill={shape.fill || "transparent"}
+                          closed={isClosed}
+                        />
+                        {isSelected && shape.perspectiveCorners.map(([x, y], idx) => (
+                          <Circle
+                            key={shape.id + "-persp-handle-" + idx}
+                            x={x}
+                            y={y}
+                            radius={8}
+                            fill="#fff"
+                            stroke="#007bff"
+                            strokeWidth={2}
+                            draggable
+                            onDragMove={e => {
+                              const newCorners = [...shape.perspectiveCorners];
+                              newCorners[idx] = [e.target.x(), e.target.y()];
+                              dispatch({
+                                type: "tool/updateShapePosition",
+                                payload: {
+                                  id: shape.id,
+                                  perspectiveCorners: newCorners,
+                                }
+                              });
+                            }}
+                            onMouseEnter={e => {
+                              e.target.getStage().container().style.cursor = "pointer";
+                            }}
+                            onMouseLeave={e => {
+                              e.target.getStage().container().style.cursor = "default";
+                            }}
+                          />
+                        ))}
+                      </>
                     );
+                  }
+                  if (
+                    shape.lpeEffect === "Roughen"
+                  ) {
+                    let points = [];
+                    if (shape.type === "Rectangle") {
+                      points = [
+                        { x: shape.x, y: shape.y },
+                        { x: shape.x + shape.width, y: shape.y },
+                        { x: shape.x + shape.width, y: shape.y + shape.height },
+                        { x: shape.x, y: shape.y + shape.height }
+                      ];
+                    } else if (shape.type === "Circle") {
+                      const num = 60;
+                      for (let i = 0; i < num; i++) {
+                        const angle = (i / num) * 2 * Math.PI;
+                        points.push({
+                          x: shape.x + shape.radius * Math.cos(angle),
+                          y: shape.y + shape.radius * Math.sin(angle)
+                        });
+                      }
+                    } else if (shape.type === "Star") {
+                      const num = (shape.corners || 5) * 2;
+                      for (let i = 0; i < num; i++) {
+                        const angle = (i / num) * 2 * Math.PI - Math.PI / 2;
+                        const r = i % 2 === 0 ? shape.outerRadius : shape.innerRadius;
+                        points.push({
+                          x: shape.x + r * Math.cos(angle),
+                          y: shape.y + r * Math.sin(angle)
+                        });
+                      }
+                    } else if (shape.type === "Polygon" && Array.isArray(shape.points)) {
+                      points = shape.points.map(p => ({ x: p.x ?? p[0], y: p.y ?? p[1] }));
+                      if (typeof shape.x === "number" && typeof shape.y === "number") {
+                        points = points.map(p => ({ x: p.x + shape.x, y: p.y + shape.y }));
+                      }
+                    } else if (Array.isArray(shape.points)) {
+                      points = shape.points.map(p => ({ x: p.x ?? p[0], y: p.y ?? p[1] }));
+                    }
+
+                    const amplitude = shape.roughenAmplitude || 10;
+                    const frequency = shape.roughenFrequency || 3;
+                    const roughPoints = shape.roughenPoints || applyRoughenEffect(points, amplitude, frequency);
+
+                    if (
+                      shape.type === "Rectangle" ||
+                      shape.type === "Circle" ||
+                      shape.type === "Star" ||
+                      shape.type === "Polygon" ||
+                      shape.closed
+                    ) {
+                      return (
+                        <Path
+                          key={shape.id}
+                          data={
+                            "M " +
+                            roughPoints.map(p => `${p.x},${p.y}`).join(" L ") +
+                            " Z"
+                          }
+                          stroke={shape.stroke || "black"}
+                          strokeWidth={shape.strokeWidth || 2}
+                          fill={shape.fill || "transparent"}
+                          closed
+                        />
+                      );
+                    } else {
+                      return (
+                        <Line
+                          key={shape.id}
+                          points={roughPoints.flatMap(p => [p.x, p.y])}
+                          stroke={shape.stroke || "black"}
+                          strokeWidth={shape.strokeWidth || 2}
+                          fill={shape.fill || "transparent"}
+                          closed={false}
+                        />
+                      );
+                    }
+                  }
+                  if (
+                    shape.lpeEffect === "Transform by 2 points" &&
+                    shape.transform2Points &&
+                    Array.isArray(shape.transform2Points.from) &&
+                    Array.isArray(shape.transform2Points.to)
+                  ) {
+                    const { from, to } = shape.transform2Points;
+                    if (from.length === 2 && to.length === 2) {
+                      let points = shapeToPoints(shape);
+
+                      function getTransformMatrix([A, B], [A2, B2]) {
+                        const dx1 = B[0] - A[0], dy1 = B[1] - A[1];
+                        const dx2 = B2[0] - A2[0], dy2 = B2[1] - A2[1];
+                        const len1 = Math.hypot(dx1, dy1);
+                        const len2 = Math.hypot(dx2, dy2);
+                        const scale = len2 / (len1 || 1);
+                        const angle1 = Math.atan2(dy1, dx1);
+                        const angle2 = Math.atan2(dy2, dx2);
+                        const theta = angle2 - angle1;
+                        return { scale, theta, from: A, to: A2 };
+                      }
+                      const { scale, theta, from: [x0, y0], to: [x1, y1] } = getTransformMatrix(from, to);
+
+                      const transformed = points.map(pt => {
+                        let px = pt.x - x0;
+                        let py = pt.y - y0;
+                        px *= scale;
+                        py *= scale;
+                        const rx = px * Math.cos(theta) - py * Math.sin(theta);
+                        const ry = px * Math.sin(theta) + py * Math.cos(theta);
+                        return { x: rx + x1, y: ry + y1 };
+                      });
+
+                      const isClosed = shape.closed || shape.type === "Polygon" || shape.type === "Rectangle" || shape.type === "Circle" || shape.type === "Star";
+                      const shapeElem = isClosed ? (
+                        <Path
+                          key={shape.id}
+                          data={
+                            "M " +
+                            transformed.map(p => `${p.x},${p.y}`).join(" L ") +
+                            " Z"
+                          }
+                          stroke={shape.stroke || "black"}
+                          strokeWidth={shape.strokeWidth || 2}
+                          fill={shape.fill || "transparent"}
+                          closed
+                        />
+                      ) : (
+                        <Line
+                          key={shape.id}
+                          points={transformed.flatMap(p => [p.x, p.y])}
+                          stroke={shape.stroke || "black"}
+                          strokeWidth={shape.strokeWidth || 2}
+                          fill={shape.fill || "transparent"}
+                          closed={false}
+                        />
+                      );
+
+                      const isSelected = selectedShapeIds.includes(shape.id);
+                      return (
+                        <>
+                          {shapeElem}
+                          {isSelected && to.map(([hx, hy], idx) => (
+                            <Circle
+                              key={shape.id + "-transform2-handle-" + idx}
+                              x={hx}
+                              y={hy}
+                              radius={8}
+                              fill="#fff"
+                              stroke={idx === 0 ? "#007bff" : "#ff007b"}
+                              strokeWidth={2}
+                              draggable
+                              onDragMove={e => {
+                                const newTo = [...to];
+                                newTo[idx] = [e.target.x(), e.target.y()];
+                                dispatch({
+                                  type: "tool/updateShapePosition",
+                                  payload: {
+                                    id: shape.id,
+                                    transform2Points: {
+                                      ...shape.transform2Points,
+                                      to: newTo
+                                    }
+                                  }
+                                });
+                              }}
+                              onMouseEnter={e => {
+                                e.target.getStage().container().style.cursor = "pointer";
+                              }}
+                              onMouseLeave={e => {
+                                e.target.getStage().container().style.cursor = "default";
+                              }}
+                            />
+                          ))}
+                        </>
+                      );
+                    }
                   }
                   if (shape.type === "polyline") {
                     return (

@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { useDispatch } from "react-redux";
 import { simplify } from "../../Redux/Slice/toolSlice";
+import { shapeToPoints } from "../Panel/Panel";
 
 const INKSCAPE_LPE_CATEGORIES = [
     {
@@ -77,7 +78,7 @@ export default function PathEffectsDialog({ isOpen, onClose, onApply, selectedSh
     const [latticeCols, setLatticeCols] = useState(2);
     const [latticePoints, setLatticePoints] = useState(
         selectedShape?.latticePoints ||
-        getDefaultLatticePoints(selectedShape, 2, 2)
+        getDefaultLatticePoints(selectedShape, latticeRows, latticeCols)
     );
     const handleEffectClick = (effect) => {
         if (effect === "Corners") {
@@ -96,9 +97,106 @@ export default function PathEffectsDialog({ isOpen, onClose, onApply, selectedSh
         } else if (effect === "Taper stroke") {
             setShowTaperStrokeDialog(true);
         } else if (effect === "Envelope Deformation") {
-            setShowEnvelopeDialog(true);
+            if (selectedShape) {
+                const normPoints = selectedShape.points?.map(p =>
+                    Array.isArray(p) ? { x: p[0], y: p[1] } : { x: p.x, y: p.y }
+                ) || [];
+                const minX = Math.min(...normPoints.map(p => p.x));
+                const maxX = Math.max(...normPoints.map(p => p.x));
+                const minY = Math.min(...normPoints.map(p => p.y));
+                const maxY = Math.max(...normPoints.map(p => p.y));
+                const envelopeTop = [minX, minY, maxX, minY];
+                const envelopeBottom = [minX, maxY, maxX, maxY];
+                const envelopeLeft = [minX, minY, minX, maxY];
+                const envelopeRight = [maxX, minY, maxX, maxY];
+                if (onApply) {
+                    onApply("Envelope Deformation", {
+                        id: selectedShape.id,
+                        envelopeTop,
+                        envelopeBottom,
+                        envelopeLeft,
+                        envelopeRight,
+                        lpeEffect: "Envelope Deformation"
+                    });
+                }
+            }
+            onClose && onClose();
         } else if (effect === "Lattice Deformation") {
-            setShowLatticeDialog(true);
+            if (selectedShape) {
+                const latticeRows = 2;
+                const latticeCols = 2;
+                const latticePoints = getDefaultLatticePoints(selectedShape, latticeRows, latticeCols);
+                if (onApply) {
+                    onApply("Lattice Deformation", {
+                        id: selectedShape.id,
+                        lpeEffect: "Lattice Deformation",
+                        latticeRows,
+                        latticeCols,
+                        latticePoints
+                    });
+                }
+            }
+            onClose && onClose();
+        } else if (effect === "Perspective/Envelope") {
+            if (selectedShape) {
+                const normPoints = selectedShape.points?.map(p =>
+                    Array.isArray(p) ? { x: p[0], y: p[1] } : { x: p.x, y: p.y }
+                ) || [];
+                const minX = Math.min(...normPoints.map(p => p.x));
+                const maxX = Math.max(...normPoints.map(p => p.x));
+                const minY = Math.min(...normPoints.map(p => p.y));
+                const maxY = Math.max(...normPoints.map(p => p.y));
+                const perspectiveCorners = [
+                    [minX, minY],
+                    [maxX, minY],
+                    [maxX, maxY],
+                    [minX, maxY],
+                ];
+                if (onApply) {
+                    onApply("Perspective/Envelope", {
+                        id: selectedShape.id,
+                        lpeEffect: "Perspective/Envelope",
+                        perspectiveCorners,
+                    });
+                }
+            }
+            onClose && onClose();
+        } else if (effect === "Roughen") {
+            if (selectedShape) {
+                if (onApply) {
+                    onApply("Roughen", {
+                        id: selectedShape.id,
+                        lpeEffect: "Roughen",
+                        roughenAmplitude: 6,
+                        roughenFrequency: 1.5,
+                    });
+                }
+            }
+            onClose && onClose();
+        } else if (effect === "Transform by 2 points") {
+            if (selectedShape) {
+                const points = shapeToPoints(selectedShape);
+                if (points.length < 2) {
+                    alert("Shape needs at least 2 points for this effect.");
+                    return;
+                }
+                const x1 = points[0].x, y1 = points[0].y;
+                const x2 = points[1].x, y2 = points[1].y;
+                const x1p = x1 + 200, y1p = y1 + 0;
+                const x2p = x2 + 200, y2p = y2 + 0;
+
+                if (onApply) {
+                    onApply("Transform by 2 points", {
+                        id: selectedShape.id,
+                        lpeEffect: "Transform by 2 points",
+                        transform2Points: {
+                            from: [[x1, y1], [x2, y2]],
+                            to: [[x1p, y1p], [x2p, y2p]]
+                        }
+                    });
+                }
+            }
+            onClose && onClose();
         } else {
             onApply && onApply(effect);
         }
@@ -513,7 +611,7 @@ export default function PathEffectsDialog({ isOpen, onClose, onApply, selectedSh
                     </div>
                 </div>
             )}
-            {showLatticeDialog && (
+            {/* {showLatticeDialog && (
                 <div style={{
                     position: "fixed", top: 0, left: 0, width: "100vw", height: "100vh",
                     background: "rgba(0,0,0,0.2)", zIndex: 10000, display: "flex", alignItems: "center", justifyContent: "center"
@@ -532,7 +630,7 @@ export default function PathEffectsDialog({ isOpen, onClose, onApply, selectedSh
                                 onChange={e => {
                                     const rows = Math.max(2, Math.min(4, Number(e.target.value)));
                                     setLatticeRows(rows);
-                                    setLatticePoints(Array(rows * latticeCols).fill([0, 0]));
+                                    setLatticePoints(getDefaultLatticePoints(selectedShape, rows, latticeCols));
                                 }}
                                 style={{ width: 50, marginLeft: 8 }}
                             />
@@ -545,7 +643,7 @@ export default function PathEffectsDialog({ isOpen, onClose, onApply, selectedSh
                                 onChange={e => {
                                     const cols = Math.max(2, Math.min(4, Number(e.target.value)));
                                     setLatticeCols(cols);
-                                    setLatticePoints(Array(latticeRows * cols).fill([0, 0]));
+                                    setLatticePoints(getDefaultLatticePoints(selectedShape, latticeRows, cols));
                                 }}
                                 style={{ width: 50, marginLeft: 8 }}
                             />
@@ -594,7 +692,7 @@ export default function PathEffectsDialog({ isOpen, onClose, onApply, selectedSh
                         <button onClick={() => setShowLatticeDialog(false)}>Cancel</button>
                     </div>
                 </div>
-            )}
+            )} */}
         </div>
     );
 }

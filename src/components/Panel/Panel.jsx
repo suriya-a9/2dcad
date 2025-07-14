@@ -97,6 +97,7 @@ import {
   REPLACE_TEXT_WITH_GLYPHS,
   addStraightPoint,
   clearStraightPoints,
+  setSplitPosition,
 } from "../../Redux/Slice/toolSlice";
 function applyRoughenEffect(points, amplitude = 10, frequency = 3) {
   if (!Array.isArray(points) || points.length < 2) return points;
@@ -461,6 +462,120 @@ function renderMarker(markerId, x, y, angle, color = "#222") {
   }
   return null;
 }
+
+export function renderShape(shape, extraProps = {}) {
+  if (shape.type === "Rectangle") {
+    return (
+      <Rect
+        key={shape.id}
+        x={shape.x}
+        y={shape.y}
+        width={shape.width}
+        height={shape.height}
+        fill={shape.fill || "transparent"}
+        stroke={shape.stroke || "black"}
+        strokeWidth={shape.strokeWidth || 1}
+        listening={false}
+        {...extraProps}
+      />
+    );
+  }
+  if (shape.type === "Circle") {
+    return (
+      <Circle
+        key={shape.id}
+        x={shape.x}
+        y={shape.y}
+        radius={shape.radius}
+        fill={shape.fill || "transparent"}
+        stroke={shape.stroke || "black"}
+        strokeWidth={shape.strokeWidth || 1}
+        listening={false}
+        {...extraProps}
+      />
+    );
+  }
+  if (shape.type === "Star") {
+    return (
+      <Star
+        key={shape.id}
+        x={shape.x}
+        y={shape.y}
+        numPoints={shape.corners}
+        innerRadius={shape.innerRadius}
+        outerRadius={shape.outerRadius}
+        fill={shape.fill || "transparent"}
+        stroke={shape.stroke || "black"}
+        strokeWidth={shape.strokeWidth || 1}
+        listening={false}
+        {...extraProps}
+      />
+    );
+  }
+  if (shape.type === "Polygon") {
+    return (
+      <Path
+        key={shape.id}
+        x={shape.x}
+        y={shape.y}
+        data={generatePolygonPath(shape.points)}
+        fill={shape.fill || "transparent"}
+        stroke={shape.stroke || "black"}
+        strokeWidth={shape.strokeWidth || 1}
+        closed
+        listening={false}
+        {...extraProps}
+      />
+    );
+  }
+  if (shape.type === "Pencil") {
+    return (
+      <Line
+        key={shape.id}
+        points={shape.points.flatMap((p) => [p.x, p.y])}
+        stroke={shape.stroke || shape.strokeColor || "black"}
+        fill={shape.fill || "transparent"}
+        strokeWidth={shape.strokeWidth || 2}
+        lineJoin="round"
+        lineCap="round"
+        closed={shape.closed || false}
+        listening={false}
+        {...extraProps}
+      />
+    );
+  }
+  if (shape.type === "Calligraphy") {
+    return (
+      <Line
+        key={shape.id}
+        points={shape.points.flatMap((p) => [p.x, p.y])}
+        stroke={shape.stroke || "black"}
+        fill={shape.fill || "transparent"}
+        strokeWidth={shape.strokeWidth || 2}
+        lineJoin="round"
+        lineCap="round"
+        closed={false}
+        listening={false}
+        {...extraProps}
+      />
+    );
+  }
+  if (shape.type === "Bezier") {
+    return (
+      <Path
+        key={shape.id}
+        data={getBezierPathFromPoints(shape.points, shape.closed)}
+        stroke={shape.stroke || "black"}
+        strokeWidth={shape.strokeWidth || 2}
+        fill={shape.closed ? (shape.fill || "transparent") : "transparent"}
+        closed={shape.closed}
+        listening={false}
+        {...extraProps}
+      />
+    );
+  }
+  return null;
+}
 const Panel = React.forwardRef(({
   textValue,
   isSidebarOpen,
@@ -574,6 +689,11 @@ const Panel = React.forwardRef(({
   const straightPoints = useSelector((state) => state.tool.straightPoints);
   const [snapText, setSnapText] = useState(null);
   const [patternImages, setPatternImages] = React.useState({});
+  const [xraySplit, setXraySplit] = useState(0.5);
+  const [xrayHoveredId, setXrayHoveredId] = useState(null);
+  const [messages, setMessages] = useState([]);
+  const [showMessagesModal, setShowMessagesModal] = useState(false);
+  const splitContainerRef = useRef();
   function addGuidesAtLine(x1, y1, x2, y2) {
     setGuides(prev => [
       ...prev,
@@ -582,6 +702,10 @@ const Panel = React.forwardRef(({
       { orientation: "vertical", position: x2 },
       { orientation: "horizontal", position: y2 }
     ]);
+  }
+  function showMessage(type, text) {
+    setMessages(msgs => [...msgs, { type, text }]);
+    setShowMessagesModal(true);
   }
   function pushMeasurementLine(x1, y1, x2, y2) {
     if (reverseMeasure) {
@@ -763,7 +887,7 @@ const Panel = React.forwardRef(({
     };
 
     if (!selectedShapeId) {
-      console.error("No shape selected for spraying");
+      showMessage("warning", "No shape selected for spraying. Please select a shape first.");
       return;
     }
 
@@ -5325,6 +5449,166 @@ const Panel = React.forwardRef(({
     }
     return points;
   }
+  const splitMode = useSelector(state => state.tool.splitMode);
+  const splitPosition = useSelector(state => state.tool.splitPosition);
+
+  const [draggingSplit, setDraggingSplit] = useState(false);
+
+  const handleSplitDrag = (e) => {
+    if (!draggingSplit) return;
+    const rect = splitContainerRef.current.getBoundingClientRect();
+    let x = (e.clientX - rect.left) / rect.width;
+    x = Math.max(0.05, Math.min(0.95, x));
+    dispatch(setSplitPosition(x));
+  };
+
+  useEffect(() => {
+    if (!draggingSplit) return;
+    const onMove = (e) => handleSplitDrag(e);
+    const onUp = () => setDraggingSplit(false);
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    return () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+  }, [draggingSplit]);
+
+  function renderShapeOutline(shape) {
+    if (shape.type === "Rectangle") {
+      return (
+        <Rect
+          key={shape.id}
+          x={shape.x}
+          y={shape.y}
+          width={shape.width}
+          height={shape.height}
+          fill={null}
+          stroke="black"
+          strokeWidth={1}
+          listening={false}
+        />
+      );
+    }
+    if (shape.type === "Circle") {
+      return (
+        <Circle
+          key={shape.id}
+          x={shape.x}
+          y={shape.y}
+          radius={shape.radius}
+          fill={null}
+          stroke="black"
+          strokeWidth={1}
+          listening={false}
+        />
+      );
+    }
+    if (shape.type === "Polygon") {
+      return (
+        <Path
+          key={shape.id}
+          x={shape.x}
+          y={shape.y}
+          data={generatePolygonPath(shape.points)}
+          fill={null}
+          stroke="black"
+          strokeWidth={1}
+          closed
+          listening={false}
+        />
+      );
+    }
+    if (shape.type === "Star") {
+      return (
+        <Star
+          key={shape.id}
+          x={shape.x}
+          y={shape.y}
+          numPoints={shape.corners}
+          innerRadius={shape.innerRadius}
+          outerRadius={shape.outerRadius}
+          fill={null}
+          stroke="black"
+          strokeWidth={1}
+          listening={false}
+        />
+      );
+    }
+    if (shape.type === "Path") {
+      return (
+        <Path
+          key={shape.id}
+          data={shape.path}
+          fill={null}
+          stroke="black"
+          strokeWidth={1}
+          listening={false}
+        />
+      );
+    }
+    if (shape.type === "Line") {
+      return (
+        <Line
+          key={shape.id}
+          points={shape.points}
+          stroke="black"
+          strokeWidth={1}
+          listening={false}
+        />
+      );
+    }
+    if (shape.type === "Pencil") {
+      return (
+        <Line
+          key={shape.id}
+          points={shape.points.flatMap((p) => [p.x, p.y])}
+          stroke="black"
+          fill={null}
+          strokeWidth={1}
+          lineJoin="round"
+          lineCap="round"
+          closed={shape.closed || false}
+          listening={false}
+        />
+      );
+    }
+    if (shape.type === "Calligraphy") {
+      return (
+        <Line
+          key={shape.id}
+          points={shape.points.flatMap((p) => [p.x, p.y])}
+          stroke="black"
+          fill={null}
+          strokeWidth={1}
+          lineJoin="round"
+          lineCap="round"
+          closed={false}
+          listening={false}
+        />
+      );
+    }
+    if (shape.type === "Bezier") {
+      return (
+        <Path
+          key={shape.id}
+          data={getBezierPathFromPoints(shape.points, shape.closed)}
+          stroke="black"
+          strokeWidth={1}
+          fill={null}
+          closed={shape.closed}
+          listening={false}
+        />
+      );
+    }
+    return null;
+  }
+  const handleXRayMouseMove = (e) => {
+    const rect = splitContainerRef.current.getBoundingClientRect();
+    let x = (e.clientX - rect.left) / rect.width;
+    x = Math.max(0, Math.min(1, x));
+    setXraySplit(x);
+  };
   return (
     <>
       {/* {selectedTool === "Dropper" && (
@@ -5340,120 +5624,187 @@ const Panel = React.forwardRef(({
       >
         <div>
           <div ref={printRef}>
-            <Stage
-              width={width}
-              height={height}
-              onMouseDown={selectedTool === "Measurement" ? handleMeasurementMouseDown : handleMouseDown}
-              onMouseMove={selectedTool === "Measurement" ? handleMeasurementMouseMove : handleMouseMove}
-              onMouseUp={selectedTool === "Measurement" ? handleMeasurementMouseUp : handleMouseUp}
-              onMouseEnter={(e) => {
-                const stage = e.target.getStage();
-                const adjustedPointerPosition = getAdjustedPointerPosition(stage, position, scale);
-                if (adjustedPointerPosition) {
-                  setCursorPosition(adjustedPointerPosition);
-                }
-                setIsCustomCursorVisible(true);
-              }}
-              onMouseLeave={() => {
-                setIsCustomCursorVisible(false);
-              }}
-              onDblClick={handleDoubleClick}
-              tabIndex={0}
-              scaleX={scale}
-              scaleY={scale}
-              x={position.x}
-              y={position.y}
-              ref={stageRef}
-              onWheel={handleWheel}
-              style={{
-                cursor: toolCursors[selectedTool] ? "none" : "default",
-              }}
-            >
-
-              <Layer ref={layerRef}>
-                <Rect
-                  x={0}
-                  y={0}
-                  height={width}
-                  width={width}
-                  fill="#ffffff"
-                  listening={false}
-                  draggable
+            {splitMode === "Split" ? (
+              <div
+                ref={splitContainerRef}
+                style={{ position: "relative", width, height, userSelect: draggingSplit ? "none" : "auto" }}
+              >
+                <div style={{
+                  position: "absolute",
+                  left: 0,
+                  top: 0,
+                  width: `${splitPosition * 100}%`,
+                  height: "100%",
+                  overflow: "hidden",
+                  pointerEvents: "none"
+                }}>
+                  <Stage width={width} height={height}>
+                    <Layer>
+                      {shapes.map(shape => renderShapeOutline(shape))}
+                    </Layer>
+                  </Stage>
+                </div>
+                <div style={{
+                  position: "absolute",
+                  left: `${splitPosition * 100}%`,
+                  top: 0,
+                  width: `${(1 - splitPosition) * 100}%`,
+                  height: "100%",
+                  overflow: "hidden",
+                  pointerEvents: "none"
+                }}>
+                  <Stage width={width} height={height}>
+                    <Layer>
+                      {shapes.map(shape => renderShape(shape))}
+                    </Layer>
+                  </Stage>
+                </div>
+                <div
+                  style={{
+                    position: "absolute",
+                    left: `${splitPosition * 100}%`,
+                    top: 0,
+                    width: 6,
+                    height: "100%",
+                    marginLeft: -3,
+                    background: "rgba(0,0,0,0.15)",
+                    borderLeft: "2px solid #007bff",
+                    cursor: "ew-resize",
+                    zIndex: 10,
+                  }}
+                  onMouseDown={() => setDraggingSplit(true)}
                 />
-                {snappingLines.map((line, index) => (
-                  <Line
-                    key={index}
-                    points={line.points}
-                    stroke="blue"
-                    strokeWidth={1}
-                    dash={[5, 5]}
-                  />
-                ))}
-                {selectedTool === "Bezier" && (
-                  bezierOption === "Straight Segments" ? (
-                    straightPoints.length > 1 && (
-                      <Path
-                        data={`M ${straightPoints.map((p) => `${p.x},${p.y}`).join(" L ")}${isShapeClosed ? " Z" : ""}`}
-                        stroke="black"
-                        strokeWidth={2}
-                        fill={isShapeClosed ? fillColor : "transparent"}
-                        closed={isShapeClosed}
-                      />
-                    )
-                  ) : bezierOption === "Spiro Path" ? (
-                    renderSpiroPath()
-                  ) : bezierOption === "BSpline Path" ? (
-                    renderBSplinePath()
-                  ) : bezierOption === "Paraxial Line Segments" ? (
-                    renderParaxialSegments()
-                  ) : (
-                    controlPoints.length > 1 && (
-                      <Path
-                        data={getBezierPath()}
-                        stroke="black"
-                        strokeWidth={2}
-                        fill={isShapeClosed ? fillColor : "transparent"}
-                        closed={isShapeClosed}
-                      />
-                    )
-                  )
-                )}
-                {snapText && (
-                  <Text
-                    x={snapText.x}
-                    y={snapText.y}
-                    text={snapText.text}
-                    fontSize={16}
-                    fill="#444"
-                    fontStyle="bold"
-                    stroke="white"
-                    strokeWidth={2}
-                    padding={4}
-                    align="center"
-                  />
-                )}
-                {/* {selectedTool === "Bezier" && bezierOption !== "Spiro Path" && (
-                  <Path
-                    data={getBezierPath()}
-                    stroke="black"
-                    strokeWidth={2}
-                    fill={isShapeClosed ? fillColor : "black"}
-                    closed={isShapeClosed}
-                  />
-                )} */}
-                {selectedTool === "Connector" && connectorDrag && (
-                  <Line
-                    points={[
-                      connectorDrag.startPos.x, connectorDrag.startPos.y,
-                      connectorDrag.currentPos.x, connectorDrag.currentPos.y
-                    ]}
-                    stroke="red"
-                    strokeWidth={2}
-                    dash={[6, 4]}
+              </div>
+            ) : splitMode === "XRay" ? (
+              <Stage
+                width={width}
+                height={height}
+                onMouseMove={handleMouseMove}
+                onMouseLeave={() => setXrayHoveredId(null)}
+                style={{ cursor: toolCursors[selectedTool] ? "none" : "default" }}
+                scaleX={scale}
+                scaleY={scale}
+                x={position.x}
+                y={position.y}
+                ref={stageRef}
+                onWheel={handleWheel}
+              >
+                <Layer>
+                  {shapes.map(shape =>
+                    xrayHoveredId === shape.id
+                      ? React.cloneElement(
+                        renderShapeOutline(shape, {
+                          onMouseEnter: () => setXrayHoveredId(shape.id),
+                          onMouseLeave: () => setXrayHoveredId(null),
+                          listening: true
+                        }),
+                        { key: shape.id }
+                      )
+                      : React.cloneElement(
+                        renderShape(shape, {
+                          onMouseEnter: () => setXrayHoveredId(shape.id),
+                          onMouseLeave: () => setXrayHoveredId(null),
+                          listening: true
+                        }),
+                        { key: shape.id }
+                      )
+                  )}
+                </Layer>
+              </Stage>
+            ) : (
+              <Stage
+                width={width}
+                height={height}
+                onMouseDown={selectedTool === "Measurement" ? handleMeasurementMouseDown : handleMouseDown}
+                onMouseMove={selectedTool === "Measurement" ? handleMeasurementMouseMove : handleMouseMove}
+                onMouseUp={selectedTool === "Measurement" ? handleMeasurementMouseUp : handleMouseUp}
+                onMouseEnter={(e) => {
+                  const stage = e.target.getStage();
+                  const adjustedPointerPosition = getAdjustedPointerPosition(stage, position, scale);
+                  if (adjustedPointerPosition) {
+                    setCursorPosition(adjustedPointerPosition);
+                  }
+                  setIsCustomCursorVisible(true);
+                }}
+                onMouseLeave={() => {
+                  setIsCustomCursorVisible(false);
+                }}
+                onDblClick={handleDoubleClick}
+                tabIndex={0}
+                scaleX={scale}
+                scaleY={scale}
+                x={position.x}
+                y={position.y}
+                ref={stageRef}
+                onWheel={handleWheel}
+                style={{
+                  cursor: toolCursors[selectedTool] ? "none" : "default",
+                }}
+              >
+
+                <Layer ref={layerRef}>
+                  <Rect
+                    x={0}
+                    y={0}
+                    height={width}
+                    width={width}
+                    fill="#ffffff"
                     listening={false}
+                    draggable
                   />
-                )}
-                {/* {selectedTool === "Bezier" && bezierOption == "Paraxial Line Segments" && (
+                  {snappingLines.map((line, index) => (
+                    <Line
+                      key={index}
+                      points={line.points}
+                      stroke="blue"
+                      strokeWidth={1}
+                      dash={[5, 5]}
+                    />
+                  ))}
+                  {selectedTool === "Bezier" && (
+                    bezierOption === "Straight Segments" ? (
+                      straightPoints.length > 1 && (
+                        <Path
+                          data={`M ${straightPoints.map((p) => `${p.x},${p.y}`).join(" L ")}${isShapeClosed ? " Z" : ""}`}
+                          stroke="black"
+                          strokeWidth={2}
+                          fill={isShapeClosed ? fillColor : "transparent"}
+                          closed={isShapeClosed}
+                        />
+                      )
+                    ) : bezierOption === "Spiro Path" ? (
+                      renderSpiroPath()
+                    ) : bezierOption === "BSpline Path" ? (
+                      renderBSplinePath()
+                    ) : bezierOption === "Paraxial Line Segments" ? (
+                      renderParaxialSegments()
+                    ) : (
+                      controlPoints.length > 1 && (
+                        <Path
+                          data={getBezierPath()}
+                          stroke="black"
+                          strokeWidth={2}
+                          fill={isShapeClosed ? fillColor : "transparent"}
+                          closed={isShapeClosed}
+                        />
+                      )
+                    )
+                  )}
+                  {snapText && (
+                    <Text
+                      x={snapText.x}
+                      y={snapText.y}
+                      text={snapText.text}
+                      fontSize={16}
+                      fill="#444"
+                      fontStyle="bold"
+                      stroke="white"
+                      strokeWidth={2}
+                      padding={4}
+                      align="center"
+                    />
+                  )}
+                  {/* {selectedTool === "Bezier" && bezierOption !== "Spiro Path" && (
                   <Path
                     data={getBezierPath()}
                     stroke="black"
@@ -5462,371 +5813,224 @@ const Panel = React.forwardRef(({
                     closed={isShapeClosed}
                   />
                 )} */}
-                {selectedTool === "Eraser" && eraserLines.map((line, i) => (
-                  <Line
-                    key={i}
-                    points={applyTremorToPoints(line.points, eraserTremor)}
-                    stroke={strokeColor}
-                    strokeWidth={Math.max(1, eraserWidth * (1 - eraserThinning))}
-                    tension={0.5}
-                    lineCap={eraserCapString}
-                    globalCompositeOperation="source-over"
-                  />
-                ))}
-
-
-                {renderSpiroPath()}
-
-                {renderBSplinePath()}
-
-                {renderParaxialSegments()}
-
-                {dynamicOffsetMode && dynamicOffsetShapeId && (() => {
-                  const shape = shapes.find(s => s.id === dynamicOffsetShapeId);
-                  const basePoints = shapeToPoints(shape);
-                  if (!basePoints || basePoints.length === 0) return null;
-                  const offsetPoints = getOffsetPoints(basePoints, dynamicOffsetAmount);
-                  if (!offsetPoints || offsetPoints.length === 0) return null;
-                  const handlePoint = offsetPoints[0];
-                  return (
-                    <Circle
-                      x={handlePoint.x}
-                      y={handlePoint.y}
-                      radius={10}
-                      fill="orange"
-                      draggable
-                      onDragMove={e => {
-
-                        const { x, y } = e.target.position();
-                        const center = getShapeCenter(shape);
-                        const dx = x - center.x;
-                        const dy = y - center.y;
-                        const newAmount = Math.sqrt(dx * dx + dy * dy) - getOriginalRadiusOrDistance(shape, handlePoint);
-                        dispatch(setDynamicOffsetAmount(newAmount));
-                      }}
-                      onDragEnd={e => {
-                        dispatch(updateShapePosition({
-                          id: shape.id,
-                          type: "Polygon",
-                          points: downsamplePoints(offsetPoints, 200),
-                          closed: true,
-                        }));
-                        dispatch(setDynamicOffsetMode(false));
-                      }}
+                  {selectedTool === "Connector" && connectorDrag && (
+                    <Line
+                      points={[
+                        connectorDrag.startPos.x, connectorDrag.startPos.y,
+                        connectorDrag.currentPos.x, connectorDrag.currentPos.y
+                      ]}
+                      stroke="red"
+                      strokeWidth={2}
+                      dash={[6, 4]}
+                      listening={false}
                     />
-                  );
-                })()}
+                  )}
+                  {/* {selectedTool === "Bezier" && bezierOption == "Paraxial Line Segments" && (
+                  <Path
+                    data={getBezierPath()}
+                    stroke="black"
+                    strokeWidth={2}
+                    fill={isShapeClosed ? fillColor : "black"}
+                    closed={isShapeClosed}
+                  />
+                )} */}
+                  {selectedTool === "Eraser" && eraserLines.map((line, i) => (
+                    <Line
+                      key={i}
+                      points={applyTremorToPoints(line.points, eraserTremor)}
+                      stroke={strokeColor}
+                      strokeWidth={Math.max(1, eraserWidth * (1 - eraserThinning))}
+                      tension={0.5}
+                      lineCap={eraserCapString}
+                      globalCompositeOperation="source-over"
+                    />
+                  ))}
 
-                {shapes.map((shape) => {
 
-                  if (shape.visible === false) return null;
-                  const isSelected = selectedShapeIds.includes(shape.id);
-                  console.log("Rendering shape:", shape);
-                  if (shape.type === "Line") {
+                  {renderSpiroPath()}
 
-                    if (!Array.isArray(shape.points)) {
-                      console.error("Invalid points structure for Line shape:", shape);
-                      return null;
-                    }
+                  {renderBSplinePath()}
 
-                    const points =
-                      typeof shape.points[0] === "number"
-                        ? shape.points.reduce((acc, val, index) => {
-                          if (index % 2 === 0) acc.push({ x: val, y: shape.points[index + 1] });
-                          return acc;
-                        }, [])
-                        : shape.points;
+                  {renderParaxialSegments()}
 
-
-                    if (!points.every((point) => point && typeof point.x === "number" && typeof point.y === "number")) {
-                      console.error("Invalid points structure for Line shape:", shape);
-                      return null;
-                    }
-
-                    return (
-                      <Line
-                        key={shape.id}
-                        points={points.flatMap((point) => [point.x, point.y])}
-                        stroke={shape.strokeColor || "black"}
-                        strokeWidth={shape.strokeWidth || 2}
-                        lineJoin="round"
-                        lineCap="round"
-                      />
-                    );
-                  }
-                  if (shape.lpeEffect === "Offset" && shape.type === "Rectangle") {
-                    const offset = shape.offsetAmount || 0;
-                    return (
-                      <Rect
-                        key={shape.id}
-                        id={shape.id}
-                        x={shape.x - offset}
-                        y={shape.y - offset}
-                        width={shape.width + offset * 2}
-                        height={shape.height + offset * 2}
-                        fill={shape.fill}
-                        stroke={shape.stroke}
-                        strokeWidth={shape.strokeWidth}
-                        draggable={!shape.locked}
-                        onDragEnd={e => handleDragEnd(e, shape.id)}
-                        onClick={e => {
-                          e.cancelBubble = true;
-                          if (!selectedShapeIds.includes(shape.id)) {
-                            dispatch(selectShape(shape.id));
-                          }
-                        }}
-                      />
-                    );
-                  }
-
-                  if (shape.lpeEffect === "Offset" && shape.type === "Circle") {
-                    const offset = shape.offsetAmount || 0;
+                  {dynamicOffsetMode && dynamicOffsetShapeId && (() => {
+                    const shape = shapes.find(s => s.id === dynamicOffsetShapeId);
+                    const basePoints = shapeToPoints(shape);
+                    if (!basePoints || basePoints.length === 0) return null;
+                    const offsetPoints = getOffsetPoints(basePoints, dynamicOffsetAmount);
+                    if (!offsetPoints || offsetPoints.length === 0) return null;
+                    const handlePoint = offsetPoints[0];
                     return (
                       <Circle
-                        key={shape.id}
-                        id={shape.id}
-                        x={shape.x}
-                        y={shape.y}
-                        radius={shape.radius + offset}
-                        fill={shape.fill}
-                        stroke={shape.stroke}
-                        strokeWidth={shape.strokeWidth}
-                        draggable={!shape.locked}
-                        onDragEnd={e => handleDragEnd(e, shape.id)}
-                        onClick={e => {
-                          e.cancelBubble = true;
-                          if (!selectedShapeIds.includes(shape.id)) {
-                            dispatch(selectShape(shape.id));
-                          }
-                        }}
-                      />
-                    );
-                  }
-                  if (
-                    shape.lpeEffect === "Offset" &&
-                    (shape.type === "Polygon" || shape.type === "Star") &&
-                    Array.isArray(shape.points)
-                  ) {
-                    const offset = shape.offsetAmount || 0;
-                    const cx = shape.x || 0;
-                    const cy = shape.y || 0;
-                    const points = shape.points.map(pt => {
-                      const dx = pt.x - cx;
-                      const dy = pt.y - cy;
-                      const len = Math.sqrt(dx * dx + dy * dy) || 1;
-                      const scale = (len + offset) / len;
-                      return {
-                        x: cx + dx * scale,
-                        y: cy + dy * scale
-                      };
-                    });
-                    return (
-                      <Path
-                        key={shape.id}
-                        id={shape.id}
-                        x={shape.x}
-                        y={shape.y}
-                        data={generatePolygonPath(points)}
-                        stroke={shape.stroke}
-                        strokeWidth={shape.strokeWidth}
-                        fill={shape.fill}
-                        closed
-                        draggable={!shape.locked}
-                        onDragEnd={e => handleDragEnd(e, shape.id)}
-                        onClick={e => {
-                          e.cancelBubble = true;
-                          if (!selectedShapeIds.includes(shape.id)) {
-                            dispatch(selectShape(shape.id));
-                          }
-                        }}
-                      />
-                    );
-                  }
+                        x={handlePoint.x}
+                        y={handlePoint.y}
+                        radius={10}
+                        fill="orange"
+                        draggable
+                        onDragMove={e => {
 
-                  if (
-                    shape.lpeEffect === "Offset" &&
-                    (shape.type === "Pencil" || shape.type === "Calligraphy") &&
-                    Array.isArray(shape.points)
-                  ) {
-                    const offset = shape.offsetAmount || 0;
-                    const offsetPts = getOffsetPoints(shape.points, offset);
-                    return (
-                      <Line
-                        key={shape.id}
-                        id={shape.id}
-                        points={offsetPts.flatMap(p => [p.x, p.y])}
-                        stroke={shape.stroke || shape.strokeColor || "black"}
-                        strokeWidth={shape.strokeWidth || 2}
-                        fill={shape.fill || "transparent"}
-                        closed={shape.closed || false}
-                        draggable={!shape.locked}
-                        onDragEnd={e => handleDragEnd(e, shape.id)}
-                        onClick={e => {
-                          e.cancelBubble = true;
-                          if (!selectedShapeIds.includes(shape.id)) {
-                            dispatch(selectShape(shape.id));
-                          }
+                          const { x, y } = e.target.position();
+                          const center = getShapeCenter(shape);
+                          const dx = x - center.x;
+                          const dy = y - center.y;
+                          const newAmount = Math.sqrt(dx * dx + dy * dy) - getOriginalRadiusOrDistance(shape, handlePoint);
+                          dispatch(setDynamicOffsetAmount(newAmount));
+                        }}
+                        onDragEnd={e => {
+                          dispatch(updateShapePosition({
+                            id: shape.id,
+                            type: "Polygon",
+                            points: downsamplePoints(offsetPoints, 200),
+                            closed: true,
+                          }));
+                          dispatch(setDynamicOffsetMode(false));
                         }}
                       />
                     );
-                  }
-                  if (
-                    shape.lpeEffect === "Power stroke" &&
-                    shape.type === "Rectangle"
-                  ) {
-                    return (
-                      <Rect
-                        key={shape.id}
-                        id={shape.id}
-                        x={shape.x}
-                        y={shape.y}
-                        width={shape.width}
-                        height={shape.height}
-                        fill={shape.fill}
-                        stroke={shape.stroke}
-                        strokeWidth={shape.powerStrokeWidth || shape.strokeWidth || 10}
-                        draggable={!shape.locked}
-                        onDragEnd={e => handleDragEnd(e, shape.id)}
-                        onClick={e => {
-                          e.cancelBubble = true;
-                          if (!selectedShapeIds.includes(shape.id)) {
-                            dispatch(selectShape(shape.id));
-                          }
-                        }}
-                      />
-                    );
-                  }
-                  if (
-                    shape.lpeEffect === "Power stroke" &&
-                    shape.type === "Circle"
-                  ) {
-                    return (
-                      <Circle
-                        key={shape.id}
-                        id={shape.id}
-                        x={shape.x}
-                        y={shape.y}
-                        radius={shape.radius}
-                        fill={shape.fill}
-                        stroke={shape.stroke}
-                        strokeWidth={shape.powerStrokeWidth || shape.strokeWidth || 10}
-                        draggable={!shape.locked}
-                        onDragEnd={e => handleDragEnd(e, shape.id)}
-                        onClick={e => {
-                          e.cancelBubble = true;
-                          if (!selectedShapeIds.includes(shape.id)) {
-                            dispatch(selectShape(shape.id));
-                          }
-                        }}
-                      />
-                    );
-                  }
+                  })()}
 
-                  if (
-                    shape.lpeEffect === "Power stroke" &&
-                    shape.type === "Star"
-                  ) {
-                    return (
-                      <Star
-                        key={shape.id}
-                        id={shape.id}
-                        x={shape.x}
-                        y={shape.y}
-                        numPoints={shape.corners}
-                        innerRadius={shape.innerRadius}
-                        outerRadius={shape.outerRadius}
-                        fill={shape.fill}
-                        stroke={shape.stroke}
-                        strokeWidth={shape.powerStrokeWidth || shape.strokeWidth || 10}
-                        draggable={!shape.locked}
-                        onDragEnd={e => handleDragEnd(e, shape.id)}
-                        onClick={e => {
-                          e.cancelBubble = true;
-                          if (!selectedShapeIds.includes(shape.id)) {
-                            dispatch(selectShape(shape.id));
-                          }
-                        }}
-                      />
-                    );
-                  }
+                  {shapes.map((shape) => {
 
-                  if (
-                    shape.lpeEffect === "Power stroke" &&
-                    shape.type === "Polygon" &&
-                    Array.isArray(shape.points)
-                  ) {
-                    return (
-                      <Path
-                        key={shape.id}
-                        id={shape.id}
-                        x={shape.x}
-                        y={shape.y}
-                        data={generatePolygonPath(shape.points)}
-                        fill={shape.fill}
-                        stroke={shape.stroke}
-                        strokeWidth={shape.powerStrokeWidth || shape.strokeWidth || 10}
-                        closed
-                        draggable={!shape.locked}
-                        onDragEnd={e => handleDragEnd(e, shape.id)}
-                        onClick={e => {
-                          e.cancelBubble = true;
-                          if (!selectedShapeIds.includes(shape.id)) {
-                            dispatch(selectShape(shape.id));
-                          }
-                        }}
-                      />
-                    );
-                  }
-                  if (
-                    shape.lpeEffect === "Power stroke" &&
-                    (shape.type === "Pencil" || shape.type === "Calligraphy" || shape.type === "Polygon" || shape.type === "Path") &&
-                    Array.isArray(shape.points)
-                  ) {
-                    return (
-                      <Line
-                        key={shape.id}
-                        id={shape.id}
-                        points={shape.points.flatMap(p => [p.x, p.y])}
-                        stroke={shape.stroke || "black"}
-                        strokeWidth={shape.powerStrokeWidth || 10}
-                        fill={shape.fill}
-                        closed={shape.closed || false}
-                        lineCap="round"
-                        lineJoin="round"
-                        draggable={!shape.locked}
-                        onDragEnd={e => handleDragEnd(e, shape.id)}
-                        onClick={e => {
-                          e.cancelBubble = true;
-                          if (!selectedShapeIds.includes(shape.id)) {
-                            dispatch(selectShape(shape.id));
-                          }
-                        }}
-                      />
-                    );
-                  }
-                  if (
-                    shape.lpeEffect === "Taper stroke" &&
-                    (shape.type === "Pencil" || shape.type === "Calligraphy" || shape.type === "Bezier") &&
-                    Array.isArray(shape.points)
-                  ) {
-                    const points = shape.points;
-                    const maxWidth = shape.taperStrokeWidth || 10;
-                    const startTaper = shape.taperStart ?? 1;
-                    const endTaper = shape.taperEnd ?? 1;
-                    const isClosed = shape.closed || false;
+                    if (shape.visible === false) return null;
+                    const isSelected = selectedShapeIds.includes(shape.id);
+                    console.log("Rendering shape:", shape);
+                    if (shape.type === "Line") {
 
-                    if (isClosed) {
+                      if (!Array.isArray(shape.points)) {
+                        console.error("Invalid points structure for Line shape:", shape);
+                        return null;
+                      }
+
+                      const points =
+                        typeof shape.points[0] === "number"
+                          ? shape.points.reduce((acc, val, index) => {
+                            if (index % 2 === 0) acc.push({ x: val, y: shape.points[index + 1] });
+                            return acc;
+                          }, [])
+                          : shape.points;
+
+
+                      if (!points.every((point) => point && typeof point.x === "number" && typeof point.y === "number")) {
+                        console.error("Invalid points structure for Line shape:", shape);
+                        return null;
+                      }
+
+                      return (
+                        <Line
+                          key={shape.id}
+                          points={points.flatMap((point) => [point.x, point.y])}
+                          stroke={shape.strokeColor || "black"}
+                          strokeWidth={shape.strokeWidth || 2}
+                          lineJoin="round"
+                          lineCap="round"
+                        />
+                      );
+                    }
+                    if (shape.lpeEffect === "Offset" && shape.type === "Rectangle") {
+                      const offset = shape.offsetAmount || 0;
+                      return (
+                        <Rect
+                          key={shape.id}
+                          id={shape.id}
+                          x={shape.x - offset}
+                          y={shape.y - offset}
+                          width={shape.width + offset * 2}
+                          height={shape.height + offset * 2}
+                          fill={shape.fill}
+                          stroke={shape.stroke}
+                          strokeWidth={shape.strokeWidth}
+                          draggable={!shape.locked}
+                          onDragEnd={e => handleDragEnd(e, shape.id)}
+                          onClick={e => {
+                            e.cancelBubble = true;
+                            if (!selectedShapeIds.includes(shape.id)) {
+                              dispatch(selectShape(shape.id));
+                            }
+                          }}
+                        />
+                      );
+                    }
+
+                    if (shape.lpeEffect === "Offset" && shape.type === "Circle") {
+                      const offset = shape.offsetAmount || 0;
+                      return (
+                        <Circle
+                          key={shape.id}
+                          id={shape.id}
+                          x={shape.x}
+                          y={shape.y}
+                          radius={shape.radius + offset}
+                          fill={shape.fill}
+                          stroke={shape.stroke}
+                          strokeWidth={shape.strokeWidth}
+                          draggable={!shape.locked}
+                          onDragEnd={e => handleDragEnd(e, shape.id)}
+                          onClick={e => {
+                            e.cancelBubble = true;
+                            if (!selectedShapeIds.includes(shape.id)) {
+                              dispatch(selectShape(shape.id));
+                            }
+                          }}
+                        />
+                      );
+                    }
+                    if (
+                      shape.lpeEffect === "Offset" &&
+                      (shape.type === "Polygon" || shape.type === "Star") &&
+                      Array.isArray(shape.points)
+                    ) {
+                      const offset = shape.offsetAmount || 0;
+                      const cx = shape.x || 0;
+                      const cy = shape.y || 0;
+                      const points = shape.points.map(pt => {
+                        const dx = pt.x - cx;
+                        const dy = pt.y - cy;
+                        const len = Math.sqrt(dx * dx + dy * dy) || 1;
+                        const scale = (len + offset) / len;
+                        return {
+                          x: cx + dx * scale,
+                          y: cy + dy * scale
+                        };
+                      });
+                      return (
+                        <Path
+                          key={shape.id}
+                          id={shape.id}
+                          x={shape.x}
+                          y={shape.y}
+                          data={generatePolygonPath(points)}
+                          stroke={shape.stroke}
+                          strokeWidth={shape.strokeWidth}
+                          fill={shape.fill}
+                          closed
+                          draggable={!shape.locked}
+                          onDragEnd={e => handleDragEnd(e, shape.id)}
+                          onClick={e => {
+                            e.cancelBubble = true;
+                            if (!selectedShapeIds.includes(shape.id)) {
+                              dispatch(selectShape(shape.id));
+                            }
+                          }}
+                        />
+                      );
+                    }
+
+                    if (
+                      shape.lpeEffect === "Offset" &&
+                      (shape.type === "Pencil" || shape.type === "Calligraphy") &&
+                      Array.isArray(shape.points)
+                    ) {
+                      const offset = shape.offsetAmount || 0;
+                      const offsetPts = getOffsetPoints(shape.points, offset);
                       return (
                         <Line
                           key={shape.id}
                           id={shape.id}
-                          points={points.flatMap(p => [p.x, p.y])}
-                          stroke={shape.stroke || "black"}
-                          strokeWidth={maxWidth}
-                          fill={shape.fill || "black"}
-                          closed={true}
-                          lineCap="round"
-                          lineJoin="round"
+                          points={offsetPts.flatMap(p => [p.x, p.y])}
+                          stroke={shape.stroke || shape.strokeColor || "black"}
+                          strokeWidth={shape.strokeWidth || 2}
+                          fill={shape.fill || "transparent"}
+                          closed={shape.closed || false}
                           draggable={!shape.locked}
                           onDragEnd={e => handleDragEnd(e, shape.id)}
                           onClick={e => {
@@ -5838,22 +6042,21 @@ const Panel = React.forwardRef(({
                         />
                       );
                     }
-
-                    const lines = [];
-                    for (let i = 1; i < points.length; i++) {
-                      const t = i / (points.length - 1);
-                      const width = maxWidth * ((1 - t) * startTaper + t * endTaper);
-                      lines.push(
-                        <Line
-                          key={shape.id + "-taper-" + i}
-                          points={[
-                            points[i - 1].x, points[i - 1].y,
-                            points[i].x, points[i].y
-                          ]}
-                          stroke={shape.stroke || "black"}
-                          strokeWidth={Math.max(1, width)}
-                          lineCap="round"
-                          lineJoin="round"
+                    if (
+                      shape.lpeEffect === "Power stroke" &&
+                      shape.type === "Rectangle"
+                    ) {
+                      return (
+                        <Rect
+                          key={shape.id}
+                          id={shape.id}
+                          x={shape.x}
+                          y={shape.y}
+                          width={shape.width}
+                          height={shape.height}
+                          fill={shape.fill}
+                          stroke={shape.stroke}
+                          strokeWidth={shape.powerStrokeWidth || shape.strokeWidth || 10}
                           draggable={!shape.locked}
                           onDragEnd={e => handleDragEnd(e, shape.id)}
                           onClick={e => {
@@ -5865,449 +6068,365 @@ const Panel = React.forwardRef(({
                         />
                       );
                     }
-                    return <>{lines}</>;
-                  }
-                  if (
-                    shape.lpeEffect === "Envelope Deformation" &&
-                    ["Pencil", "Calligraphy", "Bezier"].includes(shape.type) &&
-                    shape.envelopeTop && shape.envelopeBottom && shape.envelopeLeft && shape.envelopeRight &&
-                    Array.isArray(shape.points)
-                  ) {
-                    const [x1, y1, x2, y2] = shape.envelopeTop;
-                    const [bx1, by1, bx2, by2] = shape.envelopeBottom;
-                    const [lx1, ly1, lx2, ly2] = shape.envelopeLeft;
-                    const [rx1, ry1, rx2, ry2] = shape.envelopeRight;
-
-                    const normPoints = shape.points.map(p =>
-                      Array.isArray(p) ? { x: p[0], y: p[1] } : { x: p.x, y: p.y }
-                    );
-
-                    const minX = Math.min(...normPoints.map(p => p.x));
-                    const maxX = Math.max(...normPoints.map(p => p.x));
-                    const minY = Math.min(...normPoints.map(p => p.y));
-                    const maxY = Math.max(...normPoints.map(p => p.y));
-
-                    const mappedPoints = normPoints.map((pt) => {
-                      const u = (pt.x - minX) / (maxX - minX || 1);
-                      const v = (pt.y - minY) / (maxY - minY || 1);
-
-                      const topX = x1 + (x2 - x1) * u;
-                      const topY = y1 + (y2 - y1) * u;
-                      const botX = bx1 + (bx2 - bx1) * u;
-                      const botY = by1 + (by2 - by1) * u;
-
-                      const leftX = lx1 + (lx2 - lx1) * v;
-                      const leftY = ly1 + (ly2 - ly1) * v;
-                      const rightX = rx1 + (rx2 - rx1) * v;
-                      const rightY = ry1 + (ry2 - ry1) * v;
-
-                      const x = (1 - v) * topX + v * botX + (1 - u) * leftX + u * rightX - ((1 - u) * (1 - v) * x1 + u * (1 - v) * x2 + (1 - u) * v * bx1 + u * v * bx2);
-                      const y = (1 - v) * topY + v * botY + (1 - u) * leftY + u * rightY - ((1 - u) * (1 - v) * y1 + u * (1 - v) * y2 + (1 - u) * v * by1 + u * v * by2);
-
-                      return { x, y };
-                    });
-                    const isSelected = selectedShapeIds.includes(shape.id);
-                    const renderEnvelopeHandle = (curve, idx, color, label) => (
-                      <Circle
-                        key={shape.id + "-env-handle-" + label + idx}
-                        x={curve[idx * 2]}
-                        y={curve[idx * 2 + 1]}
-                        radius={8}
-                        fill="#fff"
-                        stroke={color}
-                        strokeWidth={2}
-                        draggable
-                        onDragMove={e => {
-                          const newCurve = [...curve];
-                          newCurve[idx * 2] = e.target.x();
-                          newCurve[idx * 2 + 1] = e.target.y();
-                          let payload = { id: shape.id };
-                          if (label === "top") payload.envelopeTop = newCurve;
-                          if (label === "bottom") payload.envelopeBottom = newCurve;
-                          if (label === "left") payload.envelopeLeft = newCurve;
-                          if (label === "right") payload.envelopeRight = newCurve;
-                          dispatch({
-                            type: "tool/updateShapePosition",
-                            payload
-                          });
-                        }}
-                        onMouseEnter={e => {
-                          e.target.getStage().container().style.cursor = "pointer";
-                        }}
-                        onMouseLeave={e => {
-                          e.target.getStage().container().style.cursor = "default";
-                        }}
-                      />
-                    );
-                    return (
-                      <>
-                        <Line
-                          key={shape.id + "-env-main"}
-                          points={mappedPoints.flatMap(p => [p.x, p.y])}
-                          stroke={shape.stroke || "black"}
-                          strokeWidth={shape.strokeWidth || 2}
-                          fill={shape.fill || "transparent"}
-                          closed={shape.closed || false}
+                    if (
+                      shape.lpeEffect === "Power stroke" &&
+                      shape.type === "Circle"
+                    ) {
+                      return (
+                        <Circle
+                          key={shape.id}
+                          id={shape.id}
+                          x={shape.x}
+                          y={shape.y}
+                          radius={shape.radius}
+                          fill={shape.fill}
+                          stroke={shape.stroke}
+                          strokeWidth={shape.powerStrokeWidth || shape.strokeWidth || 10}
+                          draggable={!shape.locked}
+                          onDragEnd={e => handleDragEnd(e, shape.id)}
+                          onClick={e => {
+                            e.cancelBubble = true;
+                            if (!selectedShapeIds.includes(shape.id)) {
+                              dispatch(selectShape(shape.id));
+                            }
+                          }}
                         />
-                        <Line key={shape.id + "-env-top"} points={[x1, y1, x2, y2]} stroke="red" strokeWidth={2} />
-                        <Line key={shape.id + "-env-bottom"} points={[bx1, by1, bx2, by2]} stroke="blue" strokeWidth={2} />
-                        <Line key={shape.id + "-env-left"} points={[lx1, ly1, lx2, ly2]} stroke="green" strokeWidth={2} />
-                        <Line key={shape.id + "-env-right"} points={[rx1, ry1, rx2, ry2]} stroke="orange" strokeWidth={2} />
-                        {isSelected && (
-                          <>
-                            {renderEnvelopeHandle(shape.envelopeTop, 0, "red", "top")}
-                            {renderEnvelopeHandle(shape.envelopeTop, 1, "red", "top")}
-                            {renderEnvelopeHandle(shape.envelopeBottom, 0, "blue", "bottom")}
-                            {renderEnvelopeHandle(shape.envelopeBottom, 1, "blue", "bottom")}
-                            {renderEnvelopeHandle(shape.envelopeLeft, 0, "green", "left")}
-                            {renderEnvelopeHandle(shape.envelopeLeft, 1, "green", "left")}
-                            {renderEnvelopeHandle(shape.envelopeRight, 0, "orange", "right")}
-                            {renderEnvelopeHandle(shape.envelopeRight, 1, "orange", "right")}
-                          </>
-                        )}
-                      </>
-                    );
-                  }
-                  if (
-                    shape.lpeEffect === "Lattice Deformation" &&
-                    ["Pencil", "Calligraphy", "Bezier"].includes(shape.type) &&
-                    Array.isArray(shape.points) &&
-                    Array.isArray(shape.latticePoints) &&
-                    shape.latticeRows && shape.latticeCols
-                  ) {
-                    const normPoints = shape.points.map(p =>
-                      Array.isArray(p) ? { x: p[0], y: p[1] } : { x: p.x, y: p.y }
-                    );
-                    const minX = Math.min(...normPoints.map(p => p.x));
-                    const maxX = Math.max(...normPoints.map(p => p.x));
-                    const minY = Math.min(...normPoints.map(p => p.y));
-                    const maxY = Math.max(...normPoints.map(p => p.y));
-
-                    const getLatticePoint = (row, col) => {
-                      const idx = row * shape.latticeCols + col;
-                      return shape.latticePoints[idx] || [0, 0];
-                    };
-
-                    function latticeMap(x, y) {
-                      const u = (x - minX) / (maxX - minX || 1);
-                      const v = (y - minY) / (maxY - minY || 1);
-
-                      const fx = u * (shape.latticeCols - 1);
-                      const fy = v * (shape.latticeRows - 1);
-
-                      const col = Math.floor(fx);
-                      const row = Math.floor(fy);
-
-                      const du = fx - col;
-                      const dv = fy - row;
-
-                      const col1 = Math.min(col, shape.latticeCols - 2);
-                      const row1 = Math.min(row, shape.latticeRows - 2);
-
-                      const p00 = getLatticePoint(row1, col1);
-                      const p10 = getLatticePoint(row1, col1 + 1);
-                      const p01 = getLatticePoint(row1 + 1, col1);
-                      const p11 = getLatticePoint(row1 + 1, col1 + 1);
-
-                      const xMapped =
-                        (1 - du) * (1 - dv) * p00[0] +
-                        du * (1 - dv) * p10[0] +
-                        (1 - du) * dv * p01[0] +
-                        du * dv * p11[0];
-                      const yMapped =
-                        (1 - du) * (1 - dv) * p00[1] +
-                        du * (1 - dv) * p10[1] +
-                        (1 - du) * dv * p01[1] +
-                        du * dv * p11[1];
-
-                      return { x: xMapped, y: yMapped };
+                      );
                     }
-
-                    const mappedPoints = normPoints.map(pt => latticeMap(pt.x, pt.y));
-                    const isSelected = selectedShapeIds.includes(shape.id);
-                    return (
-                      <>
-                        <Line
-                          key={shape.id + "-lattice"}
-                          points={mappedPoints.flatMap(p => [p.x, p.y])}
-                          stroke={shape.stroke || "black"}
-                          strokeWidth={shape.strokeWidth || 2}
-                          fill={shape.fill || "transparent"}
-                          closed={shape.closed || false}
-                        />
-                        {isSelected && shape.latticePoints.map(([x, y], idx) => (
-                          <Circle
-                            key={shape.id + "-lattice-handle-" + idx}
-                            x={x}
-                            y={y}
-                            radius={7}
-                            fill="#fff"
-                            stroke="#007bff"
-                            strokeWidth={2}
-                            draggable
-                            onDragMove={e => {
-                              const newX = e.target.x();
-                              const newY = e.target.y();
-                              const newLatticePoints = [...shape.latticePoints];
-                              newLatticePoints[idx] = [newX, newY];
-                              dispatch({
-                                type: "tool/updateShapePosition",
-                                payload: {
-                                  id: shape.id,
-                                  latticePoints: newLatticePoints,
-                                }
-                              });
-                            }}
-                            onMouseEnter={e => {
-                              e.target.getStage().container().style.cursor = "pointer";
-                            }}
-                            onMouseLeave={e => {
-                              e.target.getStage().container().style.cursor = "default";
-                            }}
-                          />
-                        ))}
-                      </>
-                    );
-                  }
-                  if (
-                    shape.lpeEffect === "Perspective/Envelope" &&
-                    Array.isArray(shape.perspectiveCorners) &&
-                    shape.perspectiveCorners.length === 4
-                  ) {
-                    const isSelected = selectedShapeIds.includes(shape.id);
-
-                    const normPoints = shape.points.map(p =>
-                      Array.isArray(p) ? { x: p[0], y: p[1] } : { x: p.x, y: p.y }
-                    );
-                    const minX = Math.min(...normPoints.map(p => p.x));
-                    const maxX = Math.max(...normPoints.map(p => p.x));
-                    const minY = Math.min(...normPoints.map(p => p.y));
-                    const maxY = Math.max(...normPoints.map(p => p.y));
-
-                    const [tl, tr, br, bl] = shape.perspectiveCorners;
-
-                    function mapPoint(pt) {
-                      const u = (pt.x - minX) / (maxX - minX || 1);
-                      const v = (pt.y - minY) / (maxY - minY || 1);
-
-                      const x =
-                        (1 - u) * (1 - v) * tl[0] +
-                        u * (1 - v) * tr[0] +
-                        u * v * br[0] +
-                        (1 - u) * v * bl[0];
-                      const y =
-                        (1 - u) * (1 - v) * tl[1] +
-                        u * (1 - v) * tr[1] +
-                        u * v * br[1] +
-                        (1 - u) * v * bl[1];
-                      return { x, y };
-                    }
-
-                    const mappedPoints = normPoints.map(mapPoint);
-
-                    const isClosed = shape.closed !== undefined ? shape.closed : true;
-
-                    return (
-                      <>
-                        <Line
-                          points={mappedPoints.flatMap(p => [p.x, p.y])}
-                          stroke={shape.stroke || "black"}
-                          strokeWidth={shape.strokeWidth || 2}
-                          fill={shape.fill || "transparent"}
-                          closed={isClosed}
-                        />
-                        {isSelected && shape.perspectiveCorners.map(([x, y], idx) => (
-                          <Circle
-                            key={shape.id + "-persp-handle-" + idx}
-                            x={x}
-                            y={y}
-                            radius={8}
-                            fill="#fff"
-                            stroke="#007bff"
-                            strokeWidth={2}
-                            draggable
-                            onDragMove={e => {
-                              const newCorners = [...shape.perspectiveCorners];
-                              newCorners[idx] = [e.target.x(), e.target.y()];
-                              dispatch({
-                                type: "tool/updateShapePosition",
-                                payload: {
-                                  id: shape.id,
-                                  perspectiveCorners: newCorners,
-                                }
-                              });
-                            }}
-                            onMouseEnter={e => {
-                              e.target.getStage().container().style.cursor = "pointer";
-                            }}
-                            onMouseLeave={e => {
-                              e.target.getStage().container().style.cursor = "default";
-                            }}
-                          />
-                        ))}
-                      </>
-                    );
-                  }
-                  if (
-                    shape.lpeEffect === "Roughen"
-                  ) {
-                    let points = [];
-                    if (shape.type === "Rectangle") {
-                      points = [
-                        { x: shape.x, y: shape.y },
-                        { x: shape.x + shape.width, y: shape.y },
-                        { x: shape.x + shape.width, y: shape.y + shape.height },
-                        { x: shape.x, y: shape.y + shape.height }
-                      ];
-                    } else if (shape.type === "Circle") {
-                      const num = 60;
-                      for (let i = 0; i < num; i++) {
-                        const angle = (i / num) * 2 * Math.PI;
-                        points.push({
-                          x: shape.x + shape.radius * Math.cos(angle),
-                          y: shape.y + shape.radius * Math.sin(angle)
-                        });
-                      }
-                    } else if (shape.type === "Star") {
-                      const num = (shape.corners || 5) * 2;
-                      for (let i = 0; i < num; i++) {
-                        const angle = (i / num) * 2 * Math.PI - Math.PI / 2;
-                        const r = i % 2 === 0 ? shape.outerRadius : shape.innerRadius;
-                        points.push({
-                          x: shape.x + r * Math.cos(angle),
-                          y: shape.y + r * Math.sin(angle)
-                        });
-                      }
-                    } else if (shape.type === "Polygon" && Array.isArray(shape.points)) {
-                      points = shape.points.map(p => ({ x: p.x ?? p[0], y: p.y ?? p[1] }));
-                      if (typeof shape.x === "number" && typeof shape.y === "number") {
-                        points = points.map(p => ({ x: p.x + shape.x, y: p.y + shape.y }));
-                      }
-                    } else if (Array.isArray(shape.points)) {
-                      points = shape.points.map(p => ({ x: p.x ?? p[0], y: p.y ?? p[1] }));
-                    }
-
-                    const amplitude = shape.roughenAmplitude || 10;
-                    const frequency = shape.roughenFrequency || 3;
-                    const roughPoints = shape.roughenPoints || applyRoughenEffect(points, amplitude, frequency);
 
                     if (
-                      shape.type === "Rectangle" ||
-                      shape.type === "Circle" ||
-                      shape.type === "Star" ||
-                      shape.type === "Polygon" ||
-                      shape.closed
+                      shape.lpeEffect === "Power stroke" &&
+                      shape.type === "Star"
+                    ) {
+                      return (
+                        <Star
+                          key={shape.id}
+                          id={shape.id}
+                          x={shape.x}
+                          y={shape.y}
+                          numPoints={shape.corners}
+                          innerRadius={shape.innerRadius}
+                          outerRadius={shape.outerRadius}
+                          fill={shape.fill}
+                          stroke={shape.stroke}
+                          strokeWidth={shape.powerStrokeWidth || shape.strokeWidth || 10}
+                          draggable={!shape.locked}
+                          onDragEnd={e => handleDragEnd(e, shape.id)}
+                          onClick={e => {
+                            e.cancelBubble = true;
+                            if (!selectedShapeIds.includes(shape.id)) {
+                              dispatch(selectShape(shape.id));
+                            }
+                          }}
+                        />
+                      );
+                    }
+
+                    if (
+                      shape.lpeEffect === "Power stroke" &&
+                      shape.type === "Polygon" &&
+                      Array.isArray(shape.points)
                     ) {
                       return (
                         <Path
                           key={shape.id}
-                          data={
-                            "M " +
-                            roughPoints.map(p => `${p.x},${p.y}`).join(" L ") +
-                            " Z"
-                          }
-                          stroke={shape.stroke || "black"}
-                          strokeWidth={shape.strokeWidth || 2}
-                          fill={shape.fill || "transparent"}
+                          id={shape.id}
+                          x={shape.x}
+                          y={shape.y}
+                          data={generatePolygonPath(shape.points)}
+                          fill={shape.fill}
+                          stroke={shape.stroke}
+                          strokeWidth={shape.powerStrokeWidth || shape.strokeWidth || 10}
                           closed
-                        />
-                      );
-                    } else {
-                      return (
-                        <Line
-                          key={shape.id}
-                          points={roughPoints.flatMap(p => [p.x, p.y])}
-                          stroke={shape.stroke || "black"}
-                          strokeWidth={shape.strokeWidth || 2}
-                          fill={shape.fill || "transparent"}
-                          closed={false}
+                          draggable={!shape.locked}
+                          onDragEnd={e => handleDragEnd(e, shape.id)}
+                          onClick={e => {
+                            e.cancelBubble = true;
+                            if (!selectedShapeIds.includes(shape.id)) {
+                              dispatch(selectShape(shape.id));
+                            }
+                          }}
                         />
                       );
                     }
-                  }
-                  if (
-                    shape.lpeEffect === "Transform by 2 points" &&
-                    shape.transform2Points &&
-                    Array.isArray(shape.transform2Points.from) &&
-                    Array.isArray(shape.transform2Points.to)
-                  ) {
-                    const { from, to } = shape.transform2Points;
-                    if (from.length === 2 && to.length === 2) {
-                      let points = shapeToPoints(shape);
-
-                      function getTransformMatrix([A, B], [A2, B2]) {
-                        const dx1 = B[0] - A[0], dy1 = B[1] - A[1];
-                        const dx2 = B2[0] - A2[0], dy2 = B2[1] - A2[1];
-                        const len1 = Math.hypot(dx1, dy1);
-                        const len2 = Math.hypot(dx2, dy2);
-                        const scale = len2 / (len1 || 1);
-                        const angle1 = Math.atan2(dy1, dx1);
-                        const angle2 = Math.atan2(dy2, dx2);
-                        const theta = angle2 - angle1;
-                        return { scale, theta, from: A, to: A2 };
-                      }
-                      const { scale, theta, from: [x0, y0], to: [x1, y1] } = getTransformMatrix(from, to);
-
-                      const transformed = points.map(pt => {
-                        let px = pt.x - x0;
-                        let py = pt.y - y0;
-                        px *= scale;
-                        py *= scale;
-                        const rx = px * Math.cos(theta) - py * Math.sin(theta);
-                        const ry = px * Math.sin(theta) + py * Math.cos(theta);
-                        return { x: rx + x1, y: ry + y1 };
-                      });
-
-                      const isClosed = shape.closed || shape.type === "Polygon" || shape.type === "Rectangle" || shape.type === "Circle" || shape.type === "Star";
-                      const shapeElem = isClosed ? (
-                        <Path
-                          key={shape.id}
-                          data={
-                            "M " +
-                            transformed.map(p => `${p.x},${p.y}`).join(" L ") +
-                            " Z"
-                          }
-                          stroke={shape.stroke || "black"}
-                          strokeWidth={shape.strokeWidth || 2}
-                          fill={shape.fill || "transparent"}
-                          closed
-                        />
-                      ) : (
+                    if (
+                      shape.lpeEffect === "Power stroke" &&
+                      (shape.type === "Pencil" || shape.type === "Calligraphy" || shape.type === "Polygon" || shape.type === "Path") &&
+                      Array.isArray(shape.points)
+                    ) {
+                      return (
                         <Line
                           key={shape.id}
-                          points={transformed.flatMap(p => [p.x, p.y])}
+                          id={shape.id}
+                          points={shape.points.flatMap(p => [p.x, p.y])}
                           stroke={shape.stroke || "black"}
-                          strokeWidth={shape.strokeWidth || 2}
-                          fill={shape.fill || "transparent"}
-                          closed={false}
+                          strokeWidth={shape.powerStrokeWidth || 10}
+                          fill={shape.fill}
+                          closed={shape.closed || false}
+                          lineCap="round"
+                          lineJoin="round"
+                          draggable={!shape.locked}
+                          onDragEnd={e => handleDragEnd(e, shape.id)}
+                          onClick={e => {
+                            e.cancelBubble = true;
+                            if (!selectedShapeIds.includes(shape.id)) {
+                              dispatch(selectShape(shape.id));
+                            }
+                          }}
                         />
                       );
+                    }
+                    if (
+                      shape.lpeEffect === "Taper stroke" &&
+                      (shape.type === "Pencil" || shape.type === "Calligraphy" || shape.type === "Bezier") &&
+                      Array.isArray(shape.points)
+                    ) {
+                      const points = shape.points;
+                      const maxWidth = shape.taperStrokeWidth || 10;
+                      const startTaper = shape.taperStart ?? 1;
+                      const endTaper = shape.taperEnd ?? 1;
+                      const isClosed = shape.closed || false;
 
+                      if (isClosed) {
+                        return (
+                          <Line
+                            key={shape.id}
+                            id={shape.id}
+                            points={points.flatMap(p => [p.x, p.y])}
+                            stroke={shape.stroke || "black"}
+                            strokeWidth={maxWidth}
+                            fill={shape.fill || "black"}
+                            closed={true}
+                            lineCap="round"
+                            lineJoin="round"
+                            draggable={!shape.locked}
+                            onDragEnd={e => handleDragEnd(e, shape.id)}
+                            onClick={e => {
+                              e.cancelBubble = true;
+                              if (!selectedShapeIds.includes(shape.id)) {
+                                dispatch(selectShape(shape.id));
+                              }
+                            }}
+                          />
+                        );
+                      }
+
+                      const lines = [];
+                      for (let i = 1; i < points.length; i++) {
+                        const t = i / (points.length - 1);
+                        const width = maxWidth * ((1 - t) * startTaper + t * endTaper);
+                        lines.push(
+                          <Line
+                            key={shape.id + "-taper-" + i}
+                            points={[
+                              points[i - 1].x, points[i - 1].y,
+                              points[i].x, points[i].y
+                            ]}
+                            stroke={shape.stroke || "black"}
+                            strokeWidth={Math.max(1, width)}
+                            lineCap="round"
+                            lineJoin="round"
+                            draggable={!shape.locked}
+                            onDragEnd={e => handleDragEnd(e, shape.id)}
+                            onClick={e => {
+                              e.cancelBubble = true;
+                              if (!selectedShapeIds.includes(shape.id)) {
+                                dispatch(selectShape(shape.id));
+                              }
+                            }}
+                          />
+                        );
+                      }
+                      return <>{lines}</>;
+                    }
+                    if (
+                      shape.lpeEffect === "Envelope Deformation" &&
+                      ["Pencil", "Calligraphy", "Bezier"].includes(shape.type) &&
+                      shape.envelopeTop && shape.envelopeBottom && shape.envelopeLeft && shape.envelopeRight &&
+                      Array.isArray(shape.points)
+                    ) {
+                      const [x1, y1, x2, y2] = shape.envelopeTop;
+                      const [bx1, by1, bx2, by2] = shape.envelopeBottom;
+                      const [lx1, ly1, lx2, ly2] = shape.envelopeLeft;
+                      const [rx1, ry1, rx2, ry2] = shape.envelopeRight;
+
+                      const normPoints = shape.points.map(p =>
+                        Array.isArray(p) ? { x: p[0], y: p[1] } : { x: p.x, y: p.y }
+                      );
+
+                      const minX = Math.min(...normPoints.map(p => p.x));
+                      const maxX = Math.max(...normPoints.map(p => p.x));
+                      const minY = Math.min(...normPoints.map(p => p.y));
+                      const maxY = Math.max(...normPoints.map(p => p.y));
+
+                      const mappedPoints = normPoints.map((pt) => {
+                        const u = (pt.x - minX) / (maxX - minX || 1);
+                        const v = (pt.y - minY) / (maxY - minY || 1);
+
+                        const topX = x1 + (x2 - x1) * u;
+                        const topY = y1 + (y2 - y1) * u;
+                        const botX = bx1 + (bx2 - bx1) * u;
+                        const botY = by1 + (by2 - by1) * u;
+
+                        const leftX = lx1 + (lx2 - lx1) * v;
+                        const leftY = ly1 + (ly2 - ly1) * v;
+                        const rightX = rx1 + (rx2 - rx1) * v;
+                        const rightY = ry1 + (ry2 - ry1) * v;
+
+                        const x = (1 - v) * topX + v * botX + (1 - u) * leftX + u * rightX - ((1 - u) * (1 - v) * x1 + u * (1 - v) * x2 + (1 - u) * v * bx1 + u * v * bx2);
+                        const y = (1 - v) * topY + v * botY + (1 - u) * leftY + u * rightY - ((1 - u) * (1 - v) * y1 + u * (1 - v) * y2 + (1 - u) * v * by1 + u * v * by2);
+
+                        return { x, y };
+                      });
+                      const isSelected = selectedShapeIds.includes(shape.id);
+                      const renderEnvelopeHandle = (curve, idx, color, label) => (
+                        <Circle
+                          key={shape.id + "-env-handle-" + label + idx}
+                          x={curve[idx * 2]}
+                          y={curve[idx * 2 + 1]}
+                          radius={8}
+                          fill="#fff"
+                          stroke={color}
+                          strokeWidth={2}
+                          draggable
+                          onDragMove={e => {
+                            const newCurve = [...curve];
+                            newCurve[idx * 2] = e.target.x();
+                            newCurve[idx * 2 + 1] = e.target.y();
+                            let payload = { id: shape.id };
+                            if (label === "top") payload.envelopeTop = newCurve;
+                            if (label === "bottom") payload.envelopeBottom = newCurve;
+                            if (label === "left") payload.envelopeLeft = newCurve;
+                            if (label === "right") payload.envelopeRight = newCurve;
+                            dispatch({
+                              type: "tool/updateShapePosition",
+                              payload
+                            });
+                          }}
+                          onMouseEnter={e => {
+                            e.target.getStage().container().style.cursor = "pointer";
+                          }}
+                          onMouseLeave={e => {
+                            e.target.getStage().container().style.cursor = "default";
+                          }}
+                        />
+                      );
+                      return (
+                        <>
+                          <Line
+                            key={shape.id + "-env-main"}
+                            points={mappedPoints.flatMap(p => [p.x, p.y])}
+                            stroke={shape.stroke || "black"}
+                            strokeWidth={shape.strokeWidth || 2}
+                            fill={shape.fill || "transparent"}
+                            closed={shape.closed || false}
+                          />
+                          <Line key={shape.id + "-env-top"} points={[x1, y1, x2, y2]} stroke="red" strokeWidth={2} />
+                          <Line key={shape.id + "-env-bottom"} points={[bx1, by1, bx2, by2]} stroke="blue" strokeWidth={2} />
+                          <Line key={shape.id + "-env-left"} points={[lx1, ly1, lx2, ly2]} stroke="green" strokeWidth={2} />
+                          <Line key={shape.id + "-env-right"} points={[rx1, ry1, rx2, ry2]} stroke="orange" strokeWidth={2} />
+                          {isSelected && (
+                            <>
+                              {renderEnvelopeHandle(shape.envelopeTop, 0, "red", "top")}
+                              {renderEnvelopeHandle(shape.envelopeTop, 1, "red", "top")}
+                              {renderEnvelopeHandle(shape.envelopeBottom, 0, "blue", "bottom")}
+                              {renderEnvelopeHandle(shape.envelopeBottom, 1, "blue", "bottom")}
+                              {renderEnvelopeHandle(shape.envelopeLeft, 0, "green", "left")}
+                              {renderEnvelopeHandle(shape.envelopeLeft, 1, "green", "left")}
+                              {renderEnvelopeHandle(shape.envelopeRight, 0, "orange", "right")}
+                              {renderEnvelopeHandle(shape.envelopeRight, 1, "orange", "right")}
+                            </>
+                          )}
+                        </>
+                      );
+                    }
+                    if (
+                      shape.lpeEffect === "Lattice Deformation" &&
+                      ["Pencil", "Calligraphy", "Bezier"].includes(shape.type) &&
+                      Array.isArray(shape.points) &&
+                      Array.isArray(shape.latticePoints) &&
+                      shape.latticeRows && shape.latticeCols
+                    ) {
+                      const normPoints = shape.points.map(p =>
+                        Array.isArray(p) ? { x: p[0], y: p[1] } : { x: p.x, y: p.y }
+                      );
+                      const minX = Math.min(...normPoints.map(p => p.x));
+                      const maxX = Math.max(...normPoints.map(p => p.x));
+                      const minY = Math.min(...normPoints.map(p => p.y));
+                      const maxY = Math.max(...normPoints.map(p => p.y));
+
+                      const getLatticePoint = (row, col) => {
+                        const idx = row * shape.latticeCols + col;
+                        return shape.latticePoints[idx] || [0, 0];
+                      };
+
+                      function latticeMap(x, y) {
+                        const u = (x - minX) / (maxX - minX || 1);
+                        const v = (y - minY) / (maxY - minY || 1);
+
+                        const fx = u * (shape.latticeCols - 1);
+                        const fy = v * (shape.latticeRows - 1);
+
+                        const col = Math.floor(fx);
+                        const row = Math.floor(fy);
+
+                        const du = fx - col;
+                        const dv = fy - row;
+
+                        const col1 = Math.min(col, shape.latticeCols - 2);
+                        const row1 = Math.min(row, shape.latticeRows - 2);
+
+                        const p00 = getLatticePoint(row1, col1);
+                        const p10 = getLatticePoint(row1, col1 + 1);
+                        const p01 = getLatticePoint(row1 + 1, col1);
+                        const p11 = getLatticePoint(row1 + 1, col1 + 1);
+
+                        const xMapped =
+                          (1 - du) * (1 - dv) * p00[0] +
+                          du * (1 - dv) * p10[0] +
+                          (1 - du) * dv * p01[0] +
+                          du * dv * p11[0];
+                        const yMapped =
+                          (1 - du) * (1 - dv) * p00[1] +
+                          du * (1 - dv) * p10[1] +
+                          (1 - du) * dv * p01[1] +
+                          du * dv * p11[1];
+
+                        return { x: xMapped, y: yMapped };
+                      }
+
+                      const mappedPoints = normPoints.map(pt => latticeMap(pt.x, pt.y));
                       const isSelected = selectedShapeIds.includes(shape.id);
                       return (
                         <>
-                          {shapeElem}
-                          {isSelected && to.map(([hx, hy], idx) => (
+                          <Line
+                            key={shape.id + "-lattice"}
+                            points={mappedPoints.flatMap(p => [p.x, p.y])}
+                            stroke={shape.stroke || "black"}
+                            strokeWidth={shape.strokeWidth || 2}
+                            fill={shape.fill || "transparent"}
+                            closed={shape.closed || false}
+                          />
+                          {isSelected && shape.latticePoints.map(([x, y], idx) => (
                             <Circle
-                              key={shape.id + "-transform2-handle-" + idx}
-                              x={hx}
-                              y={hy}
-                              radius={8}
+                              key={shape.id + "-lattice-handle-" + idx}
+                              x={x}
+                              y={y}
+                              radius={7}
                               fill="#fff"
-                              stroke={idx === 0 ? "#007bff" : "#ff007b"}
+                              stroke="#007bff"
                               strokeWidth={2}
                               draggable
                               onDragMove={e => {
-                                const newTo = [...to];
-                                newTo[idx] = [e.target.x(), e.target.y()];
+                                const newX = e.target.x();
+                                const newY = e.target.y();
+                                const newLatticePoints = [...shape.latticePoints];
+                                newLatticePoints[idx] = [newX, newY];
                                 dispatch({
                                   type: "tool/updateShapePosition",
                                   payload: {
                                     id: shape.id,
-                                    transform2Points: {
-                                      ...shape.transform2Points,
-                                      to: newTo
-                                    }
+                                    latticePoints: newLatticePoints,
                                   }
                                 });
                               }}
@@ -6322,638 +6441,891 @@ const Panel = React.forwardRef(({
                         </>
                       );
                     }
-                  }
-                  if (shape.type === "polyline") {
-                    return (
-                      <Line
-                        key={shape.id}
-                        points={shape.points.flatMap((p) => [p.x, p.y])}
-                        stroke={shape.stroke || "black"}
-                        strokeWidth={shape.strokeWidth || 2}
-                        fill={shape.fill || "transparent"}
-                        closed={false}
-                        lineJoin="round"
-                        lineCap="round"
-                      />
-                    );
-                  }
-                  if (shape.type === "Group") {
-                    return (
-                      <Group
-                        key={shape.id}
-                        id={shape.id}
-                        x={shape.x}
-                        y={shape.y}
-                        draggable
-                        onClick={(e) => {
-                          e.cancelBubble = true;
-                          if (shape.locked) return;
-                          if (!selectedShapeIds.includes(shape.id)) {
-                            dispatch(selectShape(shape.id));
-                          }
-                        }}
-                        onDragEnd={(e) => {
-                          const { x, y } = e.target.position();
-                          dispatch(updateShapePosition({ id: shape.id, x, y }));
-                        }}
-                      >
-                        {shape.shapes.map((childShape) => {
-                          if (childShape.type === "Rectangle") {
-                            return (
-                              <Rect
-                                key={childShape.id}
-                                x={childShape.x}
-                                y={childShape.y}
-                                width={childShape.width}
-                                height={childShape.height}
-                                fill={childShape.fill || "black"}
-                                stroke={childShape.stroke || "black"}
-                                strokeWidth={childShape.strokeWidth || 1}
-                              />
-                            );
-                          } else if (childShape.type === "Circle") {
-                            return (
-                              <Circle
-                                key={childShape.id}
-                                x={childShape.x}
-                                y={childShape.y}
-                                radius={childShape.radius}
-                                fill={childShape.fill || "transparent"}
-                                stroke={childShape.stroke || "black"}
-                                strokeWidth={childShape.strokeWidth || 1}
-                              />
-                            );
-                          } else if (childShape.type === "Star") {
-                            return (
-                              <Star
-                                key={childShape.id}
-                                x={childShape.x}
-                                y={childShape.y}
-                                numPoints={childShape.corners}
-                                innerRadius={childShape.innerRadius}
-                                outerRadius={childShape.outerRadius}
-                                fill={childShape.fill || "transparent"}
-                                stroke={childShape.stroke || "black"}
-                                strokeWidth={childShape.strokeWidth || 1}
-                              />
-                            );
-                          } else if (childShape.type === "Polygon") {
-                            return (
-                              <Path
-                                key={childShape.id}
-                                x={childShape.x}
-                                y={childShape.y}
-                                data={generatePolygonPath(childShape.points)}
-                                fill={childShape.fill || "transparent"}
-                                stroke={childShape.stroke || "black"}
-                                strokeWidth={childShape.strokeWidth || 1}
-                              />
-                            );
-                          } else if (childShape.type === "Pencil") {
-                            return (
-                              <Line
-                                key={childShape.id}
-                                points={childShape.points.flatMap((p) => [p[0], p[1]])}
-                                stroke={childShape.strokeColor || "black"}
-                                fill={childShape.fill || "transparent"}
-                                strokeWidth={childShape.strokeWidth || 1}
-                                lineJoin="round"
-                                lineCap="round"
-                                closed={childShape.closed || false}
-                              />
-                            );
-                          } else if (childShape.type === "Calligraphy") {
-                            return (
-                              <Line
-                                key={childShape.id}
-                                points={childShape.points.flatMap((p) => [p.x, p.y])}
-                                stroke={childShape.stroke || "black"}
-                                fill={childShape.fill || "transparent"}
-                                strokeWidth={childShape.strokeWidth || 1}
-                                lineJoin="round"
-                                lineCap="round"
-                                closed={false}
-                              />
-                            );
-                          }
-                          return null;
-                        })}
-                      </Group>
-                    );
-                  }
-                  {
-                    shape.bloom && (
-                      <Line
-                        points={offsetPoints.map(p => [p.x - (shape.x || 0), p.y - (shape.y || 0)]).flat()}
-                        closed
-                        fill={shape.fill || "transparent"}
-                        stroke={shape.stroke || "yellow"}
-                        strokeWidth={(shape.strokeWidth || 2) + (shape.bloom.radius || 16)}
-                        opacity={0.5 * (shape.bloom.brightness || 1.5)}
-                        listening={false}
-                        filters={[Konva.Filters.Blur]}
-                        blurRadius={shape.bloom?.radius || 16}
-                      />
-                    )
-                  }
-                  if (shape.type === "LinkedOffset") {
-                    const source = shapes.find(s => s.id === shape.linkedTo);
-                    if (!source) return null;
-                    const basePoints = shapeToPoints(source);
-                    const offsetPoints = getOffsetPoints(basePoints, shape.offsetAmount);
-                    const handlePoint = offsetPoints[0];
-                    const center = getShapeCenter(source);
-                    const isSelected = selectedShapeIds.includes(shape.id);
+                    if (
+                      shape.lpeEffect === "Perspective/Envelope" &&
+                      Array.isArray(shape.perspectiveCorners) &&
+                      shape.perspectiveCorners.length === 4
+                    ) {
+                      const isSelected = selectedShapeIds.includes(shape.id);
 
-                    return (
-                      <Group
-                        key={shape.id}
-                        id={shape.id}
-                        x={shape.x || 0}
-                        y={shape.y || 0}
-                        draggable
-                        ref={node => {
-                          if (node) shapeRefs.current[shape.id] = node;
-                          else delete shapeRefs.current[shape.id];
-                        }}
-                        onClick={e => {
-                          e.cancelBubble = true;
-                          if (!selectedShapeIds.includes(shape.id)) {
-                            dispatch(selectShape(shape.id));
-                          }
-                        }}
-                        onDragEnd={e => {
-                          const { x, y } = e.target.position();
-                          dispatch(updateShapePosition({ id: shape.id, x, y }));
-                        }}
-                      >
+                      const normPoints = shape.points.map(p =>
+                        Array.isArray(p) ? { x: p[0], y: p[1] } : { x: p.x, y: p.y }
+                      );
+                      const minX = Math.min(...normPoints.map(p => p.x));
+                      const maxX = Math.max(...normPoints.map(p => p.x));
+                      const minY = Math.min(...normPoints.map(p => p.y));
+                      const maxY = Math.max(...normPoints.map(p => p.y));
+
+                      const [tl, tr, br, bl] = shape.perspectiveCorners;
+
+                      function mapPoint(pt) {
+                        const u = (pt.x - minX) / (maxX - minX || 1);
+                        const v = (pt.y - minY) / (maxY - minY || 1);
+
+                        const x =
+                          (1 - u) * (1 - v) * tl[0] +
+                          u * (1 - v) * tr[0] +
+                          u * v * br[0] +
+                          (1 - u) * v * bl[0];
+                        const y =
+                          (1 - u) * (1 - v) * tl[1] +
+                          u * (1 - v) * tr[1] +
+                          u * v * br[1] +
+                          (1 - u) * v * bl[1];
+                        return { x, y };
+                      }
+
+                      const mappedPoints = normPoints.map(mapPoint);
+
+                      const isClosed = shape.closed !== undefined ? shape.closed : true;
+
+                      return (
+                        <>
+                          <Line
+                            points={mappedPoints.flatMap(p => [p.x, p.y])}
+                            stroke={shape.stroke || "black"}
+                            strokeWidth={shape.strokeWidth || 2}
+                            fill={shape.fill || "transparent"}
+                            closed={isClosed}
+                          />
+                          {isSelected && shape.perspectiveCorners.map(([x, y], idx) => (
+                            <Circle
+                              key={shape.id + "-persp-handle-" + idx}
+                              x={x}
+                              y={y}
+                              radius={8}
+                              fill="#fff"
+                              stroke="#007bff"
+                              strokeWidth={2}
+                              draggable
+                              onDragMove={e => {
+                                const newCorners = [...shape.perspectiveCorners];
+                                newCorners[idx] = [e.target.x(), e.target.y()];
+                                dispatch({
+                                  type: "tool/updateShapePosition",
+                                  payload: {
+                                    id: shape.id,
+                                    perspectiveCorners: newCorners,
+                                  }
+                                });
+                              }}
+                              onMouseEnter={e => {
+                                e.target.getStage().container().style.cursor = "pointer";
+                              }}
+                              onMouseLeave={e => {
+                                e.target.getStage().container().style.cursor = "default";
+                              }}
+                            />
+                          ))}
+                        </>
+                      );
+                    }
+                    if (
+                      shape.lpeEffect === "Roughen"
+                    ) {
+                      let points = [];
+                      if (shape.type === "Rectangle") {
+                        points = [
+                          { x: shape.x, y: shape.y },
+                          { x: shape.x + shape.width, y: shape.y },
+                          { x: shape.x + shape.width, y: shape.y + shape.height },
+                          { x: shape.x, y: shape.y + shape.height }
+                        ];
+                      } else if (shape.type === "Circle") {
+                        const num = 60;
+                        for (let i = 0; i < num; i++) {
+                          const angle = (i / num) * 2 * Math.PI;
+                          points.push({
+                            x: shape.x + shape.radius * Math.cos(angle),
+                            y: shape.y + shape.radius * Math.sin(angle)
+                          });
+                        }
+                      } else if (shape.type === "Star") {
+                        const num = (shape.corners || 5) * 2;
+                        for (let i = 0; i < num; i++) {
+                          const angle = (i / num) * 2 * Math.PI - Math.PI / 2;
+                          const r = i % 2 === 0 ? shape.outerRadius : shape.innerRadius;
+                          points.push({
+                            x: shape.x + r * Math.cos(angle),
+                            y: shape.y + r * Math.sin(angle)
+                          });
+                        }
+                      } else if (shape.type === "Polygon" && Array.isArray(shape.points)) {
+                        points = shape.points.map(p => ({ x: p.x ?? p[0], y: p.y ?? p[1] }));
+                        if (typeof shape.x === "number" && typeof shape.y === "number") {
+                          points = points.map(p => ({ x: p.x + shape.x, y: p.y + shape.y }));
+                        }
+                      } else if (Array.isArray(shape.points)) {
+                        points = shape.points.map(p => ({ x: p.x ?? p[0], y: p.y ?? p[1] }));
+                      }
+
+                      const amplitude = shape.roughenAmplitude || 10;
+                      const frequency = shape.roughenFrequency || 3;
+                      const roughPoints = shape.roughenPoints || applyRoughenEffect(points, amplitude, frequency);
+
+                      if (
+                        shape.type === "Rectangle" ||
+                        shape.type === "Circle" ||
+                        shape.type === "Star" ||
+                        shape.type === "Polygon" ||
+                        shape.closed
+                      ) {
+                        return (
+                          <Path
+                            key={shape.id}
+                            data={
+                              "M " +
+                              roughPoints.map(p => `${p.x},${p.y}`).join(" L ") +
+                              " Z"
+                            }
+                            stroke={shape.stroke || "black"}
+                            strokeWidth={shape.strokeWidth || 2}
+                            fill={shape.fill || "transparent"}
+                            closed
+                          />
+                        );
+                      } else {
+                        return (
+                          <Line
+                            key={shape.id}
+                            points={roughPoints.flatMap(p => [p.x, p.y])}
+                            stroke={shape.stroke || "black"}
+                            strokeWidth={shape.strokeWidth || 2}
+                            fill={shape.fill || "transparent"}
+                            closed={false}
+                          />
+                        );
+                      }
+                    }
+                    if (
+                      shape.lpeEffect === "Transform by 2 points" &&
+                      shape.transform2Points &&
+                      Array.isArray(shape.transform2Points.from) &&
+                      Array.isArray(shape.transform2Points.to)
+                    ) {
+                      const { from, to } = shape.transform2Points;
+                      if (from.length === 2 && to.length === 2) {
+                        let points = shapeToPoints(shape);
+
+                        function getTransformMatrix([A, B], [A2, B2]) {
+                          const dx1 = B[0] - A[0], dy1 = B[1] - A[1];
+                          const dx2 = B2[0] - A2[0], dy2 = B2[1] - A2[1];
+                          const len1 = Math.hypot(dx1, dy1);
+                          const len2 = Math.hypot(dx2, dy2);
+                          const scale = len2 / (len1 || 1);
+                          const angle1 = Math.atan2(dy1, dx1);
+                          const angle2 = Math.atan2(dy2, dx2);
+                          const theta = angle2 - angle1;
+                          return { scale, theta, from: A, to: A2 };
+                        }
+                        const { scale, theta, from: [x0, y0], to: [x1, y1] } = getTransformMatrix(from, to);
+
+                        const transformed = points.map(pt => {
+                          let px = pt.x - x0;
+                          let py = pt.y - y0;
+                          px *= scale;
+                          py *= scale;
+                          const rx = px * Math.cos(theta) - py * Math.sin(theta);
+                          const ry = px * Math.sin(theta) + py * Math.cos(theta);
+                          return { x: rx + x1, y: ry + y1 };
+                        });
+
+                        const isClosed = shape.closed || shape.type === "Polygon" || shape.type === "Rectangle" || shape.type === "Circle" || shape.type === "Star";
+                        const shapeElem = isClosed ? (
+                          <Path
+                            key={shape.id}
+                            data={
+                              "M " +
+                              transformed.map(p => `${p.x},${p.y}`).join(" L ") +
+                              " Z"
+                            }
+                            stroke={shape.stroke || "black"}
+                            strokeWidth={shape.strokeWidth || 2}
+                            fill={shape.fill || "transparent"}
+                            closed
+                          />
+                        ) : (
+                          <Line
+                            key={shape.id}
+                            points={transformed.flatMap(p => [p.x, p.y])}
+                            stroke={shape.stroke || "black"}
+                            strokeWidth={shape.strokeWidth || 2}
+                            fill={shape.fill || "transparent"}
+                            closed={false}
+                          />
+                        );
+
+                        const isSelected = selectedShapeIds.includes(shape.id);
+                        return (
+                          <>
+                            {shapeElem}
+                            {isSelected && to.map(([hx, hy], idx) => (
+                              <Circle
+                                key={shape.id + "-transform2-handle-" + idx}
+                                x={hx}
+                                y={hy}
+                                radius={8}
+                                fill="#fff"
+                                stroke={idx === 0 ? "#007bff" : "#ff007b"}
+                                strokeWidth={2}
+                                draggable
+                                onDragMove={e => {
+                                  const newTo = [...to];
+                                  newTo[idx] = [e.target.x(), e.target.y()];
+                                  dispatch({
+                                    type: "tool/updateShapePosition",
+                                    payload: {
+                                      id: shape.id,
+                                      transform2Points: {
+                                        ...shape.transform2Points,
+                                        to: newTo
+                                      }
+                                    }
+                                  });
+                                }}
+                                onMouseEnter={e => {
+                                  e.target.getStage().container().style.cursor = "pointer";
+                                }}
+                                onMouseLeave={e => {
+                                  e.target.getStage().container().style.cursor = "default";
+                                }}
+                              />
+                            ))}
+                          </>
+                        );
+                      }
+                    }
+                    if (shape.type === "polyline") {
+                      return (
+                        <Line
+                          key={shape.id}
+                          points={shape.points.flatMap((p) => [p.x, p.y])}
+                          stroke={shape.stroke || "black"}
+                          strokeWidth={shape.strokeWidth || 2}
+                          fill={shape.fill || "transparent"}
+                          closed={false}
+                          lineJoin="round"
+                          lineCap="round"
+                        />
+                      );
+                    }
+                    if (shape.type === "Group") {
+                      return (
+                        <Group
+                          key={shape.id}
+                          id={shape.id}
+                          x={shape.x}
+                          y={shape.y}
+                          draggable
+                          onClick={(e) => {
+                            e.cancelBubble = true;
+                            if (shape.locked) return;
+                            if (!selectedShapeIds.includes(shape.id)) {
+                              dispatch(selectShape(shape.id));
+                            }
+                          }}
+                          onDragEnd={(e) => {
+                            const { x, y } = e.target.position();
+                            dispatch(updateShapePosition({ id: shape.id, x, y }));
+                          }}
+                        >
+                          {shape.shapes.map((childShape) => {
+                            if (childShape.type === "Rectangle") {
+                              return (
+                                <Rect
+                                  key={childShape.id}
+                                  x={childShape.x}
+                                  y={childShape.y}
+                                  width={childShape.width}
+                                  height={childShape.height}
+                                  fill={childShape.fill || "black"}
+                                  stroke={childShape.stroke || "black"}
+                                  strokeWidth={childShape.strokeWidth || 1}
+                                />
+                              );
+                            } else if (childShape.type === "Circle") {
+                              return (
+                                <Circle
+                                  key={childShape.id}
+                                  x={childShape.x}
+                                  y={childShape.y}
+                                  radius={childShape.radius}
+                                  fill={childShape.fill || "transparent"}
+                                  stroke={childShape.stroke || "black"}
+                                  strokeWidth={childShape.strokeWidth || 1}
+                                />
+                              );
+                            } else if (childShape.type === "Star") {
+                              return (
+                                <Star
+                                  key={childShape.id}
+                                  x={childShape.x}
+                                  y={childShape.y}
+                                  numPoints={childShape.corners}
+                                  innerRadius={childShape.innerRadius}
+                                  outerRadius={childShape.outerRadius}
+                                  fill={childShape.fill || "transparent"}
+                                  stroke={childShape.stroke || "black"}
+                                  strokeWidth={childShape.strokeWidth || 1}
+                                />
+                              );
+                            } else if (childShape.type === "Polygon") {
+                              return (
+                                <Path
+                                  key={childShape.id}
+                                  x={childShape.x}
+                                  y={childShape.y}
+                                  data={generatePolygonPath(childShape.points)}
+                                  fill={childShape.fill || "transparent"}
+                                  stroke={childShape.stroke || "black"}
+                                  strokeWidth={childShape.strokeWidth || 1}
+                                />
+                              );
+                            } else if (childShape.type === "Pencil") {
+                              return (
+                                <Line
+                                  key={childShape.id}
+                                  points={childShape.points.flatMap((p) => [p[0], p[1]])}
+                                  stroke={childShape.strokeColor || "black"}
+                                  fill={childShape.fill || "transparent"}
+                                  strokeWidth={childShape.strokeWidth || 1}
+                                  lineJoin="round"
+                                  lineCap="round"
+                                  closed={childShape.closed || false}
+                                />
+                              );
+                            } else if (childShape.type === "Calligraphy") {
+                              return (
+                                <Line
+                                  key={childShape.id}
+                                  points={childShape.points.flatMap((p) => [p.x, p.y])}
+                                  stroke={childShape.stroke || "black"}
+                                  fill={childShape.fill || "transparent"}
+                                  strokeWidth={childShape.strokeWidth || 1}
+                                  lineJoin="round"
+                                  lineCap="round"
+                                  closed={false}
+                                />
+                              );
+                            }
+                            return null;
+                          })}
+                        </Group>
+                      );
+                    }
+                    {
+                      shape.bloom && (
                         <Line
                           points={offsetPoints.map(p => [p.x - (shape.x || 0), p.y - (shape.y || 0)]).flat()}
                           closed
                           fill={shape.fill || "transparent"}
-                          stroke={shape.stroke || "black"}
-                          strokeWidth={shape.strokeWidth || 2}
-                          opacity={0.5}
+                          stroke={shape.stroke || "yellow"}
+                          strokeWidth={(shape.strokeWidth || 2) + (shape.bloom.radius || 16)}
+                          opacity={0.5 * (shape.bloom.brightness || 1.5)}
+                          listening={false}
+                          filters={[Konva.Filters.Blur]}
+                          blurRadius={shape.bloom?.radius || 16}
                         />
-                        {/* Orange handle for offset amount */}
-                        <Circle
-                          x={handlePoint.x - (shape.x || 0)}
-                          y={handlePoint.y - (shape.y || 0)}
-                          radius={8}
-                          fill="orange"
-                          draggable
-                          onDragMove={e => {
-                            const { x, y } = e.target.position();
-                            const dx = x + (shape.x || 0) - center.x;
-                            const dy = y + (shape.y || 0) - center.y;
-                            const newAmount = Math.sqrt(dx * dx + dy * dy) - getOriginalRadiusOrDistance(source, handlePoint);
-                            dispatch(updateShapePosition({
-                              id: shape.id,
-                              offsetAmount: newAmount,
-                            }));
-                          }}
-                        />
-                        {isSelected && !shape.locked && shapeRefs.current[shape.id] && selectedTool !== "Node" && (
-                          <Transformer
-                            ref={transformerRef}
-                            nodes={selectedShapeIds.map(id => shapeRefs.current[id]).filter(Boolean)}
-                            enabledAnchors={[
-                              "top-left", "top-center", "top-right",
-                              "middle-left", "middle-right",
-                              "bottom-left", "bottom-center", "bottom-right",
-                            ]}
-                            skewEnabled={true}
-                          />
-                        )}
-                      </Group>
-                    );
-                  }
-                  if (shape.type === "Clone") {
+                      )
+                    }
+                    if (shape.type === "LinkedOffset") {
+                      const source = shapes.find(s => s.id === shape.linkedTo);
+                      if (!source) return null;
+                      const basePoints = shapeToPoints(source);
+                      const offsetPoints = getOffsetPoints(basePoints, shape.offsetAmount);
+                      const handlePoint = offsetPoints[0];
+                      const center = getShapeCenter(source);
+                      const isSelected = selectedShapeIds.includes(shape.id);
 
-                    const original = shapes.find(s => s.id === shape.cloneOf);
-                    if (!original) return null;
-
-
-                    const cloneShape = {
-                      ...original,
-                      id: shape.id,
-                      x: shape.x ?? original.x,
-                      y: shape.y ?? original.y,
-                      name: shape.name,
-                      isClone: true,
-                    };
-
-
-                    if (original.type === "Rectangle") {
                       return (
-                        <Rect
-                          key={cloneShape.id}
-                          id={cloneShape.id}
-                          x={cloneShape.x}
-                          y={cloneShape.y}
-                          width={original.width}
-                          height={original.height}
-                          fill={original.fill || "black"}
-                          stroke={original.stroke || "black"}
-                          strokeWidth={original.strokeWidth || 1}
+                        <Group
+                          key={shape.id}
+                          id={shape.id}
+                          x={shape.x || 0}
+                          y={shape.y || 0}
                           draggable
+                          ref={node => {
+                            if (node) shapeRefs.current[shape.id] = node;
+                            else delete shapeRefs.current[shape.id];
+                          }}
                           onClick={e => {
                             e.cancelBubble = true;
-                            if (!selectedShapeIds.includes(cloneShape.id)) {
-                              dispatch(selectShape(cloneShape.id));
+                            if (!selectedShapeIds.includes(shape.id)) {
+                              dispatch(selectShape(shape.id));
                             }
                           }}
                           onDragEnd={e => {
                             const { x, y } = e.target.position();
-                            dispatch(updateShapePosition({ id: cloneShape.id, x, y }));
+                            dispatch(updateShapePosition({ id: shape.id, x, y }));
                           }}
-                        />
-                      );
-                    }
-
-                    if (original.type === "Circle") {
-                      return (
-                        <Circle
-                          key={cloneShape.id}
-                          id={cloneShape.id}
-                          x={cloneShape.x}
-                          y={cloneShape.y}
-                          radius={original.radius}
-                          innerRadius={original.innerRadius}
-                          outerRadius={original.outerRadius}
-                          fill={original.fill || "black"}
-                          stroke={original.stroke || "black"}
-                          strokeWidth={original.strokeWidth || 1}
-                          draggable
-                          onClick={e => {
-                            e.cancelBubble = true;
-                            if (!selectedShapeIds.includes(cloneShape.id)) {
-                              dispatch(selectShape(cloneShape.id));
-                            }
-                          }}
-                          onDragEnd={e => {
-                            const { x, y } = e.target.position();
-                            dispatch(updateShapePosition({ id: cloneShape.id, x, y }));
-                          }}
-                        />
-                      );
-                    }
-
-                    if (original.type === "Star") {
-                      return (
-                        <Star
-                          key={cloneShape.id}
-                          id={cloneShape.id}
-                          x={cloneShape.x}
-                          y={cloneShape.y}
-                          numPoints={original.corners}
-                          innerRadius={original.innerRadius}
-                          outerRadius={original.outerRadius}
-                          fill={original.fill || "black"}
-                          rotation={original.rotation}
-                          scaleX={original.scaleX}
-                          scaleY={original.scaleY}
-                          stroke={original.stroke || "black"}
-                          strokeWidth={original.strokeWidth || 1}
-                          draggable
-                          onClick={e => {
-                            e.cancelBubble = true;
-                            if (!selectedShapeIds.includes(cloneShape.id)) {
-                              dispatch(selectShape(cloneShape.id));
-                            }
-                          }}
-                          onDragEnd={e => {
-                            const { x, y } = e.target.position();
-                            dispatch(updateShapePosition({ id: cloneShape.id, x, y }));
-                          }}
-                        />
-                      );
-                    }
-
-                    if (original.type === "Polygon") {
-                      return (
-                        <Line
-                          key={cloneShape.id}
-                          id={cloneShape.id}
-                          x={cloneShape.x}
-                          y={cloneShape.y}
-                          points={original.points.flatMap(pt => [pt.x, pt.y])}
-                          closed
-                          fill={original.fill || "black"}
-                          stroke={original.stroke || "black"}
-                          strokeWidth={original.strokeWidth || 1}
-                          draggable
-                          onClick={e => {
-                            e.cancelBubble = true;
-                            if (!selectedShapeIds.includes(cloneShape.id)) {
-                              dispatch(selectShape(cloneShape.id));
-                            }
-                          }}
-                          onDragEnd={e => {
-                            const { x, y } = e.target.position();
-                            dispatch(updateShapePosition({ id: cloneShape.id, x, y }));
-                          }}
-                        />
-                      );
-                    }
-
-                    return null;
-                  }
-                  if (shape.type === "Rectangle") {
-                    return (
-                      <React.Fragment key={shape.id}>
-                        {shape.bloom && (
-                          <Rect
-                            x={shape.x}
-                            y={shape.y}
-                            width={shape.width}
-                            height={shape.height}
-                            fill={brightenColor(shape.fill || "#ffffff", shape.bloom.brightness)}
+                        >
+                          <Line
+                            points={offsetPoints.map(p => [p.x - (shape.x || 0), p.y - (shape.y || 0)]).flat()}
+                            closed
+                            fill={shape.fill || "transparent"}
+                            stroke={shape.stroke || "black"}
+                            strokeWidth={shape.strokeWidth || 2}
                             opacity={0.5}
-                            blurRadius={shape.bloom.radius}
-                            filters={[Konva.Filters.Blur]}
-                            listening={false}
-                            globalCompositeOperation="lighter"
                           />
-                        )}
-                        {shape.mesh && shape.mesh.nodes ? (
-                          <Group
-                            ref={node => {
-                              if (node) shapeRefs.current[shape.id] = node;
-                              else delete shapeRefs.current[shape.id];
+                          {/* Orange handle for offset amount */}
+                          <Circle
+                            x={handlePoint.x - (shape.x || 0)}
+                            y={handlePoint.y - (shape.y || 0)}
+                            radius={8}
+                            fill="orange"
+                            draggable
+                            onDragMove={e => {
+                              const { x, y } = e.target.position();
+                              const dx = x + (shape.x || 0) - center.x;
+                              const dy = y + (shape.y || 0) - center.y;
+                              const newAmount = Math.sqrt(dx * dx + dy * dy) - getOriginalRadiusOrDistance(source, handlePoint);
+                              dispatch(updateShapePosition({
+                                id: shape.id,
+                                offsetAmount: newAmount,
+                              }));
                             }}
-                            key={shape.id}
-                            id={shape.id}
-                          >
-                            {shape.mesh.nodes.slice(0, -1).map((row, r) =>
-                              row.slice(0, -1).map((node, c) => {
-                                const p1 = node;
-                                const p2 = shape.mesh.nodes[r][c + 1];
-                                const p3 = shape.mesh.nodes[r + 1][c + 1];
-                                const p4 = shape.mesh.nodes[r + 1][c];
-                                function hexToRgb(hex) {
-                                  hex = hex.replace(/^#/, "");
-                                  if (hex.length === 3) hex = hex.split("").map(x => x + x).join("");
-                                  const num = parseInt(hex, 16);
-                                  return {
-                                    r: (num >> 16) & 255,
-                                    g: (num >> 8) & 255,
-                                    b: num & 255
-                                  };
-                                }
-                                function rgbToHex({ r, g, b }) {
-                                  return (
-                                    "#" +
-                                    [r, g, b]
-                                      .map((x) => {
-                                        const hex = x.toString(16);
-                                        return hex.length === 1 ? "0" + hex : hex;
-                                      })
-                                      .join("")
-                                  );
-                                }
-                                function avgColor(colors) {
-                                  const rgbs = colors.map(hexToRgb);
-                                  const r = Math.round(rgbs.reduce((sum, c) => sum + c.r, 0) / rgbs.length);
-                                  const g = Math.round(rgbs.reduce((sum, c) => sum + c.g, 0) / rgbs.length);
-                                  const b = Math.round(rgbs.reduce((sum, c) => sum + c.b, 0) / rgbs.length);
-                                  return rgbToHex({ r, g, b });
-                                }
-                                const fillColor = avgColor([p1.color, p2.color, p3.color, p4.color]);
-                                return (
-                                  <Line
-                                    key={`${r}-${c}`}
-                                    points={[p1.x, p1.y, p2.x, p2.y, p3.x, p3.y, p4.x, p4.y]}
-                                    closed
-                                    fill={fillColor}
-                                    stroke={isSelected ? "#888" : undefined}
-                                    strokeWidth={isSelected ? 1 : 0}
-                                  />
-                                );
-                              })
-                            )}
-                            {shape.mesh.nodes.flat().map((node, idx) => (
-                              <Circle
-                                key={`white-${idx}`}
-                                x={node.x}
-                                y={node.y}
-                                radius={Math.min(
-                                  shape.width / (shape.mesh.cols * 2),
-                                  shape.height / (shape.mesh.rows * 2),
-                                  32
-                                )}
-                                fill="rgba(255,255,255,0.35)"
-                                listening={false}
-                              />
-                            ))}
-                            {selectedTool === "Mesh" && isSelected && shape.mesh.nodes.flat().map((node, idx) => (
-                              <Circle
-                                key={idx}
-                                x={node.x}
-                                y={node.y}
-                                radius={6}
-                                fill={blendWithWhite(node.color, 0.7)}
-                                stroke="#000"
-                                strokeWidth={1}
-                                draggable
-                                onDragMove={e => {
-                                  const { x, y } = e.target.position();
+                          />
+                          {isSelected && !shape.locked && shapeRefs.current[shape.id] && selectedTool !== "Node" && (
+                            <Transformer
+                              ref={transformerRef}
+                              nodes={selectedShapeIds.map(id => shapeRefs.current[id]).filter(Boolean)}
+                              enabledAnchors={[
+                                "top-left", "top-center", "top-right",
+                                "middle-left", "middle-right",
+                                "bottom-left", "bottom-center", "bottom-right",
+                              ]}
+                              skewEnabled={true}
+                            />
+                          )}
+                        </Group>
+                      );
+                    }
+                    if (shape.type === "Clone") {
 
-                                  dispatch({
-                                    type: "tool/updateMeshNode",
-                                    payload: { meshId: shape.id, nodeIdx: idx, x, y }
-                                  });
+                      const original = shapes.find(s => s.id === shape.cloneOf);
+                      if (!original) return null;
 
 
-                                  if (
-                                    shape.fill &&
-                                    (shape.fill.type === "linear-gradient" || shape.fill.type === "radial-gradient")
-                                  ) {
-                                    let newFill = { ...shape.fill };
-                                    if (shape.fill.type === "linear-gradient") {
-                                      if (idx === 0) {
-                                        newFill.start = { x, y };
-                                      } else if (idx === shape.mesh.nodes.flat().length - 1) {
-                                        newFill.end = { x, y };
-                                      }
-                                    } else if (shape.fill.type === "radial-gradient") {
-                                      if (idx === 0) {
-                                        newFill.center = { x, y };
-                                      } else if (idx === shape.mesh.nodes.flat().length - 1) {
-                                        const dx = x - newFill.center.x;
-                                        const dy = y - newFill.center.y;
-                                        newFill.radius = Math.sqrt(dx * dx + dy * dy);
-                                      }
-                                    }
-                                    dispatch(
-                                      updateShapePosition({
-                                        id: shape.id,
-                                        fill: newFill
-                                      })
+                      const cloneShape = {
+                        ...original,
+                        id: shape.id,
+                        x: shape.x ?? original.x,
+                        y: shape.y ?? original.y,
+                        name: shape.name,
+                        isClone: true,
+                      };
+
+
+                      if (original.type === "Rectangle") {
+                        return (
+                          <Rect
+                            key={cloneShape.id}
+                            id={cloneShape.id}
+                            x={cloneShape.x}
+                            y={cloneShape.y}
+                            width={original.width}
+                            height={original.height}
+                            fill={original.fill || "black"}
+                            stroke={original.stroke || "black"}
+                            strokeWidth={original.strokeWidth || 1}
+                            draggable
+                            onClick={e => {
+                              e.cancelBubble = true;
+                              if (!selectedShapeIds.includes(cloneShape.id)) {
+                                dispatch(selectShape(cloneShape.id));
+                              }
+                            }}
+                            onDragEnd={e => {
+                              const { x, y } = e.target.position();
+                              dispatch(updateShapePosition({ id: cloneShape.id, x, y }));
+                            }}
+                          />
+                        );
+                      }
+
+                      if (original.type === "Circle") {
+                        return (
+                          <Circle
+                            key={cloneShape.id}
+                            id={cloneShape.id}
+                            x={cloneShape.x}
+                            y={cloneShape.y}
+                            radius={original.radius}
+                            innerRadius={original.innerRadius}
+                            outerRadius={original.outerRadius}
+                            fill={original.fill || "black"}
+                            stroke={original.stroke || "black"}
+                            strokeWidth={original.strokeWidth || 1}
+                            draggable
+                            onClick={e => {
+                              e.cancelBubble = true;
+                              if (!selectedShapeIds.includes(cloneShape.id)) {
+                                dispatch(selectShape(cloneShape.id));
+                              }
+                            }}
+                            onDragEnd={e => {
+                              const { x, y } = e.target.position();
+                              dispatch(updateShapePosition({ id: cloneShape.id, x, y }));
+                            }}
+                          />
+                        );
+                      }
+
+                      if (original.type === "Star") {
+                        return (
+                          <Star
+                            key={cloneShape.id}
+                            id={cloneShape.id}
+                            x={cloneShape.x}
+                            y={cloneShape.y}
+                            numPoints={original.corners}
+                            innerRadius={original.innerRadius}
+                            outerRadius={original.outerRadius}
+                            fill={original.fill || "black"}
+                            rotation={original.rotation}
+                            scaleX={original.scaleX}
+                            scaleY={original.scaleY}
+                            stroke={original.stroke || "black"}
+                            strokeWidth={original.strokeWidth || 1}
+                            draggable
+                            onClick={e => {
+                              e.cancelBubble = true;
+                              if (!selectedShapeIds.includes(cloneShape.id)) {
+                                dispatch(selectShape(cloneShape.id));
+                              }
+                            }}
+                            onDragEnd={e => {
+                              const { x, y } = e.target.position();
+                              dispatch(updateShapePosition({ id: cloneShape.id, x, y }));
+                            }}
+                          />
+                        );
+                      }
+
+                      if (original.type === "Polygon") {
+                        return (
+                          <Line
+                            key={cloneShape.id}
+                            id={cloneShape.id}
+                            x={cloneShape.x}
+                            y={cloneShape.y}
+                            points={original.points.flatMap(pt => [pt.x, pt.y])}
+                            closed
+                            fill={original.fill || "black"}
+                            stroke={original.stroke || "black"}
+                            strokeWidth={original.strokeWidth || 1}
+                            draggable
+                            onClick={e => {
+                              e.cancelBubble = true;
+                              if (!selectedShapeIds.includes(cloneShape.id)) {
+                                dispatch(selectShape(cloneShape.id));
+                              }
+                            }}
+                            onDragEnd={e => {
+                              const { x, y } = e.target.position();
+                              dispatch(updateShapePosition({ id: cloneShape.id, x, y }));
+                            }}
+                          />
+                        );
+                      }
+
+                      return null;
+                    }
+                    if (shape.type === "Rectangle") {
+                      return (
+                        <React.Fragment key={shape.id}>
+                          {shape.bloom && (
+                            <Rect
+                              x={shape.x}
+                              y={shape.y}
+                              width={shape.width}
+                              height={shape.height}
+                              fill={brightenColor(shape.fill || "#ffffff", shape.bloom.brightness)}
+                              opacity={0.5}
+                              blurRadius={shape.bloom.radius}
+                              filters={[Konva.Filters.Blur]}
+                              listening={false}
+                              globalCompositeOperation="lighter"
+                            />
+                          )}
+                          {shape.mesh && shape.mesh.nodes ? (
+                            <Group
+                              ref={node => {
+                                if (node) shapeRefs.current[shape.id] = node;
+                                else delete shapeRefs.current[shape.id];
+                              }}
+                              key={shape.id}
+                              id={shape.id}
+                            >
+                              {shape.mesh.nodes.slice(0, -1).map((row, r) =>
+                                row.slice(0, -1).map((node, c) => {
+                                  const p1 = node;
+                                  const p2 = shape.mesh.nodes[r][c + 1];
+                                  const p3 = shape.mesh.nodes[r + 1][c + 1];
+                                  const p4 = shape.mesh.nodes[r + 1][c];
+                                  function hexToRgb(hex) {
+                                    hex = hex.replace(/^#/, "");
+                                    if (hex.length === 3) hex = hex.split("").map(x => x + x).join("");
+                                    const num = parseInt(hex, 16);
+                                    return {
+                                      r: (num >> 16) & 255,
+                                      g: (num >> 8) & 255,
+                                      b: num & 255
+                                    };
+                                  }
+                                  function rgbToHex({ r, g, b }) {
+                                    return (
+                                      "#" +
+                                      [r, g, b]
+                                        .map((x) => {
+                                          const hex = x.toString(16);
+                                          return hex.length === 1 ? "0" + hex : hex;
+                                        })
+                                        .join("")
                                     );
                                   }
-                                }}
-                              />
-                            ))}
-                          </Group>
-                        ) : (
-                          <Rect
-                            ref={(node) => {
-                              if (node) shapeRefs.current[shape.id] = node;
-                              else delete shapeRefs.current[shape.id];
-                            }}
-                            key={shape.id}
-                            id={shape.id}
-                            x={shape.x}
-                            y={shape.y}
-                            width={shape.width}
-                            height={shape.height}
-                            fill={
-                              typeof shape.fill === "string"
-                                ? shape.fill
-                                : (shape.fill && shape.fill.type === "pattern"
-                                  ? (patternImages[shape.id + ":fill"] ? undefined : "#ccc")
-                                  : "transparent")
-                            }
-                            fillPatternImage={
-                              shape.fill && shape.fill.type === "pattern"
-                                ? patternImages[shape.id + ":fill"]
-                                : undefined
-                            }
-                            fillPatternRepeat="repeat"
-                            strokePatternImage={
-                              shape.stroke && shape.stroke.type === "pattern"
-                                ? patternImages[shape.id + ":stroke"]
-                                : undefined
-                            }
-                            fillLinearGradientStartPoint={
-                              shape.gradientTarget === "fill" && shape.fill?.type === "linear-gradient"
-                                ? shape.fill.start
-                                : undefined
-                            }
-                            fillLinearGradientEndPoint={
-                              shape.gradientTarget === "fill" && shape.fill?.type === "linear-gradient"
-                                ? shape.fill.end
-                                : undefined
-                            }
-                            fillLinearGradientColorStops={
-                              shape.gradientTarget === "fill" && shape.fill?.type === "linear-gradient"
-                                ? getLinearGradientColorStops(shape.fill)
-                                : undefined
-                            }
-                            fillRadialGradientStartPoint={shape.fill?.type === "radial-gradient" ? shape.fill.center : undefined}
-                            fillRadialGradientEndPoint={shape.fill?.type === "radial-gradient" && shape.fill.radius !== undefined
-                              ? { x: shape.fill.center.x + shape.fill.radius, y: shape.fill.center.y }
-                              : undefined}
-                            fillRadialGradientColorStops={shape.fill?.type === "radial-gradient"
-                              ? shape.fill.colors.flatMap(stop => [stop.pos, stop.color])
-                              : undefined}
-                            stroke={
-                              shape.stroke?.type === "linear-gradient"
-                                ? undefined
-                                : shape.fill?.type === "mesh-gradient"
-                                  ? calculateMeshGradientStroke(shape.fill.nodes)
-                                  : shape.stroke || "black"
-                            }
-                            strokeLinearGradientStartPoint={
-                              shape.gradientTarget === "stroke" && shape.stroke?.type === "linear-gradient"
-                                ? shape.stroke.start
-                                : undefined
-                            }
-                            strokeLinearGradientEndPoint={
-                              shape.gradientTarget === "stroke" && shape.stroke?.type === "linear-gradient"
-                                ? shape.stroke.end
-                                : undefined
-                            }
-                            strokeLinearGradientColorStops={
-                              shape.gradientTarget === "stroke" && shape.stroke?.type === "linear-gradient"
-                                ? shape.stroke.colors.flatMap(stop => [stop.pos, stop.color])
-                                : undefined
-                            }
-                            strokeRadialGradientStartPoint={shape.stroke?.type === "radial-gradient" ? shape.stroke.center : undefined}
-                            strokeRadialGradientEndPoint={shape.stroke?.type === "radial-gradient" && shape.stroke.radius !== undefined
-                              ? {
-                                x: shape.stroke.center.x + shape.stroke.radius,
-                                y: shape.stroke.center.y
-                              }
-                              : undefined}
-                            strokeRadialGradientColorStops={shape.stroke?.type === "radial-gradient"
-                              ? shape.stroke.colors.flatMap(stop => [stop.pos, stop.color])
-                              : undefined}
-                            strokeWidth={shape.strokeWidth || 1}
-                            cornerRadius={tempCornerRadius !== null ? tempCornerRadius : shape.cornerRadius}
-                            dash={getDashArray(shape.strokeStyle)}
-                            rotation={shape.rotation || 0}
-                            scaleX={shape.scaleX || 1}
-                            scaleY={shape.scaleY || 1}
-                            blur={shape.blur || 0}
-                            shadowBlur={shape.blur || 0}
-                            shadowColor={shape.fill || "#fff"}
-                            draggable={!shape.locked && selectedTool !== "Node" && selectedTool !== "Mesh" && selectedTool !== "Connector"}
-                            onDragMove={handleDragMove}
-                            onDragEnd={(e) => handleDragEnd(e, shape.id)}
-                            onTransformEnd={(e) => handleResizeEnd(e, shape.id)}
-                            onMouseEnter={() => {
-                              if (selectedTool === "Measurement") setHoveredShape(shape);
-                            }}
-                            onMouseLeave={() => {
-                              if (selectedTool === "Measurement") setHoveredShape(null);
-                            }}
-                            skewX={shape.skewX || 0}
-                            skewY={shape.skewY || 0}
-                            onClick={(e) => {
-                              e.cancelBubble = true;
-                              if (shape.locked) return;
-                              handleShapeClick(shape);
-                              if (selectedTool !== "Dropper") {
-                                if (e.evt.ctrlKey && selectedShape) {
-
-                                  dispatch(
-                                    selectNodePoint({
-                                      shapeId: selectedShape.id,
-                                      index,
-                                      x: point.x,
-                                      y: point.y,
-                                    })
+                                  function avgColor(colors) {
+                                    const rgbs = colors.map(hexToRgb);
+                                    const r = Math.round(rgbs.reduce((sum, c) => sum + c.r, 0) / rgbs.length);
+                                    const g = Math.round(rgbs.reduce((sum, c) => sum + c.g, 0) / rgbs.length);
+                                    const b = Math.round(rgbs.reduce((sum, c) => sum + c.b, 0) / rgbs.length);
+                                    return rgbToHex({ r, g, b });
+                                  }
+                                  const fillColor = avgColor([p1.color, p2.color, p3.color, p4.color]);
+                                  return (
+                                    <Line
+                                      key={`${r}-${c}`}
+                                      points={[p1.x, p1.y, p2.x, p2.y, p3.x, p3.y, p4.x, p4.y]}
+                                      closed
+                                      fill={fillColor}
+                                      stroke={isSelected ? "#888" : undefined}
+                                      strokeWidth={isSelected ? 1 : 0}
+                                    />
                                   );
-                                } else if (sprayEraserMode) {
-                                  dispatch(deleteShape(shape.id));
-                                } else if (selectedTool === "Eraser" && eraserMode === "delete") {
-                                  dispatch(deleteShape(shape.id));
-                                } else {
+                                })
+                              )}
+                              {shape.mesh.nodes.flat().map((node, idx) => (
+                                <Circle
+                                  key={`white-${idx}`}
+                                  x={node.x}
+                                  y={node.y}
+                                  radius={Math.min(
+                                    shape.width / (shape.mesh.cols * 2),
+                                    shape.height / (shape.mesh.rows * 2),
+                                    32
+                                  )}
+                                  fill="rgba(255,255,255,0.35)"
+                                  listening={false}
+                                />
+                              ))}
+                              {selectedTool === "Mesh" && isSelected && shape.mesh.nodes.flat().map((node, idx) => (
+                                <Circle
+                                  key={idx}
+                                  x={node.x}
+                                  y={node.y}
+                                  radius={6}
+                                  fill={blendWithWhite(node.color, 0.7)}
+                                  stroke="#000"
+                                  strokeWidth={1}
+                                  draggable
+                                  onDragMove={e => {
+                                    const { x, y } = e.target.position();
 
-                                  if (!selectedShapeIds.includes(shape.id)) {
-                                    dispatch(selectShape(shape.id));
+                                    dispatch({
+                                      type: "tool/updateMeshNode",
+                                      payload: { meshId: shape.id, nodeIdx: idx, x, y }
+                                    });
+
+
+                                    if (
+                                      shape.fill &&
+                                      (shape.fill.type === "linear-gradient" || shape.fill.type === "radial-gradient")
+                                    ) {
+                                      let newFill = { ...shape.fill };
+                                      if (shape.fill.type === "linear-gradient") {
+                                        if (idx === 0) {
+                                          newFill.start = { x, y };
+                                        } else if (idx === shape.mesh.nodes.flat().length - 1) {
+                                          newFill.end = { x, y };
+                                        }
+                                      } else if (shape.fill.type === "radial-gradient") {
+                                        if (idx === 0) {
+                                          newFill.center = { x, y };
+                                        } else if (idx === shape.mesh.nodes.flat().length - 1) {
+                                          const dx = x - newFill.center.x;
+                                          const dy = y - newFill.center.y;
+                                          newFill.radius = Math.sqrt(dx * dx + dy * dy);
+                                        }
+                                      }
+                                      dispatch(
+                                        updateShapePosition({
+                                          id: shape.id,
+                                          fill: newFill
+                                        })
+                                      );
+                                    }
+                                  }}
+                                />
+                              ))}
+                            </Group>
+                          ) : (
+                            <Rect
+                              ref={(node) => {
+                                if (node) shapeRefs.current[shape.id] = node;
+                                else delete shapeRefs.current[shape.id];
+                              }}
+                              key={shape.id}
+                              id={shape.id}
+                              x={shape.x}
+                              y={shape.y}
+                              width={shape.width}
+                              height={shape.height}
+                              fill={
+                                typeof shape.fill === "string"
+                                  ? shape.fill
+                                  : (shape.fill && shape.fill.type === "pattern"
+                                    ? (patternImages[shape.id + ":fill"] ? undefined : "#ccc")
+                                    : "transparent")
+                              }
+                              fillPatternImage={
+                                shape.fill && shape.fill.type === "pattern"
+                                  ? patternImages[shape.id + ":fill"]
+                                  : undefined
+                              }
+                              fillPatternRepeat="repeat"
+                              strokePatternImage={
+                                shape.stroke && shape.stroke.type === "pattern"
+                                  ? patternImages[shape.id + ":stroke"]
+                                  : undefined
+                              }
+                              fillLinearGradientStartPoint={
+                                shape.gradientTarget === "fill" && shape.fill?.type === "linear-gradient"
+                                  ? shape.fill.start
+                                  : undefined
+                              }
+                              fillLinearGradientEndPoint={
+                                shape.gradientTarget === "fill" && shape.fill?.type === "linear-gradient"
+                                  ? shape.fill.end
+                                  : undefined
+                              }
+                              fillLinearGradientColorStops={
+                                shape.gradientTarget === "fill" && shape.fill?.type === "linear-gradient"
+                                  ? getLinearGradientColorStops(shape.fill)
+                                  : undefined
+                              }
+                              fillRadialGradientStartPoint={shape.fill?.type === "radial-gradient" ? shape.fill.center : undefined}
+                              fillRadialGradientEndPoint={shape.fill?.type === "radial-gradient" && shape.fill.radius !== undefined
+                                ? { x: shape.fill.center.x + shape.fill.radius, y: shape.fill.center.y }
+                                : undefined}
+                              fillRadialGradientColorStops={shape.fill?.type === "radial-gradient"
+                                ? shape.fill.colors.flatMap(stop => [stop.pos, stop.color])
+                                : undefined}
+                              stroke={
+                                shape.stroke?.type === "linear-gradient"
+                                  ? undefined
+                                  : shape.fill?.type === "mesh-gradient"
+                                    ? calculateMeshGradientStroke(shape.fill.nodes)
+                                    : shape.stroke || "black"
+                              }
+                              strokeLinearGradientStartPoint={
+                                shape.gradientTarget === "stroke" && shape.stroke?.type === "linear-gradient"
+                                  ? shape.stroke.start
+                                  : undefined
+                              }
+                              strokeLinearGradientEndPoint={
+                                shape.gradientTarget === "stroke" && shape.stroke?.type === "linear-gradient"
+                                  ? shape.stroke.end
+                                  : undefined
+                              }
+                              strokeLinearGradientColorStops={
+                                shape.gradientTarget === "stroke" && shape.stroke?.type === "linear-gradient"
+                                  ? shape.stroke.colors.flatMap(stop => [stop.pos, stop.color])
+                                  : undefined
+                              }
+                              strokeRadialGradientStartPoint={shape.stroke?.type === "radial-gradient" ? shape.stroke.center : undefined}
+                              strokeRadialGradientEndPoint={shape.stroke?.type === "radial-gradient" && shape.stroke.radius !== undefined
+                                ? {
+                                  x: shape.stroke.center.x + shape.stroke.radius,
+                                  y: shape.stroke.center.y
+                                }
+                                : undefined}
+                              strokeRadialGradientColorStops={shape.stroke?.type === "radial-gradient"
+                                ? shape.stroke.colors.flatMap(stop => [stop.pos, stop.color])
+                                : undefined}
+                              strokeWidth={shape.strokeWidth || 1}
+                              cornerRadius={tempCornerRadius !== null ? tempCornerRadius : shape.cornerRadius}
+                              dash={getDashArray(shape.strokeStyle)}
+                              rotation={shape.rotation || 0}
+                              scaleX={shape.scaleX || 1}
+                              scaleY={shape.scaleY || 1}
+                              blur={shape.blur || 0}
+                              shadowBlur={shape.blur || 0}
+                              shadowColor={shape.fill || "#fff"}
+                              draggable={!shape.locked && selectedTool !== "Node" && selectedTool !== "Mesh" && selectedTool !== "Connector"}
+                              onDragMove={handleDragMove}
+                              onDragEnd={(e) => handleDragEnd(e, shape.id)}
+                              onTransformEnd={(e) => handleResizeEnd(e, shape.id)}
+                              onMouseEnter={() => {
+                                if (selectedTool === "Measurement") setHoveredShape(shape);
+                              }}
+                              onMouseLeave={() => {
+                                if (selectedTool === "Measurement") setHoveredShape(null);
+                              }}
+                              skewX={shape.skewX || 0}
+                              skewY={shape.skewY || 0}
+                              onClick={(e) => {
+                                e.cancelBubble = true;
+                                if (shape.locked) return;
+                                handleShapeClick(shape);
+                                if (selectedTool !== "Dropper") {
+                                  if (e.evt.ctrlKey && selectedShape) {
+
+                                    dispatch(
+                                      selectNodePoint({
+                                        shapeId: selectedShape.id,
+                                        index,
+                                        x: point.x,
+                                        y: point.y,
+                                      })
+                                    );
+                                  } else if (sprayEraserMode) {
+                                    dispatch(deleteShape(shape.id));
+                                  } else if (selectedTool === "Eraser" && eraserMode === "delete") {
+                                    dispatch(deleteShape(shape.id));
+                                  } else {
+
+                                    if (!selectedShapeIds.includes(shape.id)) {
+                                      dispatch(selectShape(shape.id));
+                                    }
                                   }
                                 }
-                              }
-                            }}
-                          />
-                        )}
-                        {isSelected && !shape.locked && shapeRefs.current[shape.id] && selectedTool !== "Node" && (
-                          <Transformer
-                            ref={transformerRef}
-                            nodes={selectedShapeIds.map(id => shapeRefs.current[id]).filter(Boolean)}
-                            boundBoxFunc={(oldBox, newBox) => {
-                              if (newBox.width < 5 || newBox.height < 5) {
-                                return oldBox;
-                              }
-                              return newBox;
-                            }}
-                            enabledAnchors={[
-                              "top-left",
-                              "top-center",
-                              "top-right",
-                              "middle-left",
-                              "middle-right",
-                              "bottom-left",
-                              "bottom-center",
-                              "bottom-right",
-                            ]}
-                            skewEnabled={true}
-                          />
-                        )}
-                        {/* {isSelected && selectedTool === "Rectangle" && (
+                              }}
+                            />
+                          )}
+                          {isSelected && !shape.locked && shapeRefs.current[shape.id] && selectedTool !== "Node" && (
+                            <Transformer
+                              ref={transformerRef}
+                              nodes={selectedShapeIds.map(id => shapeRefs.current[id]).filter(Boolean)}
+                              boundBoxFunc={(oldBox, newBox) => {
+                                if (newBox.width < 5 || newBox.height < 5) {
+                                  return oldBox;
+                                }
+                                return newBox;
+                              }}
+                              enabledAnchors={[
+                                "top-left",
+                                "top-center",
+                                "top-right",
+                                "middle-left",
+                                "middle-right",
+                                "bottom-left",
+                                "bottom-center",
+                                "bottom-right",
+                              ]}
+                              skewEnabled={true}
+                            />
+                          )}
+                          {/* {isSelected && selectedTool === "Rectangle" && (
                           <>
                             <Circle
                               x={shape.x + shape.width / 2}
@@ -7019,1271 +7391,116 @@ const Panel = React.forwardRef(({
                             />
                           </>
                         )} */}
-                      </React.Fragment>
-                    );
-                  } else if (shape.type === "Bezier") {
-                    const isSelected = selectedShapeIds.includes(shape.id);
-                    return (
-                      <React.Fragment key={shape.id}>
-                        <Path
-                          ref={(node) => {
-                            if (node) shapeRefs.current[shape.id] = node;
-                            else delete shapeRefs.current[shape.id];
-                          }}
-                          id={shape.id}
-                          data={getBezierPathFromPoints(shape.points, shape.closed)}
-                          stroke={isSelected ? "blue" : shape.stroke || shape.strokeColor || "black"}
-                          strokeWidth={shape.strokeWidth || 2}
-                          fill={shape.fill || (shape.closed ? shape.fillColor : "transparent")}
-                          closed={shape.closed}
-                          rotation={shape.rotation || 0}
-                          draggable={!shape.locked && selectedTool !== "Node" && selectedTool !== "Mesh" && selectedTool !== "Connector"}
-                          onDragMove={handleDragMove}
-                          dash={getDashArray(shape.strokeStyle)}
-                          onClick={(e) => {
-                            e.cancelBubble = true;
-                            if (shape.locked) return;
-                            if (!selectedShapeIds.includes(shape.id)) {
-                              dispatch(selectShape(shape.id));
-                            }
-                          }}
-                          onMouseDown={(e) => {
-                            e.cancelBubble = true;
-                          }}
-                          onTransformStart={(e) => {
-                            e.cancelBubble = true;
-                          }}
-                          onTransformEnd={(e) => handleBezierTransformEnd(e, shape)}
-                          onDragEnd={(e) => {
-                            const { x, y } = e.target.position();
-                            dispatch(updateShapePosition({ id: shape.id, x, y }));
-                          }}
-                        />
-                        {isSelected && !shape.locked && shapeRefs.current[shape.id] && selectedTool !== "Node" && (
-                          <Transformer
-                            ref={transformerRef}
-                            nodes={selectedShapeIds.map(id => shapeRefs.current[id]).filter(Boolean)}
-                            boundBoxFunc={(oldBox, newBox) => {
-                              if (newBox.width < 5 || newBox.height < 5) {
-                                return oldBox;
-                              }
-                              return newBox;
-                            }}
-                            enabledAnchors={[
-                              "top-left",
-                              "top-center",
-                              "top-right",
-                              "middle-left",
-                              "middle-right",
-                              "bottom-left",
-                              "bottom-center",
-                              "bottom-right",
-                            ]}
-                            skewEnabled={true}
-                          />
-                        )}
-                      </React.Fragment>
-                    );
-                  } else if (shape.type === "Spiro Path") {
-                    const isSelected = selectedShapeIds.includes(shape.id);
-                    return (
-                      <React.Fragment key={shape.id}>
-                        <Path
-                          ref={(node) => {
-                            if (node) shapeRefs.current[shape.id] = node;
-                            else delete shapeRefs.current[shape.id];
-                          }}
-                          id={shape.id}
-                          data={shape.path}
-                          stroke={shape.stroke || "black"}
-                          strokeWidth={shape.strokeWidth || 2}
-                          fill={shape.fill || (shape.closed ? shape.fill : "black")}
-                          closed={shape.closed || false}
-                          rotation={shape.rotation || 0}
-                          draggable={!shape.locked && selectedTool !== "Node"}
-                          onDragMove={handleDragMove}
-                          dash={getDashArray(shape.strokeStyle)}
-                          onClick={(e) => {
-                            e.cancelBubble = true;
-                            if (shape.locked) return;
-                            if (e.evt.ctrlKey && selectedShape) {
-
-                              dispatch(
-                                selectNodePoint({
-                                  shapeId: selectedShape.id,
-                                  index,
-                                  x: point.x,
-                                  y: point.y,
-                                })
-                              );
-                            } else {
-
-                              if (!selectedShapeIds.includes(shape.id)) {
-                                dispatch(selectShape(shape.id));
-                              }
-                            }
-                          }}
-                          onMouseDown={(e) => {
-                            e.cancelBubble = true;
-                          }}
-                          onDragEnd={(e) => {
-                            const { x, y } = e.target.position();
-                            dispatch(updateShapePosition({ id: shape.id, x, y }));
-                          }}
-                        />
-                        {isSelected && !shape.locked && shapeRefs.current[shape.id] && selectedTool !== "Node" && (
-                          <Transformer
-                            ref={transformerRef}
-                            nodes={selectedShapeIds.map(id => shapeRefs.current[id]).filter(Boolean)}
-                            boundBoxFunc={(oldBox, newBox) => {
-                              if (newBox.width < 5 || newBox.height < 5) {
-                                return oldBox;
-                              }
-                              return newBox;
-                            }}
-                            enabledAnchors={[
-                              "top-left",
-                              "top-center",
-                              "top-right",
-                              "middle-left",
-                              "middle-right",
-                              "bottom-left",
-                              "bottom-center",
-                              "bottom-right",
-                            ]}
-                            skewEnabled={true}
-                          />
-                        )}
-                      </React.Fragment>
-                    );
-                  }
-                  else if (shape.type === "Image") {
-                    const isSelected = selectedShapeIds.includes(shape.id);
-                    return (
-                      <React.Fragment key={shape.id}>
-                        <Group
-                          x={shape.x}
-                          y={shape.y}
-                          clipFunc={
-                            shape.inverseClipPath
-                              ? ctx => {
-                                ctx.beginPath();
-                                shape.inverseClipPath[0].forEach((pt, i) => {
-                                  if (i === 0) ctx.moveTo(pt.x, pt.y);
-                                  else ctx.lineTo(pt.x, pt.y);
-                                });
-                                ctx.closePath();
-                                ctx.moveTo(shape.inverseClipPath[1][0].x, shape.inverseClipPath[1][0].y);
-                                for (let i = 1; i < shape.inverseClipPath[1].length; i++) {
-                                  ctx.lineTo(shape.inverseClipPath[1][i].x, shape.inverseClipPath[1][i].y);
-                                }
-                                ctx.closePath();
-                                ctx.clip('evenodd');
-                              }
-                              : shape.clipPath
-                                ? ctx => {
-                                  ctx.beginPath();
-                                  shape.clipPath.forEach((pt, i) => {
-                                    if (i === 0) ctx.moveTo(pt.x, pt.y);
-                                    else ctx.lineTo(pt.x, pt.y);
-                                  });
-                                  ctx.closePath();
-                                }
-                                : shape.maskPath
-                                  ? ctx => {
-                                    ctx.beginPath();
-                                    shape.maskPath.forEach((pt, i) => {
-                                      if (i === 0) ctx.moveTo(pt.x, pt.y);
-                                      else ctx.lineTo(pt.x, pt.y);
-                                    });
-                                    ctx.closePath();
-                                  }
-                                  : shape.inverseMaskPath
-                                    ? ctx => {
-                                      ctx.beginPath();
-                                      shape.inverseMaskPath[0].forEach((pt, i) => {
-                                        if (i === 0) ctx.moveTo(pt.x, pt.y);
-                                        else ctx.lineTo(pt.x, pt.y);
-                                      });
-                                      ctx.closePath();
-                                      ctx.moveTo(shape.inverseMaskPath[1][0].x, shape.inverseMaskPath[1][0].y);
-                                      shape.inverseMaskPath[1].forEach((pt, i) => {
-                                        if (i === 0) ctx.moveTo(pt.x, pt.y);
-                                        else ctx.lineTo(pt.x, pt.y);
-                                      });
-                                      ctx.closePath();
-                                      ctx.clip("evenodd");
-                                    }
-                                    : undefined
-                          }
-                        >
-                          <CanvasImage
-                            ref={node => {
-                              if (node) shapeRefs.current[shape.id] = node;
-                              else delete shapeRefs.current[shape.id];
-                            }}
-                            id={shape.id}
-                            shape={{ ...shape, x: 0, y: 0 }}
-                            x={0}
-                            y={0}
-                            draggable={!shape.locked && selectedTool === "Select"}
-                            dash={getDashArray(shape.strokeStyle)}
-                            onClick={e => {
-                              e.cancelBubble = true;
-                              if (!selectedShapeIds.includes(shape.id)) {
-                                dispatch(selectShape(shape.id));
-                              }
-                            }}
-                            onDragEnd={e => {
-                              const { x, y } = e.target.position();
-                              dispatch(updateShapePosition({ id: shape.id, x, y }));
-                            }}
-                          />
-                        </Group>
-                        {isSelected && !shape.locked && shapeRefs.current[shape.id] && selectedTool !== "Node" && (
-                          <Transformer
-                            ref={transformerRef}
-                            nodes={selectedShapeIds.map(id => shapeRefs.current[id]).filter(Boolean)}
-                            boundBoxFunc={(oldBox, newBox) => {
-                              if (newBox.width < 5 || newBox.height < 5) {
-                                return oldBox;
-                              }
-                              return newBox;
-                            }}
-                            enabledAnchors={[
-                              "top-left",
-                              "top-center",
-                              "top-right",
-                              "middle-left",
-                              "middle-right",
-                              "bottom-left",
-                              "bottom-center",
-                              "bottom-right",
-                            ]}
-                            skewEnabled={true}
-                          />
-                        )}
-                      </React.Fragment>
-                    );
-                  } else if (shape.type === "Circle") {
-                    const isSelected = selectedShapeIds.includes(shape.id);
-                    const arcType = shape.arcType || "slice";
-                    if (arcType === "arc") {
-                      return (
-                        <Arc
-                          ref={(node) => {
-                            if (node) shapeRefs.current[shape.id] = node;
-                            else delete shapeRefs.current[shape.id];
-                          }}
-                          id={shape.id}
-                          x={shape.x}
-                          y={shape.y}
-                          innerRadius={shape.radius * 0.7}
-                          outerRadius={shape.radius}
-                          angle={shape.arcAngle || 360}
-                          fill={shape.fill || "transparent"}
-                          stroke={shape.stroke || "black"}
-                          strokeWidth={shape.strokeWidth || 1}
-                          rotation={shape.rotation || 0}
-                          closed={false}
-                          dash={[10, 10]}
-                          draggable={!shape.locked && selectedTool !== "Node" && selectedTool !== "Connector"}
-                          onDragMove={handleDragMove}
-                          onDragEnd={(e) => {
-                            const { x, y } = e.target.position();
-                            dispatch(updateShapePosition({ id: shape.id, x, y }));
-                          }}
-                        />
+                        </React.Fragment>
                       );
-                    }
-
-                    if (arcType === "chord") {
-                      return (
-                        <Arc
-                          ref={(node) => {
-                            if (node) shapeRefs.current[shape.id] = node;
-                            else delete shapeRefs.current[shape.id];
-                          }}
-                          id={shape.id}
-                          x={shape.x}
-                          y={shape.y}
-                          innerRadius={0}
-                          outerRadius={shape.radius}
-                          angle={shape.arcAngle || 360}
-                          fill="transparent"
-                          stroke={shape.stroke || "black"}
-                          strokeWidth={shape.strokeWidth || 1}
-                          rotation={shape.rotation || 0}
-                          closed={true}
-                          draggable={!shape.locked && selectedTool !== "Node" && selectedTool !== "Connector"}
-                          onDragMove={handleDragMove}
-                          onDragEnd={(e) => {
-                            const { x, y } = e.target.position();
-                            dispatch(updateShapePosition({ id: shape.id, x, y }));
-                          }}
-                        />
-                      );
-                    }
-
-                    if (arcType === "ellipse") {
-                      return (
-                        <Ellipse
-                          ref={node => {
-                            if (node) shapeRefs.current[shape.id] = node;
-                            else delete shapeRefs.current[shape.id];
-                          }}
-                          id={shape.id}
-                          x={shape.x}
-                          y={shape.y}
-                          radiusX={shape.radiusX || shape.radius}
-                          radiusY={shape.radiusY || shape.radius}
-                          fill={shape.fill || "transparent"}
-                          stroke={shape.stroke || "black"}
-                          strokeWidth={shape.strokeWidth || 1}
-                          rotation={shape.rotation || 0}
-                          draggable={!shape.locked && selectedTool !== "Node" && selectedTool !== "Connector"}
-                          onDragMove={handleDragMove}
-                          onDragEnd={e => {
-                            const { x, y } = e.target.position();
-                            dispatch(updateShapePosition({ id: shape.id, x, y }));
-                          }}
-                        />
-                      );
-                    }
-                    return (
-                      <React.Fragment key={shape.id}>
-                        <Circle
-                          ref={(node) => {
-                            if (node) shapeRefs.current[shape.id] = node;
-                            else delete shapeRefs.current[shape.id];
-                          }}
-                          id={shape.id}
-                          x={shape.x}
-                          y={shape.y}
-                          radius={shape.radius}
-                          innerRadius={0}
-                          outerRadius={shape.radius || 0}
-                          angle={shape.arcAngle || 360}
-                          fill={
-                            shape.fill?.type === "linear-gradient" || shape.fill?.type === "radial-gradient"
-                              ? undefined
-                              : shape.fill || "transparent"
-                          }
-                          fillLinearGradientStartPoint={shape.fill?.type === "linear-gradient" ? shape.fill.start : undefined}
-                          fillLinearGradientEndPoint={shape.fill?.type === "linear-gradient" ? shape.fill.end : undefined}
-                          fillLinearGradientColorStops={shape.fill?.type === "linear-gradient" ? shape.fill.colors.flatMap(stop => [stop.pos, stop.color]) : undefined}
-                          fillRadialGradientStartPoint={shape.fill?.type === "radial-gradient" ? shape.fill.center : undefined}
-                          fillRadialGradientEndPoint={shape.fill?.type === "radial-gradient" ? { x: shape.fill.center.x, y: shape.fill.center.y + shape.fill.radius } : undefined}
-                          fillRadialGradientColorStops={shape.fill?.type === "radial-gradient" ? shape.fill.colors.flatMap(stop => [stop.pos, stop.color]) : undefined}
-                          stroke={
-                            shape.stroke?.type === "linear-gradient" || shape.stroke?.type === "radial-gradient"
-                              ? undefined
-                              : shape.stroke || "black"
-                          }
-                          strokeLinearGradientStartPoint={shape.stroke?.type === "linear-gradient" ? shape.stroke.start : undefined}
-                          strokeLinearGradientEndPoint={shape.stroke?.type === "linear-gradient" ? shape.stroke.end : undefined}
-                          strokeLinearGradientColorStops={shape.stroke?.type === "linear-gradient" ? shape.stroke.colors.flatMap(stop => [stop.pos, stop.color]) : undefined}
-                          strokeRadialGradientStartPoint={shape.stroke?.type === "radial-gradient" ? shape.stroke.center : undefined}
-                          strokeRadialGradientEndPoint={shape.stroke?.type === "radial-gradient" ? { x: shape.stroke.center.x, y: shape.stroke.center.y + shape.stroke.radius } : undefined}
-                          strokeRadialGradientColorStops={shape.stroke?.type === "radial-gradient" ? shape.stroke.colors.flatMap(stop => [stop.pos, stop.color]) : undefined}
-                          strokeWidth={shape.strokeWidth || 1}
-
-                          rotation={shape.rotation || 0}
-                          scaleX={shape.horizontalRadius / shape.radius || 1}
-                          scaleY={shape.verticalRadius / shape.radius || 1}
-                          draggable={!shape.locked && selectedTool !== "Node" && selectedTool !== "Connector" && selectedTool !== "Gradient"}
-                          onDragMove={handleDragMove}
-                          skewX={shape.skewX || 0}
-                          blur={shape.blur || 0}
-                          shadowBlur={shape.blur || 0}
-                          shadowColor={shape.fill || "#fff"}
-                          closed={false}
-                          skewY={shape.skewY || 0}
-                          onMouseEnter={() => {
-                            if (selectedTool === "Measurement") setHoveredShape(shape);
-                          }}
-                          onMouseLeave={() => {
-                            if (selectedTool === "Measurement") setHoveredShape(null);
-                          }}
-                          onClick={(e) => {
-                            e.cancelBubble = true;
-                            if (shape.locked) return;
-                            handleShapeClick(shape);
-                            if (selectedTool !== "Dropper") {
-                              if (e.evt.ctrlKey && selectedShape) {
-
-                                dispatch(
-                                  selectNodePoint({
-                                    shapeId: selectedShape.id,
-                                    index,
-                                    x: point.x,
-                                    y: point.y,
-                                  })
-                                );
-                              } else if (sprayEraserMode) {
-                                dispatch(deleteShape(shape.id));
-                              } else if (selectedTool === "Eraser" && eraserMode === "delete") {
-                                dispatch(deleteShape(shape.id));
-                              } else {
-
-                                if (!selectedShapeIds.includes(shape.id)) {
-                                  dispatch(selectShape(shape.id));
-                                }
-                              }
-                            }
-                          }}
-                          onTransformEnd={(e) => handleResizeEnd(e, shape.id)}
-                          onDragEnd={(e) => {
-                            const { x, y } = e.target.position();
-                            dispatch(updateShapePosition({ id: shape.id, x, y }));
-                          }}
-                        />
-                        {isSelected && !shape.locked && shapeRefs.current[shape.id] && selectedTool !== "Node" && (
-                          <Transformer
-                            ref={transformerRef}
-                            nodes={selectedShapeIds.map(id => shapeRefs.current[id]).filter(Boolean)}
-                            boundBoxFunc={(oldBox, newBox) => {
-                              if (newBox.width < 5 || newBox.height < 5) {
-                                return oldBox;
-                              }
-                              return newBox;
-                            }}
-                            enabledAnchors={[
-                              "top-left",
-                              "top-center",
-                              "top-right",
-                              "middle-left",
-                              "middle-right",
-                              "bottom-left",
-                              "bottom-center",
-                              "bottom-right",
-                            ]}
-                            skewEnabled={true}
-                          />
-                        )}
-                        {selectedTool === "Node" && shape.points.map((point, index) => (
-                          <Circle
-                            key={index}
-                            x={point.x}
-                            y={point.y}
-                            radius={5}
-                            fill="blue"
-                            draggable
-                            onDragMove={(e) => {
-                              const newPosition = { x: e.target.x(), y: e.target.y() };
-                              dispatch(updateNodePosition({ shapeId: shape.id, nodeIndex: index, newPosition }));
-                            }}
-                          />
-                        ))}
-                      </React.Fragment>
-                    );
-                  } else if (shape.type === "Star") {
-                    const isSelected = selectedShapeIds.includes(shape.id);
-
-                    return (
-                      <React.Fragment key={shape.id}>
-                        <Star
-                          ref={(node) => {
-                            if (node) shapeRefs.current[shape.id] = node;
-                            else delete shapeRefs.current[shape.id];
-                          }}
-                          id={shape.id}
-                          x={shape.x}
-                          y={shape.y}
-                          numPoints={shape.corners}
-                          innerRadius={
-                            shape.outerRadius *
-                            (shape.spokeRatio || 0.5) *
-                            (1 - (shape.rounded || 0) * 0.5) *
-                            (shape.randomOffsets?.[1] || 1)
-                          }
-                          outerRadius={
-                            shape.outerRadius *
-                            (1 - (shape.rounded || 0) * 0.2) *
-                            (shape.randomOffsets?.[0] || 1)
-                          }
-                          rotation={shape.rotation || 0}
-                          scaleX={shape.scaleX || 1}
-                          scaleY={shape.scaleY || 1}
-                          fill={
-                            shape.fill?.type === "linear-gradient" || shape.fill?.type === "radial-gradient"
-                              ? undefined
-                              : shape.fill || "transparent"
-                          }
-                          fillLinearGradientStartPoint={shape.fill?.type === "linear-gradient" ? shape.fill.start : undefined}
-                          fillLinearGradientEndPoint={shape.fill?.type === "linear-gradient" ? shape.fill.end : undefined}
-                          fillLinearGradientColorStops={shape.fill?.type === "linear-gradient" ? shape.fill.colors.flatMap(stop => [stop.pos, stop.color]) : undefined}
-                          fillRadialGradientStartPoint={shape.fill?.type === "radial-gradient" ? shape.fill.center : undefined}
-                          fillRadialGradientEndPoint={shape.fill?.type === "radial-gradient" ? { x: shape.fill.center.x, y: shape.fill.center.y + shape.fill.radius } : undefined}
-                          fillRadialGradientColorStops={shape.fill?.type === "radial-gradient" ? shape.fill.colors.flatMap(stop => [stop.pos, stop.color]) : undefined}
-                          stroke={
-                            shape.stroke?.type === "linear-gradient" || shape.stroke?.type === "radial-gradient"
-                              ? undefined
-                              : shape.stroke || "black"
-                          }
-                          strokeLinearGradientStartPoint={shape.stroke?.type === "linear-gradient" ? shape.stroke.start : undefined}
-                          strokeLinearGradientEndPoint={shape.stroke?.type === "linear-gradient" ? shape.stroke.end : undefined}
-                          strokeLinearGradientColorStops={shape.stroke?.type === "linear-gradient" ? shape.stroke.colors.flatMap(stop => [stop.pos, stop.color]) : undefined}
-                          strokeRadialGradientStartPoint={shape.stroke?.type === "radial-gradient" ? shape.stroke.center : undefined}
-                          strokeRadialGradientEndPoint={shape.stroke?.type === "radial-gradient" ? { x: shape.stroke.center.x, y: shape.stroke.center.y + shape.stroke.radius } : undefined}
-                          strokeRadialGradientColorStops={shape.stroke?.type === "radial-gradient" ? shape.stroke.colors.flatMap(stop => [stop.pos, stop.color]) : undefined}
-                          strokeWidth={shape.strokeWidth || 1}
-                          draggable={!shape.locked && selectedTool !== "Node" && selectedTool !== "Connector" && selectedTool !== "Gradient"}
-                          onDragMove={handleDragMove}
-                          skewX={shape.skewX || 0}
-                          skewY={shape.skewY || 0}
-                          blur={shape.blur || 0}
-                          shadowBlur={shape.blur || 0}
-                          shadowColor={shape.fill || "#fff"}
-                          onTransformEnd={(e) => handleBezierTransformEnd(e, shape)}
-                          onMouseEnter={() => {
-                            if (selectedTool === "Measurement") setHoveredShape(shape);
-                          }}
-                          onMouseLeave={() => {
-                            if (selectedTool === "Measurement") setHoveredShape(null);
-                          }}
-                          onClick={(e) => {
-                            e.cancelBubble = true;
-                            if (shape.locked) return;
-                            handleShapeClick(shape);
-                            if (selectedTool !== "Dropper") {
-                              if (e.evt.ctrlKey && selectedShape) {
-
-                                dispatch(
-                                  selectNodePoint({
-                                    shapeId: selectedShape.id,
-                                    index,
-                                    x: point.x,
-                                    y: point.y,
-                                  })
-                                );
-                              } else if (sprayEraserMode) {
-                                dispatch(deleteShape(shape.id));
-                              } else if (selectedTool === "Eraser" && eraserMode === "delete") {
-                                dispatch(deleteShape(shape.id));
-                              } else {
-
-                                if (!selectedShapeIds.includes(shape.id)) {
-                                  dispatch(selectShape(shape.id));
-                                }
-                              }
-                            }
-                          }}
-                          onDragEnd={(e) => {
-                            const { x, y } = e.target.position();
-                            dispatch(updateShapePosition({ id: shape.id, x, y }));
-                          }}
-                        />
-                        {isSelected && !shape.locked && shapeRefs.current[shape.id] && selectedTool !== "Node" && (
-                          <Transformer
-                            ref={transformerRef}
-                            nodes={selectedShapeIds.map(id => shapeRefs.current[id]).filter(Boolean)}
-                            boundBoxFunc={(oldBox, newBox) => {
-                              if (newBox.width < 5 || newBox.height < 5) {
-                                return oldBox;
-                              }
-                              return newBox;
-                            }}
-                            enabledAnchors={[
-                              "top-left",
-                              "top-center",
-                              "top-right",
-                              "middle-left",
-                              "middle-right",
-                              "bottom-left",
-                              "bottom-center",
-                              "bottom-right",
-                            ]}
-                            skewEnabled={true}
-                          />
-                        )}
-                      </React.Fragment>
-                    );
-                  } else if (shape.type === "CompoundPath") {
-                    return (
-                      <Group
-                        key={shape.id}
-                        id={shape.id}
-                        ref={node => {
-                          if (node) shapeRefs.current[shape.id] = node;
-                          else delete shapeRefs.current[shape.id];
-                        }}
-                        draggable
-                        onClick={e => {
-                          e.cancelBubble = true;
-                          if (!selectedShapeIds.includes(shape.id)) {
-                            dispatch(selectShape(shape.id));
-                          }
-                        }}
-                        onDragEnd={e => {
-                          const { x, y } = e.target.position();
-                          dispatch(updateShapePosition({ id: shape.id, x, y }));
-                        }}
-                      >
-                        {shape.rings.map((ring, i) => (
-                          <Line
-                            key={i}
-                            points={ring.flatMap(pt => [pt.x, pt.y])}
-                            closed
-                            fill={shape.fill || "transparent"}
-                            stroke={shape.stroke || "black"}
-                            strokeWidth={shape.strokeWidth || 1}
-                          />
-                        ))}
-                      </Group>
-                    );
-                  } else if (shape.type === "Polygon") {
-                    let points = shape.points.map(p => ({ x: p.x, y: p.y }));
-                    if (shape.lpeEffect === "Bend") {
-                      points = applyBendEffect(points, 40, 1);
-                    }
-                    if (!shape.points || shape.points.length === 0) return null;
-                    const isSelected = selectedShapeIds.includes(shape.id);
-                    return (
-                      <React.Fragment key={shape.id}>
-                        {shape.bloom && (
-                          <Path
-                            x={shape.x}
-                            y={shape.y}
-                            data={generatePolygonPath(shape.points)}
-                            fill={shape.fill || "transparent"}
-                            stroke={shape.stroke || "#ffff99"}
-                            strokeWidth={(shape.strokeWidth || 2) + (shape.bloom.radius || 16)}
-                            opacity={0.5 * (shape.bloom.brightness || 1.5)}
-                            listening={false}
-                            filters={[window.Konva.Filters.Blur]}
-                            blurRadius={shape.bloom.radius || 16}
-                          />
-                        )}
-                        <Group
-                          key={shape.id}
-                          clipFunc={shape.clipPath ? ctx => {
-                            ctx.beginPath();
-                            shape.clipPath.forEach((pt, i) => {
-                              if (i === 0) ctx.moveTo(pt.x, pt.y);
-                              else ctx.lineTo(pt.x, pt.y);
-                            });
-                            ctx.closePath();
-                          } : undefined}
-                        ></Group>
-                        <Path
-                          ref={(node) => {
-                            if (node) shapeRefs.current[shape.id] = node;
-                            else delete shapeRefs.current[shape.id];
-                          }}
-                          key={shape.id}
-                          id={shape.id}
-                          x={shape.x}
-                          y={shape.y}
-                          points={points.flatMap(p => [p.x, p.y])}
-                          data={generatePolygonPath(shape.points)}
-                          stroke={
-                            shape.stroke?.type === "linear-gradient" || shape.stroke?.type === "radial-gradient"
-                              ? undefined
-                              : shape.stroke || "black"
-                          }
-                          strokeWidth={shape.strokeWidth || 1}
-                          strokeLinearGradientStartPoint={shape.stroke?.type === "linear-gradient" ? shape.stroke.start : undefined}
-                          strokeLinearGradientEndPoint={shape.stroke?.type === "linear-gradient" ? shape.stroke.end : undefined}
-                          strokeLinearGradientColorStops={shape.stroke?.type === "linear-gradient" ? shape.stroke.colors.flatMap(stop => [stop.pos, stop.color]) : undefined}
-                          strokeRadialGradientStartPoint={shape.stroke?.type === "radial-gradient" ? shape.stroke.center : undefined}
-                          strokeRadialGradientEndPoint={shape.stroke?.type === "radial-gradient" ? { x: shape.stroke.center.x, y: shape.stroke.center.y + shape.stroke.radius } : undefined}
-                          strokeRadialGradientColorStops={shape.stroke?.type === "radial-gradient" ? shape.stroke.colors.flatMap(stop => [stop.pos, stop.color]) : undefined}
-                          fill={
-                            shape.fill?.type === "linear-gradient" || shape.fill?.type === "radial-gradient"
-                              ? undefined
-                              : shape.fill || "transparent"
-                          }
-                          fillLinearGradientStartPoint={shape.fill?.type === "linear-gradient" ? shape.fill.start : undefined}
-                          fillLinearGradientEndPoint={shape.fill?.type === "linear-gradient" ? shape.fill.end : undefined}
-                          fillLinearGradientColorStops={shape.fill?.type === "linear-gradient" ? shape.fill.colors.flatMap(stop => [stop.pos, stop.color]) : undefined}
-                          fillRadialGradientStartPoint={shape.fill?.type === "radial-gradient" ? shape.fill.center : undefined}
-                          fillRadialGradientEndPoint={shape.fill?.type === "radial-gradient" ? { x: shape.fill.center.x, y: shape.fill.center.y + shape.fill.radius } : undefined}
-                          fillRadialGradientColorStops={shape.fill?.type === "radial-gradient" ? shape.fill.colors.flatMap(stop => [stop.pos, stop.color]) : undefined}
-                          rotation={shape.rotation || 0}
-                          scaleX={shape.scaleX || 1}
-                          scaleY={shape.scaleY || 1}
-                          blur={shape.blur || 0}
-                          shadowBlur={shape.blur || 0}
-                          shadowColor={shape.fill || "#fff"}
-                          closed
-                          draggable={!shape.locked && selectedTool !== "Node" && selectedTool !== "Connector" && selectedTool !== "Gradient"}
-                          onDragMove={handleDragMove}
-                          skewX={shape.skewX || 0}
-                          skewY={shape.skewY || 0}
-                          onMouseEnter={() => {
-                            if (selectedTool === "Measurement") setHoveredShape(shape);
-                          }}
-                          onMouseLeave={() => {
-                            if (selectedTool === "Measurement") setHoveredShape(null);
-                          }}
-                          onClick={(e) => {
-                            e.cancelBubble = true;
-                            if (shape.locked) return;
-                            handleShapeClick(shape);
-                            if (selectedTool !== "Dropper") {
-                              if (e.evt.ctrlKey && selectedShape) {
-
-                                dispatch(
-                                  selectNodePoint({
-                                    shapeId: selectedShape.id,
-                                    index,
-                                    x: point.x,
-                                    y: point.y,
-                                  })
-                                );
-                              } else if (sprayEraserMode) {
-                                dispatch(deleteShape(shape.id));
-                              } else if (selectedTool === "Eraser" && eraserMode === "delete") {
-                                dispatch(deleteShape(shape.id));
-                              } else {
-
-                                if (!selectedShapeIds.includes(shape.id)) {
-                                  dispatch(selectShape(shape.id));
-                                }
-                              }
-                            }
-                          }}
-                          onDragEnd={(e) => {
-                            const { x, y } = e.target.position();
-                            dispatch(updateShapePosition({ id: shape.id, x, y }));
-                          }}
-                        />
-                        {isSelected && !shape.locked && shapeRefs.current[shape.id] && selectedTool !== "Node" && (
-                          <Transformer
-                            ref={transformerRef}
-                            nodes={selectedShapeIds.map(id => shapeRefs.current[id]).filter(Boolean)}
-                            boundBoxFunc={(oldBox, newBox) => {
-                              if (newBox.width < 5 || newBox.height < 5) {
-                                return oldBox;
-                              }
-                              return newBox;
-                            }}
-                            enabledAnchors={[
-                              "top-left",
-                              "top-center",
-                              "top-right",
-                              "middle-left",
-                              "middle-right",
-                              "bottom-left",
-                              "bottom-center",
-                              "bottom-right",
-                            ]}
-                            skewEnabled={true}
-                          />
-                        )}
-                      </React.Fragment>
-                    );
-                  } else if (shape.type === "Pen") {
-                    if (!Array.isArray(shape.points) || !shape.points.every((p) => Array.isArray(p) && p.length === 2)) {
-                      console.error("Invalid points structure for Pen shape:", shape);
-                      return null;
-                    }
-
-                    const centerX = shape.points.reduce((sum, [x]) => sum + x, 0) / shape.points.length;
-                    const centerY = shape.points.reduce((sum, [, y]) => sum + y, 0) / shape.points.length;
-
-                    const rotatedPoints = shape.points.map(([x, y]) => {
-                      const { x: nx, y: ny } = rotatePoint(x, y, centerX, centerY, shape.rotation || 0);
-                      return [nx, ny];
-                    });
-                    return (
-                      <Line
-                        ref={(node) => {
-                          if (node) shapeRefs.current[shape.id] = node;
-                          else delete shapeRefs.current[shape.id];
-                        }}
-                        key={shape.id}
-                        id={shape.id}
-                        points={rotatedPoints.flat()}
-                        stroke={shape.strokeColor}
-                        strokeWidth={shape.strokeWidth || 2}
-                        lineJoin="round"
-                        lineCap="round"
-                        blur={shape.blur || 0}
-                        shadowBlur={shape.blur || 0}
-                        shadowColor={shape.fill || "#fff"}
-                        rotation={shape.rotation || 0}
-                        dash={getDashArray(shape.strokeStyle)}
-                        scaleX={shape.scaleX || 1}
-                        scaleY={shape.scaleY || 1}
-                        draggable={!shape.locked && selectedTool !== "Node" && selectedTool !== "Connector"}
-                        onClick={(e) => {
-                          e.cancelBubble = true;
-                          if (shape.locked) return;
-                          handleShapeClick(shape);
-                          if (selectedTool !== "Dropper") {
-                            if (e.evt.ctrlKey && selectedShape) {
-
-                              dispatch(
-                                selectNodePoint({
-                                  shapeId: selectedShape.id,
-                                  index,
-                                  x: point.x,
-                                  y: point.y,
-                                })
-                              );
-                            } else if (sprayEraserMode) {
-                              dispatch(deleteShape(shape.id));
-                            } else if (selectedTool === "Eraser" && eraserMode === "delete") {
-                              dispatch(deleteShape(shape.id));
-                            } else {
-
-                              if (!selectedShapeIds.includes(shape.id)) {
-                                dispatch(selectShape(shape.id));
-                              }
-                            }
-                          }
-                        }}
-                        onMouseDown={(e) => {
-                          e.cancelBubble = true;
-                        }}
-                        onTransformStart={(e) => {
-                          e.cancelBubble = true;
-                        }}
-                        onTransformEnd={(e) => handleBezierTransformEnd(e, shape)}
-                        onDragEnd={(e) => {
-                          const { x, y } = e.target.position();
-                          dispatch(updateShapePosition({ id: shape.id, x, y }));
-                        }}
-                      />
-                    );
-                  } else if (shape.type === "Pencil") {
-                    if (shape.lpeEffect === "Knot") {
-                      const points = shape.points.map(p => ({ x: p.x, y: p.y }));
-                      return (
-                        <Path
-                          key={shape.id}
-                          id={shape.id}
-                          data={generateKnotEffectPath(points, shape.knotGapLength || 10)}
-                          stroke={shape.stroke || shape.strokeColor || "black"}
-                          strokeWidth={shape.strokeWidth || 2}
-                          fill="none"
-                          draggable={!shape.locked}
-                          onDragMove={handleDragMove}
-                          onDragEnd={e => handleDragEnd(e, shape.id)}
-                          onClick={e => {
-                            e.cancelBubble = true;
-                            if (!selectedShapeIds.includes(shape.id)) {
-                              dispatch(selectShape(shape.id));
-                            }
-                          }}
-                        />
-                      );
-                    }
-                    if (!Array.isArray(shape.points) || !shape.points.every((p) => typeof p.x === "number" && typeof p.y === "number")) {
-                      console.error("Invalid points structure for Pencil shape:", shape);
-                      return null;
-                    }
-                    const centerX = shape.points.reduce((sum, p) => sum + p.x, 0) / shape.points.length;
-                    const centerY = shape.points.reduce((sum, p) => sum + p.y, 0) / shape.points.length;
-
-                    const rotatedPoints = shape.points.map((p) => {
-                      const { x: nx, y: ny } = rotatePoint(p.x, p.y, centerX, centerY, shape.rotation || 0);
-                      return [nx, ny];
-                    });
-                    const scaledPoints = scaleShapePoints(shape.points.map(p => [p.x, p.y]), 1 + pencilScale, centerX, centerY);
-                    const isSelected = selectedShapeIds.includes(shape.id);
-                    const pencilOption = shape.pencilOption || "None";
-                    let points = shape.points.map(p => [p.x, p.y]);
-                    const width = (shape.strokeWidth || 10) * (1 + (shape.pencilScale ?? pencilScale ?? 0));
-                    if (shape.lpeEffect === "Bend") {
-                      points = applyBendEffect(points.map(([x, y]) => ({ x, y })), 40, 1);
-                      points = points.flatMap(p => [p.x, p.y]);
-                    } else {
-                      points = points.flat();
-                    }
-                    function getPerp([x1, y1], [x2, y2], w) {
-                      const dx = x2 - x1, dy = y2 - y1;
-                      const len = Math.hypot(dx, dy) || 1;
-                      return [-(dy / len) * w, (dx / len) * w];
-                    }
-                    if (pencilOption === "Ellipse" && points.length > 2) {
-                      const smoothing = 90;
-                      const smoothPoints = smoothShape(points, smoothing);
-                      const left = [];
-                      const right = [];
-                      for (let i = 1; i < smoothPoints.length - 1; i++) {
-                        const [x0, y0] = smoothPoints[i - 1];
-                        const [x1, y1] = smoothPoints[i];
-                        const [x2, y2] = smoothPoints[i + 1];
-                        const perp1 = getPerp([x0, y0], [x1, y1], width);
-                        const perp2 = getPerp([x1, y1], [x2, y2], width);
-                        const perp = [(perp1[0] + perp2[0]) / 2, (perp1[1] + perp2[1]) / 2];
-                        left.push([x1 + perp[0] / 2, y1 + perp[1] / 2]);
-                        right.push([x1 - perp[0] / 2, y1 - perp[1] / 2]);
-                      }
-                      const [xStart, yStart] = smoothPoints[0];
-                      const [xEnd, yEnd] = smoothPoints[smoothPoints.length - 1];
-                      const polygon = [
-                        [xStart, yStart],
-                        ...left,
-                        [xEnd, yEnd],
-                        ...right.reverse()
-                      ];
-                      const pathData = polygon.map(
-                        ([x, y], i) => (i === 0 ? `M ${x} ${y}` : `L ${x} ${y}`)
-                      ).join(" ") + " Z";
-                      return (
-                        <Path
-                          ref={(node) => {
-                            if (node) shapeRefs.current[shape.id] = node;
-                            else delete shapeRefs.current[shape.id];
-                          }}
-                          key={shape.id}
-                          data={pathData}
-                          fill={shape.fill || shape.strokeColor || "black"}
-                          stroke={shape.strokeColor || "black"}
-                          strokeWidth={1}
-                          closed
-                          draggable={!shape.locked && selectedTool !== "Node"}
-                          onDragMove={handleDragMove}
-                          onDragEnd={(e) => {
-                            const { x, y } = e.target.position();
-                            dispatch(updateShapePosition({ id: shape.id, x, y }));
-                          }}
-                        />
-                      );
-                    }
-                    return (
-                      <React.Fragment key={shape.id}>
-                        <Line
-                          ref={(node) => {
-                            if (node) shapeRefs.current[shape.id] = node;
-                            else delete shapeRefs.current[shape.id];
-                          }}
-                          key={shape.id}
-                          id={shape.id}
-                          points={points}
-                          stroke={shape.strokeColor}
-                          fill={shape.fill || "transparent"}
-                          strokeWidth={(shape.strokeWidth || 1) * (shape.pencilScale ?? pencilScale ?? 1)}
-                          lineJoin="round"
-                          lineCap="round"
-                          closed={shape.closed || false}
-                          draggable={!shape.locked && selectedTool !== "Node" && selectedTool !== "Connector" && selectedTool === "Select"}
-                          dash={getDashArray(shape.strokeStyle)}
-                          rotation={shape.rotation || 0}
-                          onDragMove={handleDragMove}
-                          scaleX={shape.scaleX || 1}
-                          listening={true}
-                          scaleY={shape.scaleY || 1}
-                          skewX={shape.skewX || 0}
-                          skewY={shape.skewY || 0}
-                          blur={shape.blur || 0}
-                          shadowBlur={shape.blur || 0}
-                          shadowColor={shape.fill || "#fff"}
-                          onMouseEnter={() => {
-                            if (selectedTool === "Measurement") setHoveredShape(shape);
-                          }}
-                          onMouseLeave={() => {
-                            if (selectedTool === "Measurement") setHoveredShape(null);
-                          }}
-                          onClick={(e) => {
-                            e.cancelBubble = true;
-                            if (shape.locked) return;
-                            handleShapeClick(shape);
-                            if (selectedTool !== "Dropper") {
-                              if (e.evt.ctrlKey && selectedShape) {
-
-                                dispatch(
-                                  selectNodePoint({
-                                    shapeId: selectedShape.id,
-                                    index,
-                                    x: point.x,
-                                    y: point.y,
-                                  })
-                                );
-                              } else if (sprayEraserMode) {
-                                dispatch(deleteShape(shape.id));
-                              } else if (selectedTool === "Eraser" && eraserMode === "delete") {
-                                dispatch(deleteShape(shape.id));
-                              } else {
-
-                                if (!selectedShapeIds.includes(shape.id)) {
-                                  dispatch(selectShape(shape.id));
-                                }
-                              }
-                            }
-                          }}
-                          onDragEnd={(e) => {
-                            const { x, y } = e.target.position();
-                            dispatch(updateShapePosition({ id: shape.id, x, y }));
-                          }}
-                        />
-                        {isSelected && !shape.locked && shapeRefs.current[shape.id] && selectedTool !== "Node" && (
-                          <Transformer
-                            ref={transformerRef}
-                            nodes={selectedShapeIds.map(id => shapeRefs.current[id]).filter(Boolean)}
-                            boundBoxFunc={(oldBox, newBox) => {
-                              if (newBox.width < 5 || newBox.height < 5) {
-                                return oldBox;
-                              }
-                              return newBox;
-                            }}
-                            enabledAnchors={[
-                              "top-left",
-                              "top-center",
-                              "top-right",
-                              "middle-left",
-                              "middle-right",
-                              "bottom-left",
-                              "bottom-center",
-                              "bottom-right",
-                            ]}
-                            skewEnabled={true}
-                          />
-                        )}
-                      </React.Fragment>
-                    );
-                  } else if (shape.type === "BrushStroke") {
-                    const segments = [];
-                    const points = shape.points;
-
-                    const maxBrushWidth = 40;
-                    const minBrushWidth = pressureMin * maxBrushWidth;
-
-                    for (let i = 1; i < points.length; i++) {
-                      const [x0, y0, w0 = 1] = points[i - 1];
-                      const [x, y, w = 1] = points[i];
-
-
-                      const p0 = Math.max(pressureMin, Math.min(1, w0));
-                      const p1 = Math.max(pressureMin, Math.min(1, w));
-
-
-                      const width0 = minBrushWidth + ((p0 - pressureMin) / (1 - pressureMin)) * (maxBrushWidth - minBrushWidth);
-                      const width1 = minBrushWidth + ((p1 - pressureMin) / (1 - pressureMin)) * (maxBrushWidth - minBrushWidth);
-
-                      const width = Math.max(minBrushWidth, (width0 + width1) / 2);
-
-                      segments.push(
-                        <Line
-                          ref={(node) => {
-                            if (node) shapeRefs.current[shape.id] = node;
-                            else delete shapeRefs.current[shape.id];
-                          }}
-                          key={i}
-                          points={[x0, y0, x, y]}
-                          stroke={shape.strokeColor}
-                          strokeWidth={width}
-                          lineCap={brushCaps}
-                          lineJoin="round"
-                        />
-                      );
-                    }
-
-                    if (brushCaps === "round" && points.length > 1) {
-                      const [xStart, yStart, wStart = 1] = points[0];
-                      const [xEnd, yEnd, wEnd = 1] = points[points.length - 1];
-                      const pStart = Math.max(0, Math.min(1, (wStart - pressureMin) / (pressureMax - pressureMin)));
-                      const pEnd = Math.max(0, Math.min(1, (wEnd - pressureMin) / (pressureMax - pressureMin)));
-                      segments.push(
-                        <Circle
-                          ref={(node) => {
-                            if (node) shapeRefs.current[shape.id] = node;
-                            else delete shapeRefs.current[shape.id];
-                          }}
-                          key="start-cap"
-                          x={xStart}
-                          y={yStart}
-                          radius={pStart * maxBrushWidth / 2}
-                          fill={shape.strokeColor}
-                        />,
-                        <Circle
-                          ref={(node) => {
-                            if (node) shapeRefs.current[shape.id] = node;
-                            else delete shapeRefs.current[shape.id];
-                          }}
-                          key="end-cap"
-                          x={xEnd}
-                          y={yEnd}
-                          radius={pEnd * maxBrushWidth / 2}
-                          fill={shape.strokeColor}
-                        />
-                      );
-                    }
-
-                    return <React.Fragment key={shape.id}>{segments}</React.Fragment>;
-                  } else if (shape.type === "Calligraphy") {
-                    const isSelected = selectedShapeIds.includes(shape.id);
-                    return (
-                      <React.Fragment key={shape.id}>
-                        <Line
-                          ref={(node) => {
-                            if (node) shapeRefs.current[shape.id] = node;
-                            else delete shapeRefs.current[shape.id];
-                          }}
-                          key={shape.id}
-                          id={shape.id}
-                          points={shape.points.flatMap((p) => [p.x, p.y])}
-                          stroke={shape.stroke}
-                          fill={shape.fill || "transparent"}
-                          strokeWidth={shape.strokeWidth}
-                          lineJoin="round"
-                          lineCap="round"
-                          closed={false}
-                          draggable={!shape.locked && selectedTool === "Select"}
-                          dash={getDashArray(shape.strokeStyle)}
-                          listening={true}
-                          onDragMove={handleDragMove}
-                          rotation={shape.rotation || 0}
-                          scaleX={shape.scaleX || 1}
-                          scaleY={shape.scaleY || 1}
-                          blur={shape.blur || 0}
-                          shadowBlur={shape.blur || 0}
-                          shadowColor={shape.fill || "#fff"}
-                          offsetX={shape.width ? shape.width / 2 : 0}
-                          offsetY={shape.height ? shape.height / 2 : 0}
-                          skewX={shape.skewX || 0}
-                          skewY={shape.skewY || 0}
-                          onMouseEnter={() => {
-                            if (selectedTool === "Measurement") setHoveredShape(shape);
-                          }}
-                          onMouseLeave={() => {
-                            if (selectedTool === "Measurement") setHoveredShape(null);
-                          }}
-                          onClick={(e) => {
-                            e.cancelBubble = true;
-                            if (shape.locked) return;
-                            handleShapeClick(shape);
-                            if (selectedTool !== "Dropper") {
-                              if (e.evt.ctrlKey && selectedShape) {
-
-                                dispatch(
-                                  selectNodePoint({
-                                    shapeId: selectedShape.id,
-                                    index,
-                                    x: point.x,
-                                    y: point.y,
-                                  })
-                                );
-                              } else if (sprayEraserMode) {
-                                dispatch(deleteShape(shape.id));
-                              } else if (selectedTool === "Eraser" && eraserMode === "delete") {
-                                dispatch(deleteShape(shape.id));
-                              } else {
-
-                                if (!selectedShapeIds.includes(shape.id)) {
-                                  dispatch(selectShape(shape.id));
-                                }
-                              }
-                            }
-                          }}
-                          onDragEnd={(e) => {
-                            const { x, y } = e.target.position();
-                            dispatch(updateShapePosition({ id: shape.id, x, y }));
-                          }}
-                        />
-                        {isSelected && !shape.locked && shapeRefs.current[shape.id] && selectedTool !== "Node" && (
-                          <Transformer
-                            ref={transformerRef}
-                            nodes={selectedShapeIds.map(id => shapeRefs.current[id]).filter(Boolean)}
-                            boundBoxFunc={(oldBox, newBox) => {
-                              if (newBox.width < 5 || newBox.height < 5) {
-                                return oldBox;
-                              }
-                              return newBox;
-                            }}
-                            enabledAnchors={[
-                              "top-left",
-                              "top-center",
-                              "top-right",
-                              "middle-left",
-                              "middle-right",
-                              "bottom-left",
-                              "bottom-center",
-                              "bottom-right",
-                            ]}
-                            skewEnabled={true}
-                          />
-                        )}
-                      </React.Fragment>
-                    );
-                  } else if (shape.type === "DipPen") {
-                    return (
-                      <Group key={shape.id}>
-                        {shape.points.map((point, index) => {
-                          if (index === 0) return null;
-
-                          const prevPoint = shape.points[index - 1];
-                          const angle = point.angle || 0;
-
-
-                          const taperFactorStart = index < 3 ? index / 3 : 1;
-                          const taperFactorEnd =
-                            index > shape.points.length - 4
-                              ? (shape.points.length - index) / 3
-                              : 1;
-                          const taperFactor = Math.min(taperFactorStart, taperFactorEnd);
-
-                          const nibWidth = point.strokeWidth * taperFactor;
-
-
-                          const topX1 = prevPoint.x - (nibWidth / 2) * Math.cos(angle + Math.PI / 2);
-                          const topY1 = prevPoint.y - (nibWidth / 2) * Math.sin(angle + Math.PI / 2);
-                          const bottomX1 = prevPoint.x + (nibWidth / 2) * Math.cos(angle + Math.PI / 2);
-                          const bottomY1 = prevPoint.y + (nibWidth / 2) * Math.sin(angle + Math.PI / 2);
-
-                          const topX2 = point.x - (nibWidth / 2) * Math.cos(angle + Math.PI / 2);
-                          const topY2 = point.y - (nibWidth / 2) * Math.sin(angle + Math.PI / 2);
-                          const bottomX2 = point.x + (nibWidth / 2) * Math.cos(angle + Math.PI / 2);
-                          const bottomY2 = point.y + (nibWidth / 2) * Math.sin(angle + Math.PI / 2);
-
-                          return (
-                            <Shape
-                              ref={(node) => {
-                                if (node) shapeRefs.current[shape.id] = node;
-                                else delete shapeRefs.current[shape.id];
-                              }}
-                              key={index}
-                              id={`${shape.id}`}
-                              sceneFunc={(context, shape) => {
-                                context.beginPath();
-                                context.moveTo(topX1, topY1);
-                                context.lineTo(topX2, topY2);
-                                context.lineTo(bottomX2, bottomY2);
-                                context.lineTo(bottomX1, bottomY1);
-                                context.closePath();
-                                context.fillStrokeShape(shape);
-                              }}
-                              fill={shape.stroke}
-                              stroke={shape.stroke}
-                              strokeWidth={1}
-                              onDragMove={handleDragMove}
-                            />
-                          );
-                        })}
-                      </Group>
-                    );
-                  } else if (shape.type === "Tracing") {
-                    const isSelected = selectedShapeIds.includes(shape.id);
-                    if (shape.pathData) {
+                    } else if (shape.type === "Bezier") {
+                      const isSelected = selectedShapeIds.includes(shape.id);
                       return (
                         <React.Fragment key={shape.id}>
                           <Path
-                            ref={node => {
+                            ref={(node) => {
                               if (node) shapeRefs.current[shape.id] = node;
                               else delete shapeRefs.current[shape.id];
                             }}
                             id={shape.id}
-                            data={shape.pathData}
-                            x={shape.x}
-                            y={shape.y}
-                            stroke={shape.stroke || "black"}
-                            strokeWidth={shape.strokeWidth || 1}
-                            fill={shape.fill || "none"}
-                            draggable={!shape.locked && selectedTool === "Select"}
+                            data={getBezierPathFromPoints(shape.points, shape.closed)}
+                            stroke={isSelected ? "blue" : shape.stroke || shape.strokeColor || "black"}
+                            strokeWidth={shape.strokeWidth || 2}
+                            fill={shape.fill || (shape.closed ? shape.fillColor : "transparent")}
+                            closed={shape.closed}
+                            rotation={shape.rotation || 0}
+                            draggable={!shape.locked && selectedTool !== "Node" && selectedTool !== "Mesh" && selectedTool !== "Connector"}
                             onDragMove={handleDragMove}
-                            onDragEnd={e => {
-                              const { x, y } = e.target.position();
-                              dispatch(updateShapePosition({ id: shape.id, x, y }));
-                            }}
-                            onClick={e => {
+                            dash={getDashArray(shape.strokeStyle)}
+                            onClick={(e) => {
                               e.cancelBubble = true;
+                              if (shape.locked) return;
                               if (!selectedShapeIds.includes(shape.id)) {
                                 dispatch(selectShape(shape.id));
                               }
+                            }}
+                            onMouseDown={(e) => {
+                              e.cancelBubble = true;
+                            }}
+                            onTransformStart={(e) => {
+                              e.cancelBubble = true;
+                            }}
+                            onTransformEnd={(e) => handleBezierTransformEnd(e, shape)}
+                            onDragEnd={(e) => {
+                              const { x, y } = e.target.position();
+                              dispatch(updateShapePosition({ id: shape.id, x, y }));
+                            }}
+                          />
+                          {isSelected && !shape.locked && shapeRefs.current[shape.id] && selectedTool !== "Node" && (
+                            <Transformer
+                              ref={transformerRef}
+                              nodes={selectedShapeIds.map(id => shapeRefs.current[id]).filter(Boolean)}
+                              boundBoxFunc={(oldBox, newBox) => {
+                                if (newBox.width < 5 || newBox.height < 5) {
+                                  return oldBox;
+                                }
+                                return newBox;
+                              }}
+                              enabledAnchors={[
+                                "top-left",
+                                "top-center",
+                                "top-right",
+                                "middle-left",
+                                "middle-right",
+                                "bottom-left",
+                                "bottom-center",
+                                "bottom-right",
+                              ]}
+                              skewEnabled={true}
+                            />
+                          )}
+                        </React.Fragment>
+                      );
+                    } else if (shape.type === "Spiro Path") {
+                      const isSelected = selectedShapeIds.includes(shape.id);
+                      return (
+                        <React.Fragment key={shape.id}>
+                          <Path
+                            ref={(node) => {
+                              if (node) shapeRefs.current[shape.id] = node;
+                              else delete shapeRefs.current[shape.id];
+                            }}
+                            id={shape.id}
+                            data={shape.path}
+                            stroke={shape.stroke || "black"}
+                            strokeWidth={shape.strokeWidth || 2}
+                            fill={shape.fill || (shape.closed ? shape.fill : "black")}
+                            closed={shape.closed || false}
+                            rotation={shape.rotation || 0}
+                            draggable={!shape.locked && selectedTool !== "Node"}
+                            onDragMove={handleDragMove}
+                            dash={getDashArray(shape.strokeStyle)}
+                            onClick={(e) => {
+                              e.cancelBubble = true;
+                              if (shape.locked) return;
+                              if (e.evt.ctrlKey && selectedShape) {
+
+                                dispatch(
+                                  selectNodePoint({
+                                    shapeId: selectedShape.id,
+                                    index,
+                                    x: point.x,
+                                    y: point.y,
+                                  })
+                                );
+                              } else {
+
+                                if (!selectedShapeIds.includes(shape.id)) {
+                                  dispatch(selectShape(shape.id));
+                                }
+                              }
+                            }}
+                            onMouseDown={(e) => {
+                              e.cancelBubble = true;
+                            }}
+                            onDragEnd={(e) => {
+                              const { x, y } = e.target.position();
+                              dispatch(updateShapePosition({ id: shape.id, x, y }));
                             }}
                           />
                           {isSelected && !shape.locked && shapeRefs.current[shape.id] && selectedTool !== "Node" && (
@@ -8312,140 +7529,1869 @@ const Panel = React.forwardRef(({
                         </React.Fragment>
                       );
                     }
-
-                    if (!shape.points) return null;
-                    const allPoints = [];
-                    shape.points.forEach((point) => {
-                      if (Array.isArray(point.shapes)) {
-                        point.shapes.forEach((subShape) => {
-                          allPoints.push({ x: subShape.x, y: subShape.y, r: subShape.radius });
-                        });
-                      }
-                    });
-
-
-                    if (allPoints.length < 3) {
+                    else if (shape.type === "Image") {
+                      const isSelected = selectedShapeIds.includes(shape.id);
                       return (
-                        <Group key={shape.id} id={shape.id}>
-                          {allPoints.map((pt, i) => (
+                        <React.Fragment key={shape.id}>
+                          <Group
+                            x={shape.x}
+                            y={shape.y}
+                            clipFunc={
+                              shape.inverseClipPath
+                                ? ctx => {
+                                  ctx.beginPath();
+                                  shape.inverseClipPath[0].forEach((pt, i) => {
+                                    if (i === 0) ctx.moveTo(pt.x, pt.y);
+                                    else ctx.lineTo(pt.x, pt.y);
+                                  });
+                                  ctx.closePath();
+                                  ctx.moveTo(shape.inverseClipPath[1][0].x, shape.inverseClipPath[1][0].y);
+                                  for (let i = 1; i < shape.inverseClipPath[1].length; i++) {
+                                    ctx.lineTo(shape.inverseClipPath[1][i].x, shape.inverseClipPath[1][i].y);
+                                  }
+                                  ctx.closePath();
+                                  ctx.clip('evenodd');
+                                }
+                                : shape.clipPath
+                                  ? ctx => {
+                                    ctx.beginPath();
+                                    shape.clipPath.forEach((pt, i) => {
+                                      if (i === 0) ctx.moveTo(pt.x, pt.y);
+                                      else ctx.lineTo(pt.x, pt.y);
+                                    });
+                                    ctx.closePath();
+                                  }
+                                  : shape.maskPath
+                                    ? ctx => {
+                                      ctx.beginPath();
+                                      shape.maskPath.forEach((pt, i) => {
+                                        if (i === 0) ctx.moveTo(pt.x, pt.y);
+                                        else ctx.lineTo(pt.x, pt.y);
+                                      });
+                                      ctx.closePath();
+                                    }
+                                    : shape.inverseMaskPath
+                                      ? ctx => {
+                                        ctx.beginPath();
+                                        shape.inverseMaskPath[0].forEach((pt, i) => {
+                                          if (i === 0) ctx.moveTo(pt.x, pt.y);
+                                          else ctx.lineTo(pt.x, pt.y);
+                                        });
+                                        ctx.closePath();
+                                        ctx.moveTo(shape.inverseMaskPath[1][0].x, shape.inverseMaskPath[1][0].y);
+                                        shape.inverseMaskPath[1].forEach((pt, i) => {
+                                          if (i === 0) ctx.moveTo(pt.x, pt.y);
+                                          else ctx.lineTo(pt.x, pt.y);
+                                        });
+                                        ctx.closePath();
+                                        ctx.clip("evenodd");
+                                      }
+                                      : undefined
+                            }
+                          >
+                            <CanvasImage
+                              ref={node => {
+                                if (node) shapeRefs.current[shape.id] = node;
+                                else delete shapeRefs.current[shape.id];
+                              }}
+                              id={shape.id}
+                              shape={{ ...shape, x: 0, y: 0 }}
+                              x={0}
+                              y={0}
+                              draggable={!shape.locked && selectedTool === "Select"}
+                              dash={getDashArray(shape.strokeStyle)}
+                              onClick={e => {
+                                e.cancelBubble = true;
+                                if (!selectedShapeIds.includes(shape.id)) {
+                                  dispatch(selectShape(shape.id));
+                                }
+                              }}
+                              onDragEnd={e => {
+                                const { x, y } = e.target.position();
+                                dispatch(updateShapePosition({ id: shape.id, x, y }));
+                              }}
+                            />
+                          </Group>
+                          {isSelected && !shape.locked && shapeRefs.current[shape.id] && selectedTool !== "Node" && (
+                            <Transformer
+                              ref={transformerRef}
+                              nodes={selectedShapeIds.map(id => shapeRefs.current[id]).filter(Boolean)}
+                              boundBoxFunc={(oldBox, newBox) => {
+                                if (newBox.width < 5 || newBox.height < 5) {
+                                  return oldBox;
+                                }
+                                return newBox;
+                              }}
+                              enabledAnchors={[
+                                "top-left",
+                                "top-center",
+                                "top-right",
+                                "middle-left",
+                                "middle-right",
+                                "bottom-left",
+                                "bottom-center",
+                                "bottom-right",
+                              ]}
+                              skewEnabled={true}
+                            />
+                          )}
+                        </React.Fragment>
+                      );
+                    } else if (shape.type === "Circle") {
+                      const isSelected = selectedShapeIds.includes(shape.id);
+                      const arcType = shape.arcType || "slice";
+                      if (arcType === "arc") {
+                        return (
+                          <Arc
+                            ref={(node) => {
+                              if (node) shapeRefs.current[shape.id] = node;
+                              else delete shapeRefs.current[shape.id];
+                            }}
+                            id={shape.id}
+                            x={shape.x}
+                            y={shape.y}
+                            innerRadius={shape.radius * 0.7}
+                            outerRadius={shape.radius}
+                            angle={shape.arcAngle || 360}
+                            fill={shape.fill || "transparent"}
+                            stroke={shape.stroke || "black"}
+                            strokeWidth={shape.strokeWidth || 1}
+                            rotation={shape.rotation || 0}
+                            closed={false}
+                            dash={[10, 10]}
+                            draggable={!shape.locked && selectedTool !== "Node" && selectedTool !== "Connector"}
+                            onDragMove={handleDragMove}
+                            onDragEnd={(e) => {
+                              const { x, y } = e.target.position();
+                              dispatch(updateShapePosition({ id: shape.id, x, y }));
+                            }}
+                          />
+                        );
+                      }
+
+                      if (arcType === "chord") {
+                        return (
+                          <Arc
+                            ref={(node) => {
+                              if (node) shapeRefs.current[shape.id] = node;
+                              else delete shapeRefs.current[shape.id];
+                            }}
+                            id={shape.id}
+                            x={shape.x}
+                            y={shape.y}
+                            innerRadius={0}
+                            outerRadius={shape.radius}
+                            angle={shape.arcAngle || 360}
+                            fill="transparent"
+                            stroke={shape.stroke || "black"}
+                            strokeWidth={shape.strokeWidth || 1}
+                            rotation={shape.rotation || 0}
+                            closed={true}
+                            draggable={!shape.locked && selectedTool !== "Node" && selectedTool !== "Connector"}
+                            onDragMove={handleDragMove}
+                            onDragEnd={(e) => {
+                              const { x, y } = e.target.position();
+                              dispatch(updateShapePosition({ id: shape.id, x, y }));
+                            }}
+                          />
+                        );
+                      }
+
+                      if (arcType === "ellipse") {
+                        return (
+                          <Ellipse
+                            ref={node => {
+                              if (node) shapeRefs.current[shape.id] = node;
+                              else delete shapeRefs.current[shape.id];
+                            }}
+                            id={shape.id}
+                            x={shape.x}
+                            y={shape.y}
+                            radiusX={shape.radiusX || shape.radius}
+                            radiusY={shape.radiusY || shape.radius}
+                            fill={shape.fill || "transparent"}
+                            stroke={shape.stroke || "black"}
+                            strokeWidth={shape.strokeWidth || 1}
+                            rotation={shape.rotation || 0}
+                            draggable={!shape.locked && selectedTool !== "Node" && selectedTool !== "Connector"}
+                            onDragMove={handleDragMove}
+                            onDragEnd={e => {
+                              const { x, y } = e.target.position();
+                              dispatch(updateShapePosition({ id: shape.id, x, y }));
+                            }}
+                          />
+                        );
+                      }
+                      return (
+                        <React.Fragment key={shape.id}>
+                          <Circle
+                            ref={(node) => {
+                              if (node) shapeRefs.current[shape.id] = node;
+                              else delete shapeRefs.current[shape.id];
+                            }}
+                            id={shape.id}
+                            x={shape.x}
+                            y={shape.y}
+                            radius={shape.radius}
+                            innerRadius={0}
+                            outerRadius={shape.radius || 0}
+                            angle={shape.arcAngle || 360}
+                            fill={
+                              shape.fill?.type === "linear-gradient" || shape.fill?.type === "radial-gradient"
+                                ? undefined
+                                : shape.fill || "transparent"
+                            }
+                            fillLinearGradientStartPoint={shape.fill?.type === "linear-gradient" ? shape.fill.start : undefined}
+                            fillLinearGradientEndPoint={shape.fill?.type === "linear-gradient" ? shape.fill.end : undefined}
+                            fillLinearGradientColorStops={shape.fill?.type === "linear-gradient" ? shape.fill.colors.flatMap(stop => [stop.pos, stop.color]) : undefined}
+                            fillRadialGradientStartPoint={shape.fill?.type === "radial-gradient" ? shape.fill.center : undefined}
+                            fillRadialGradientEndPoint={shape.fill?.type === "radial-gradient" ? { x: shape.fill.center.x, y: shape.fill.center.y + shape.fill.radius } : undefined}
+                            fillRadialGradientColorStops={shape.fill?.type === "radial-gradient" ? shape.fill.colors.flatMap(stop => [stop.pos, stop.color]) : undefined}
+                            stroke={
+                              shape.stroke?.type === "linear-gradient" || shape.stroke?.type === "radial-gradient"
+                                ? undefined
+                                : shape.stroke || "black"
+                            }
+                            strokeLinearGradientStartPoint={shape.stroke?.type === "linear-gradient" ? shape.stroke.start : undefined}
+                            strokeLinearGradientEndPoint={shape.stroke?.type === "linear-gradient" ? shape.stroke.end : undefined}
+                            strokeLinearGradientColorStops={shape.stroke?.type === "linear-gradient" ? shape.stroke.colors.flatMap(stop => [stop.pos, stop.color]) : undefined}
+                            strokeRadialGradientStartPoint={shape.stroke?.type === "radial-gradient" ? shape.stroke.center : undefined}
+                            strokeRadialGradientEndPoint={shape.stroke?.type === "radial-gradient" ? { x: shape.stroke.center.x, y: shape.stroke.center.y + shape.stroke.radius } : undefined}
+                            strokeRadialGradientColorStops={shape.stroke?.type === "radial-gradient" ? shape.stroke.colors.flatMap(stop => [stop.pos, stop.color]) : undefined}
+                            strokeWidth={shape.strokeWidth || 1}
+
+                            rotation={shape.rotation || 0}
+                            scaleX={shape.horizontalRadius / shape.radius || 1}
+                            scaleY={shape.verticalRadius / shape.radius || 1}
+                            draggable={!shape.locked && selectedTool !== "Node" && selectedTool !== "Connector" && selectedTool !== "Gradient"}
+                            onDragMove={handleDragMove}
+                            skewX={shape.skewX || 0}
+                            blur={shape.blur || 0}
+                            shadowBlur={shape.blur || 0}
+                            shadowColor={shape.fill || "#fff"}
+                            closed={false}
+                            skewY={shape.skewY || 0}
+                            onMouseEnter={() => {
+                              if (selectedTool === "Measurement") setHoveredShape(shape);
+                            }}
+                            onMouseLeave={() => {
+                              if (selectedTool === "Measurement") setHoveredShape(null);
+                            }}
+                            onClick={(e) => {
+                              e.cancelBubble = true;
+                              if (shape.locked) return;
+                              handleShapeClick(shape);
+                              if (selectedTool !== "Dropper") {
+                                if (e.evt.ctrlKey && selectedShape) {
+
+                                  dispatch(
+                                    selectNodePoint({
+                                      shapeId: selectedShape.id,
+                                      index,
+                                      x: point.x,
+                                      y: point.y,
+                                    })
+                                  );
+                                } else if (sprayEraserMode) {
+                                  dispatch(deleteShape(shape.id));
+                                } else if (selectedTool === "Eraser" && eraserMode === "delete") {
+                                  dispatch(deleteShape(shape.id));
+                                } else {
+
+                                  if (!selectedShapeIds.includes(shape.id)) {
+                                    dispatch(selectShape(shape.id));
+                                  }
+                                }
+                              }
+                            }}
+                            onTransformEnd={(e) => handleResizeEnd(e, shape.id)}
+                            onDragEnd={(e) => {
+                              const { x, y } = e.target.position();
+                              dispatch(updateShapePosition({ id: shape.id, x, y }));
+                            }}
+                          />
+                          {isSelected && !shape.locked && shapeRefs.current[shape.id] && selectedTool !== "Node" && (
+                            <Transformer
+                              ref={transformerRef}
+                              nodes={selectedShapeIds.map(id => shapeRefs.current[id]).filter(Boolean)}
+                              boundBoxFunc={(oldBox, newBox) => {
+                                if (newBox.width < 5 || newBox.height < 5) {
+                                  return oldBox;
+                                }
+                                return newBox;
+                              }}
+                              enabledAnchors={[
+                                "top-left",
+                                "top-center",
+                                "top-right",
+                                "middle-left",
+                                "middle-right",
+                                "bottom-left",
+                                "bottom-center",
+                                "bottom-right",
+                              ]}
+                              skewEnabled={true}
+                            />
+                          )}
+                          {selectedTool === "Node" && shape.points.map((point, index) => (
                             <Circle
+                              key={index}
+                              x={point.x}
+                              y={point.y}
+                              radius={5}
+                              fill="blue"
+                              draggable
+                              onDragMove={(e) => {
+                                const newPosition = { x: e.target.x(), y: e.target.y() };
+                                dispatch(updateNodePosition({ shapeId: shape.id, nodeIndex: index, newPosition }));
+                              }}
+                            />
+                          ))}
+                        </React.Fragment>
+                      );
+                    } else if (shape.type === "Star") {
+                      const isSelected = selectedShapeIds.includes(shape.id);
+
+                      return (
+                        <React.Fragment key={shape.id}>
+                          <Star
+                            ref={(node) => {
+                              if (node) shapeRefs.current[shape.id] = node;
+                              else delete shapeRefs.current[shape.id];
+                            }}
+                            id={shape.id}
+                            x={shape.x}
+                            y={shape.y}
+                            numPoints={shape.corners}
+                            innerRadius={
+                              shape.outerRadius *
+                              (shape.spokeRatio || 0.5) *
+                              (1 - (shape.rounded || 0) * 0.5) *
+                              (shape.randomOffsets?.[1] || 1)
+                            }
+                            outerRadius={
+                              shape.outerRadius *
+                              (1 - (shape.rounded || 0) * 0.2) *
+                              (shape.randomOffsets?.[0] || 1)
+                            }
+                            rotation={shape.rotation || 0}
+                            scaleX={shape.scaleX || 1}
+                            scaleY={shape.scaleY || 1}
+                            fill={
+                              shape.fill?.type === "linear-gradient" || shape.fill?.type === "radial-gradient"
+                                ? undefined
+                                : shape.fill || "transparent"
+                            }
+                            fillLinearGradientStartPoint={shape.fill?.type === "linear-gradient" ? shape.fill.start : undefined}
+                            fillLinearGradientEndPoint={shape.fill?.type === "linear-gradient" ? shape.fill.end : undefined}
+                            fillLinearGradientColorStops={shape.fill?.type === "linear-gradient" ? shape.fill.colors.flatMap(stop => [stop.pos, stop.color]) : undefined}
+                            fillRadialGradientStartPoint={shape.fill?.type === "radial-gradient" ? shape.fill.center : undefined}
+                            fillRadialGradientEndPoint={shape.fill?.type === "radial-gradient" ? { x: shape.fill.center.x, y: shape.fill.center.y + shape.fill.radius } : undefined}
+                            fillRadialGradientColorStops={shape.fill?.type === "radial-gradient" ? shape.fill.colors.flatMap(stop => [stop.pos, stop.color]) : undefined}
+                            stroke={
+                              shape.stroke?.type === "linear-gradient" || shape.stroke?.type === "radial-gradient"
+                                ? undefined
+                                : shape.stroke || "black"
+                            }
+                            strokeLinearGradientStartPoint={shape.stroke?.type === "linear-gradient" ? shape.stroke.start : undefined}
+                            strokeLinearGradientEndPoint={shape.stroke?.type === "linear-gradient" ? shape.stroke.end : undefined}
+                            strokeLinearGradientColorStops={shape.stroke?.type === "linear-gradient" ? shape.stroke.colors.flatMap(stop => [stop.pos, stop.color]) : undefined}
+                            strokeRadialGradientStartPoint={shape.stroke?.type === "radial-gradient" ? shape.stroke.center : undefined}
+                            strokeRadialGradientEndPoint={shape.stroke?.type === "radial-gradient" ? { x: shape.stroke.center.x, y: shape.stroke.center.y + shape.stroke.radius } : undefined}
+                            strokeRadialGradientColorStops={shape.stroke?.type === "radial-gradient" ? shape.stroke.colors.flatMap(stop => [stop.pos, stop.color]) : undefined}
+                            strokeWidth={shape.strokeWidth || 1}
+                            draggable={!shape.locked && selectedTool !== "Node" && selectedTool !== "Connector" && selectedTool !== "Gradient"}
+                            onDragMove={handleDragMove}
+                            skewX={shape.skewX || 0}
+                            skewY={shape.skewY || 0}
+                            blur={shape.blur || 0}
+                            shadowBlur={shape.blur || 0}
+                            shadowColor={shape.fill || "#fff"}
+                            onTransformEnd={(e) => handleBezierTransformEnd(e, shape)}
+                            onMouseEnter={() => {
+                              if (selectedTool === "Measurement") setHoveredShape(shape);
+                            }}
+                            onMouseLeave={() => {
+                              if (selectedTool === "Measurement") setHoveredShape(null);
+                            }}
+                            onClick={(e) => {
+                              e.cancelBubble = true;
+                              if (shape.locked) return;
+                              handleShapeClick(shape);
+                              if (selectedTool !== "Dropper") {
+                                if (e.evt.ctrlKey && selectedShape) {
+
+                                  dispatch(
+                                    selectNodePoint({
+                                      shapeId: selectedShape.id,
+                                      index,
+                                      x: point.x,
+                                      y: point.y,
+                                    })
+                                  );
+                                } else if (sprayEraserMode) {
+                                  dispatch(deleteShape(shape.id));
+                                } else if (selectedTool === "Eraser" && eraserMode === "delete") {
+                                  dispatch(deleteShape(shape.id));
+                                } else {
+
+                                  if (!selectedShapeIds.includes(shape.id)) {
+                                    dispatch(selectShape(shape.id));
+                                  }
+                                }
+                              }
+                            }}
+                            onDragEnd={(e) => {
+                              const { x, y } = e.target.position();
+                              dispatch(updateShapePosition({ id: shape.id, x, y }));
+                            }}
+                          />
+                          {isSelected && !shape.locked && shapeRefs.current[shape.id] && selectedTool !== "Node" && (
+                            <Transformer
+                              ref={transformerRef}
+                              nodes={selectedShapeIds.map(id => shapeRefs.current[id]).filter(Boolean)}
+                              boundBoxFunc={(oldBox, newBox) => {
+                                if (newBox.width < 5 || newBox.height < 5) {
+                                  return oldBox;
+                                }
+                                return newBox;
+                              }}
+                              enabledAnchors={[
+                                "top-left",
+                                "top-center",
+                                "top-right",
+                                "middle-left",
+                                "middle-right",
+                                "bottom-left",
+                                "bottom-center",
+                                "bottom-right",
+                              ]}
+                              skewEnabled={true}
+                            />
+                          )}
+                        </React.Fragment>
+                      );
+                    } else if (shape.type === "CompoundPath") {
+                      return (
+                        <Group
+                          key={shape.id}
+                          id={shape.id}
+                          ref={node => {
+                            if (node) shapeRefs.current[shape.id] = node;
+                            else delete shapeRefs.current[shape.id];
+                          }}
+                          draggable
+                          onClick={e => {
+                            e.cancelBubble = true;
+                            if (!selectedShapeIds.includes(shape.id)) {
+                              dispatch(selectShape(shape.id));
+                            }
+                          }}
+                          onDragEnd={e => {
+                            const { x, y } = e.target.position();
+                            dispatch(updateShapePosition({ id: shape.id, x, y }));
+                          }}
+                        >
+                          {shape.rings.map((ring, i) => (
+                            <Line
                               key={i}
-                              x={pt.x}
-                              y={pt.y}
-                              radius={pt.r}
-                              fill={shape.stroke || "black"}
-                              opacity={0.7}
+                              points={ring.flatMap(pt => [pt.x, pt.y])}
+                              closed
+                              fill={shape.fill || "transparent"}
+                              stroke={shape.stroke || "black"}
+                              strokeWidth={shape.strokeWidth || 1}
                             />
                           ))}
                         </Group>
                       );
-                    }
+                    } else if (shape.type === "Polygon") {
+                      let points = shape.points.map(p => ({ x: p.x, y: p.y }));
+                      if (shape.lpeEffect === "Bend") {
+                        points = applyBendEffect(points, 40, 1);
+                      }
+                      if (!shape.points || shape.points.length === 0) return null;
+                      const isSelected = selectedShapeIds.includes(shape.id);
+                      return (
+                        <React.Fragment key={shape.id}>
+                          {shape.bloom && (
+                            <Path
+                              x={shape.x}
+                              y={shape.y}
+                              data={generatePolygonPath(shape.points)}
+                              fill={shape.fill || "transparent"}
+                              stroke={shape.stroke || "#ffff99"}
+                              strokeWidth={(shape.strokeWidth || 2) + (shape.bloom.radius || 16)}
+                              opacity={0.5 * (shape.bloom.brightness || 1.5)}
+                              listening={false}
+                              filters={[window.Konva.Filters.Blur]}
+                              blurRadius={shape.bloom.radius || 16}
+                            />
+                          )}
+                          <Group
+                            key={shape.id}
+                            clipFunc={shape.clipPath ? ctx => {
+                              ctx.beginPath();
+                              shape.clipPath.forEach((pt, i) => {
+                                if (i === 0) ctx.moveTo(pt.x, pt.y);
+                                else ctx.lineTo(pt.x, pt.y);
+                              });
+                              ctx.closePath();
+                            } : undefined}
+                          ></Group>
+                          <Path
+                            ref={(node) => {
+                              if (node) shapeRefs.current[shape.id] = node;
+                              else delete shapeRefs.current[shape.id];
+                            }}
+                            key={shape.id}
+                            id={shape.id}
+                            x={shape.x}
+                            y={shape.y}
+                            points={points.flatMap(p => [p.x, p.y])}
+                            data={generatePolygonPath(shape.points)}
+                            stroke={
+                              shape.stroke?.type === "linear-gradient" || shape.stroke?.type === "radial-gradient"
+                                ? undefined
+                                : shape.stroke || "black"
+                            }
+                            strokeWidth={shape.strokeWidth || 1}
+                            strokeLinearGradientStartPoint={shape.stroke?.type === "linear-gradient" ? shape.stroke.start : undefined}
+                            strokeLinearGradientEndPoint={shape.stroke?.type === "linear-gradient" ? shape.stroke.end : undefined}
+                            strokeLinearGradientColorStops={shape.stroke?.type === "linear-gradient" ? shape.stroke.colors.flatMap(stop => [stop.pos, stop.color]) : undefined}
+                            strokeRadialGradientStartPoint={shape.stroke?.type === "radial-gradient" ? shape.stroke.center : undefined}
+                            strokeRadialGradientEndPoint={shape.stroke?.type === "radial-gradient" ? { x: shape.stroke.center.x, y: shape.stroke.center.y + shape.stroke.radius } : undefined}
+                            strokeRadialGradientColorStops={shape.stroke?.type === "radial-gradient" ? shape.stroke.colors.flatMap(stop => [stop.pos, stop.color]) : undefined}
+                            fill={
+                              shape.fill?.type === "linear-gradient" || shape.fill?.type === "radial-gradient"
+                                ? undefined
+                                : shape.fill || "transparent"
+                            }
+                            fillLinearGradientStartPoint={shape.fill?.type === "linear-gradient" ? shape.fill.start : undefined}
+                            fillLinearGradientEndPoint={shape.fill?.type === "linear-gradient" ? shape.fill.end : undefined}
+                            fillLinearGradientColorStops={shape.fill?.type === "linear-gradient" ? shape.fill.colors.flatMap(stop => [stop.pos, stop.color]) : undefined}
+                            fillRadialGradientStartPoint={shape.fill?.type === "radial-gradient" ? shape.fill.center : undefined}
+                            fillRadialGradientEndPoint={shape.fill?.type === "radial-gradient" ? { x: shape.fill.center.x, y: shape.fill.center.y + shape.fill.radius } : undefined}
+                            fillRadialGradientColorStops={shape.fill?.type === "radial-gradient" ? shape.fill.colors.flatMap(stop => [stop.pos, stop.color]) : undefined}
+                            rotation={shape.rotation || 0}
+                            scaleX={shape.scaleX || 1}
+                            scaleY={shape.scaleY || 1}
+                            blur={shape.blur || 0}
+                            shadowBlur={shape.blur || 0}
+                            shadowColor={shape.fill || "#fff"}
+                            closed
+                            draggable={!shape.locked && selectedTool !== "Node" && selectedTool !== "Connector" && selectedTool !== "Gradient"}
+                            onDragMove={handleDragMove}
+                            skewX={shape.skewX || 0}
+                            skewY={shape.skewY || 0}
+                            onMouseEnter={() => {
+                              if (selectedTool === "Measurement") setHoveredShape(shape);
+                            }}
+                            onMouseLeave={() => {
+                              if (selectedTool === "Measurement") setHoveredShape(null);
+                            }}
+                            onClick={(e) => {
+                              e.cancelBubble = true;
+                              if (shape.locked) return;
+                              handleShapeClick(shape);
+                              if (selectedTool !== "Dropper") {
+                                if (e.evt.ctrlKey && selectedShape) {
+
+                                  dispatch(
+                                    selectNodePoint({
+                                      shapeId: selectedShape.id,
+                                      index,
+                                      x: point.x,
+                                      y: point.y,
+                                    })
+                                  );
+                                } else if (sprayEraserMode) {
+                                  dispatch(deleteShape(shape.id));
+                                } else if (selectedTool === "Eraser" && eraserMode === "delete") {
+                                  dispatch(deleteShape(shape.id));
+                                } else {
+
+                                  if (!selectedShapeIds.includes(shape.id)) {
+                                    dispatch(selectShape(shape.id));
+                                  }
+                                }
+                              }
+                            }}
+                            onDragEnd={(e) => {
+                              const { x, y } = e.target.position();
+                              dispatch(updateShapePosition({ id: shape.id, x, y }));
+                            }}
+                          />
+                          {isSelected && !shape.locked && shapeRefs.current[shape.id] && selectedTool !== "Node" && (
+                            <Transformer
+                              ref={transformerRef}
+                              nodes={selectedShapeIds.map(id => shapeRefs.current[id]).filter(Boolean)}
+                              boundBoxFunc={(oldBox, newBox) => {
+                                if (newBox.width < 5 || newBox.height < 5) {
+                                  return oldBox;
+                                }
+                                return newBox;
+                              }}
+                              enabledAnchors={[
+                                "top-left",
+                                "top-center",
+                                "top-right",
+                                "middle-left",
+                                "middle-right",
+                                "bottom-left",
+                                "bottom-center",
+                                "bottom-right",
+                              ]}
+                              skewEnabled={true}
+                            />
+                          )}
+                        </React.Fragment>
+                      );
+                    } else if (shape.type === "Pen") {
+                      if (!Array.isArray(shape.points) || !shape.points.every((p) => Array.isArray(p) && p.length === 2)) {
+                        console.error("Invalid points structure for Pen shape:", shape);
+                        return null;
+                      }
+
+                      const centerX = shape.points.reduce((sum, [x]) => sum + x, 0) / shape.points.length;
+                      const centerY = shape.points.reduce((sum, [, y]) => sum + y, 0) / shape.points.length;
+
+                      const rotatedPoints = shape.points.map(([x, y]) => {
+                        const { x: nx, y: ny } = rotatePoint(x, y, centerX, centerY, shape.rotation || 0);
+                        return [nx, ny];
+                      });
+                      return (
+                        <Line
+                          ref={(node) => {
+                            if (node) shapeRefs.current[shape.id] = node;
+                            else delete shapeRefs.current[shape.id];
+                          }}
+                          key={shape.id}
+                          id={shape.id}
+                          points={rotatedPoints.flat()}
+                          stroke={shape.strokeColor}
+                          strokeWidth={shape.strokeWidth || 2}
+                          lineJoin="round"
+                          lineCap="round"
+                          blur={shape.blur || 0}
+                          shadowBlur={shape.blur || 0}
+                          shadowColor={shape.fill || "#fff"}
+                          rotation={shape.rotation || 0}
+                          dash={getDashArray(shape.strokeStyle)}
+                          scaleX={shape.scaleX || 1}
+                          scaleY={shape.scaleY || 1}
+                          draggable={!shape.locked && selectedTool !== "Node" && selectedTool !== "Connector"}
+                          onClick={(e) => {
+                            e.cancelBubble = true;
+                            if (shape.locked) return;
+                            handleShapeClick(shape);
+                            if (selectedTool !== "Dropper") {
+                              if (e.evt.ctrlKey && selectedShape) {
+
+                                dispatch(
+                                  selectNodePoint({
+                                    shapeId: selectedShape.id,
+                                    index,
+                                    x: point.x,
+                                    y: point.y,
+                                  })
+                                );
+                              } else if (sprayEraserMode) {
+                                dispatch(deleteShape(shape.id));
+                              } else if (selectedTool === "Eraser" && eraserMode === "delete") {
+                                dispatch(deleteShape(shape.id));
+                              } else {
+
+                                if (!selectedShapeIds.includes(shape.id)) {
+                                  dispatch(selectShape(shape.id));
+                                }
+                              }
+                            }
+                          }}
+                          onMouseDown={(e) => {
+                            e.cancelBubble = true;
+                          }}
+                          onTransformStart={(e) => {
+                            e.cancelBubble = true;
+                          }}
+                          onTransformEnd={(e) => handleBezierTransformEnd(e, shape)}
+                          onDragEnd={(e) => {
+                            const { x, y } = e.target.position();
+                            dispatch(updateShapePosition({ id: shape.id, x, y }));
+                          }}
+                        />
+                      );
+                    } else if (shape.type === "Pencil") {
+                      if (shape.lpeEffect === "Knot") {
+                        const points = shape.points.map(p => ({ x: p.x, y: p.y }));
+                        return (
+                          <Path
+                            key={shape.id}
+                            id={shape.id}
+                            data={generateKnotEffectPath(points, shape.knotGapLength || 10)}
+                            stroke={shape.stroke || shape.strokeColor || "black"}
+                            strokeWidth={shape.strokeWidth || 2}
+                            fill="none"
+                            draggable={!shape.locked}
+                            onDragMove={handleDragMove}
+                            onDragEnd={e => handleDragEnd(e, shape.id)}
+                            onClick={e => {
+                              e.cancelBubble = true;
+                              if (!selectedShapeIds.includes(shape.id)) {
+                                dispatch(selectShape(shape.id));
+                              }
+                            }}
+                          />
+                        );
+                      }
+                      if (!Array.isArray(shape.points) || !shape.points.every((p) => typeof p.x === "number" && typeof p.y === "number")) {
+                        console.error("Invalid points structure for Pencil shape:", shape);
+                        return null;
+                      }
+                      const centerX = shape.points.reduce((sum, p) => sum + p.x, 0) / shape.points.length;
+                      const centerY = shape.points.reduce((sum, p) => sum + p.y, 0) / shape.points.length;
+
+                      const rotatedPoints = shape.points.map((p) => {
+                        const { x: nx, y: ny } = rotatePoint(p.x, p.y, centerX, centerY, shape.rotation || 0);
+                        return [nx, ny];
+                      });
+                      const scaledPoints = scaleShapePoints(shape.points.map(p => [p.x, p.y]), 1 + pencilScale, centerX, centerY);
+                      const isSelected = selectedShapeIds.includes(shape.id);
+                      const pencilOption = shape.pencilOption || "None";
+                      let points = shape.points.map(p => [p.x, p.y]);
+                      const width = (shape.strokeWidth || 10) * (1 + (shape.pencilScale ?? pencilScale ?? 0));
+                      if (shape.lpeEffect === "Bend") {
+                        points = applyBendEffect(points.map(([x, y]) => ({ x, y })), 40, 1);
+                        points = points.flatMap(p => [p.x, p.y]);
+                      } else {
+                        points = points.flat();
+                      }
+                      function getPerp([x1, y1], [x2, y2], w) {
+                        const dx = x2 - x1, dy = y2 - y1;
+                        const len = Math.hypot(dx, dy) || 1;
+                        return [-(dy / len) * w, (dx / len) * w];
+                      }
+                      if (pencilOption === "Ellipse" && points.length > 2) {
+                        const smoothing = 90;
+                        const smoothPoints = smoothShape(points, smoothing);
+                        const left = [];
+                        const right = [];
+                        for (let i = 1; i < smoothPoints.length - 1; i++) {
+                          const [x0, y0] = smoothPoints[i - 1];
+                          const [x1, y1] = smoothPoints[i];
+                          const [x2, y2] = smoothPoints[i + 1];
+                          const perp1 = getPerp([x0, y0], [x1, y1], width);
+                          const perp2 = getPerp([x1, y1], [x2, y2], width);
+                          const perp = [(perp1[0] + perp2[0]) / 2, (perp1[1] + perp2[1]) / 2];
+                          left.push([x1 + perp[0] / 2, y1 + perp[1] / 2]);
+                          right.push([x1 - perp[0] / 2, y1 - perp[1] / 2]);
+                        }
+                        const [xStart, yStart] = smoothPoints[0];
+                        const [xEnd, yEnd] = smoothPoints[smoothPoints.length - 1];
+                        const polygon = [
+                          [xStart, yStart],
+                          ...left,
+                          [xEnd, yEnd],
+                          ...right.reverse()
+                        ];
+                        const pathData = polygon.map(
+                          ([x, y], i) => (i === 0 ? `M ${x} ${y}` : `L ${x} ${y}`)
+                        ).join(" ") + " Z";
+                        return (
+                          <Path
+                            ref={(node) => {
+                              if (node) shapeRefs.current[shape.id] = node;
+                              else delete shapeRefs.current[shape.id];
+                            }}
+                            key={shape.id}
+                            data={pathData}
+                            fill={shape.fill || shape.strokeColor || "black"}
+                            stroke={shape.strokeColor || "black"}
+                            strokeWidth={1}
+                            closed
+                            draggable={!shape.locked && selectedTool !== "Node"}
+                            onDragMove={handleDragMove}
+                            onDragEnd={(e) => {
+                              const { x, y } = e.target.position();
+                              dispatch(updateShapePosition({ id: shape.id, x, y }));
+                            }}
+                          />
+                        );
+                      }
+                      return (
+                        <React.Fragment key={shape.id}>
+                          <Line
+                            ref={(node) => {
+                              if (node) shapeRefs.current[shape.id] = node;
+                              else delete shapeRefs.current[shape.id];
+                            }}
+                            key={shape.id}
+                            id={shape.id}
+                            points={points}
+                            stroke={shape.strokeColor}
+                            fill={shape.fill || "transparent"}
+                            strokeWidth={(shape.strokeWidth || 1) * (shape.pencilScale ?? pencilScale ?? 1)}
+                            lineJoin="round"
+                            lineCap="round"
+                            closed={shape.closed || false}
+                            draggable={!shape.locked && selectedTool !== "Node" && selectedTool !== "Connector" && selectedTool === "Select"}
+                            dash={getDashArray(shape.strokeStyle)}
+                            rotation={shape.rotation || 0}
+                            onDragMove={handleDragMove}
+                            scaleX={shape.scaleX || 1}
+                            listening={true}
+                            scaleY={shape.scaleY || 1}
+                            skewX={shape.skewX || 0}
+                            skewY={shape.skewY || 0}
+                            blur={shape.blur || 0}
+                            shadowBlur={shape.blur || 0}
+                            shadowColor={shape.fill || "#fff"}
+                            onMouseEnter={() => {
+                              if (selectedTool === "Measurement") setHoveredShape(shape);
+                            }}
+                            onMouseLeave={() => {
+                              if (selectedTool === "Measurement") setHoveredShape(null);
+                            }}
+                            onClick={(e) => {
+                              e.cancelBubble = true;
+                              if (shape.locked) return;
+                              handleShapeClick(shape);
+                              if (selectedTool !== "Dropper") {
+                                if (e.evt.ctrlKey && selectedShape) {
+
+                                  dispatch(
+                                    selectNodePoint({
+                                      shapeId: selectedShape.id,
+                                      index,
+                                      x: point.x,
+                                      y: point.y,
+                                    })
+                                  );
+                                } else if (sprayEraserMode) {
+                                  dispatch(deleteShape(shape.id));
+                                } else if (selectedTool === "Eraser" && eraserMode === "delete") {
+                                  dispatch(deleteShape(shape.id));
+                                } else {
+
+                                  if (!selectedShapeIds.includes(shape.id)) {
+                                    dispatch(selectShape(shape.id));
+                                  }
+                                }
+                              }
+                            }}
+                            onDragEnd={(e) => {
+                              const { x, y } = e.target.position();
+                              dispatch(updateShapePosition({ id: shape.id, x, y }));
+                            }}
+                          />
+                          {isSelected && !shape.locked && shapeRefs.current[shape.id] && selectedTool !== "Node" && (
+                            <Transformer
+                              ref={transformerRef}
+                              nodes={selectedShapeIds.map(id => shapeRefs.current[id]).filter(Boolean)}
+                              boundBoxFunc={(oldBox, newBox) => {
+                                if (newBox.width < 5 || newBox.height < 5) {
+                                  return oldBox;
+                                }
+                                return newBox;
+                              }}
+                              enabledAnchors={[
+                                "top-left",
+                                "top-center",
+                                "top-right",
+                                "middle-left",
+                                "middle-right",
+                                "bottom-left",
+                                "bottom-center",
+                                "bottom-right",
+                              ]}
+                              skewEnabled={true}
+                            />
+                          )}
+                        </React.Fragment>
+                      );
+                    } else if (shape.type === "BrushStroke") {
+                      const segments = [];
+                      const points = shape.points;
+
+                      const maxBrushWidth = 40;
+                      const minBrushWidth = pressureMin * maxBrushWidth;
+
+                      for (let i = 1; i < points.length; i++) {
+                        const [x0, y0, w0 = 1] = points[i - 1];
+                        const [x, y, w = 1] = points[i];
 
 
-                    const outer = [];
-                    const inner = [];
-                    for (let i = 0; i < allPoints.length; i++) {
-                      const p = allPoints[i];
-                      const prev = allPoints[i - 1] || allPoints[0];
-                      const dx = p.x - prev.x;
-                      const dy = p.y - prev.y;
-                      const len = Math.hypot(dx, dy) || 1;
+                        const p0 = Math.max(pressureMin, Math.min(1, w0));
+                        const p1 = Math.max(pressureMin, Math.min(1, w));
 
-                      const nx = -dy / len;
-                      const ny = dx / len;
-                      const r = p.r || 5;
-                      outer.push({ x: p.x + nx * r, y: p.y + ny * r });
-                      inner.push({ x: p.x - nx * r, y: p.y - ny * r });
-                    }
 
-                    const polygon = [...outer, ...inner.reverse()];
-                    const pathData = polygon.map((pt, i) =>
-                      (i === 0 ? `M ${pt.x} ${pt.y}` : `L ${pt.x} ${pt.y}`)
-                    ).join(" ") + " Z";
+                        const width0 = minBrushWidth + ((p0 - pressureMin) / (1 - pressureMin)) * (maxBrushWidth - minBrushWidth);
+                        const width1 = minBrushWidth + ((p1 - pressureMin) / (1 - pressureMin)) * (maxBrushWidth - minBrushWidth);
 
-                    return (
-                      <Path
-                        ref={node => {
-                          if (node) shapeRefs.current[shape.id] = node;
-                          else delete shapeRefs.current[shape.id];
-                        }}
-                        key={shape.id}
-                        id={shape.id}
-                        data={pathData}
-                        fill={shape.stroke || "black"}
-                        opacity={0.7}
-                        stroke={shape.stroke || "black"}
-                        strokeWidth={1}
-                        closed
-                        draggable={!shape.locked && selectedTool === "Select"}
-                        onDragMove={handleDragMove}
-                      />
-                    );
-                  } else if (shape.type === "Splotchy") {
-                    const points = shape.points;
-                    if (!points || points.length < 3) return null;
+                        const width = Math.max(minBrushWidth, (width0 + width1) / 2);
 
-                    const outer = [];
-                    const inner = [];
-                    for (let i = 0; i < points.length; i++) {
-                      const p = points[i];
-                      const prev = points[i - 1] || points[0];
-                      const dx = p.x - prev.x;
-                      const dy = p.y - prev.y;
-                      const len = Math.hypot(dx, dy) || 1;
-                      const nx = -dy / len;
-                      const ny = dx / len;
-                      const r = (p.strokeWidth || 10) / 2;
-                      outer.push({ x: p.x + nx * r, y: p.y + ny * r });
-                      inner.push({ x: p.x - nx * r, y: p.y - ny * r });
-                    }
-                    const polygon = [...outer, ...inner.reverse()];
-                    const pathData = polygon.map((pt, i) =>
-                      (i === 0 ? `M ${pt.x} ${pt.y}` : `L ${pt.x} ${pt.y}`)
-                    ).join(" ") + " Z";
+                        segments.push(
+                          <Line
+                            ref={(node) => {
+                              if (node) shapeRefs.current[shape.id] = node;
+                              else delete shapeRefs.current[shape.id];
+                            }}
+                            key={i}
+                            points={[x0, y0, x, y]}
+                            stroke={shape.strokeColor}
+                            strokeWidth={width}
+                            lineCap={brushCaps}
+                            lineJoin="round"
+                          />
+                        );
+                      }
 
-                    return (
-                      <Path
-                        ref={node => {
-                          if (node) shapeRefs.current[shape.id] = node;
-                          else delete shapeRefs.current[shape.id];
-                        }}
-                        key={shape.id}
-                        id={shape.id}
-                        data={pathData}
-                        fill={shape.stroke || "black"}
-                        opacity={0.7}
-                        stroke={shape.stroke || "black"}
-                        strokeWidth={1}
-                        closed
-                        draggable={!shape.locked && selectedTool === "Select"}
-                        onDragMove={handleDragMove}
-                      />
-                    );
-                  } else if (shape.type === "Spiral") {
-                    const isSelected = selectedShapeIds.includes(shape.id);
-                    return (
-                      <React.Fragment key={shape.id}>
+                      if (brushCaps === "round" && points.length > 1) {
+                        const [xStart, yStart, wStart = 1] = points[0];
+                        const [xEnd, yEnd, wEnd = 1] = points[points.length - 1];
+                        const pStart = Math.max(0, Math.min(1, (wStart - pressureMin) / (pressureMax - pressureMin)));
+                        const pEnd = Math.max(0, Math.min(1, (wEnd - pressureMin) / (pressureMax - pressureMin)));
+                        segments.push(
+                          <Circle
+                            ref={(node) => {
+                              if (node) shapeRefs.current[shape.id] = node;
+                              else delete shapeRefs.current[shape.id];
+                            }}
+                            key="start-cap"
+                            x={xStart}
+                            y={yStart}
+                            radius={pStart * maxBrushWidth / 2}
+                            fill={shape.strokeColor}
+                          />,
+                          <Circle
+                            ref={(node) => {
+                              if (node) shapeRefs.current[shape.id] = node;
+                              else delete shapeRefs.current[shape.id];
+                            }}
+                            key="end-cap"
+                            x={xEnd}
+                            y={yEnd}
+                            radius={pEnd * maxBrushWidth / 2}
+                            fill={shape.strokeColor}
+                          />
+                        );
+                      }
+
+                      return <React.Fragment key={shape.id}>{segments}</React.Fragment>;
+                    } else if (shape.type === "Calligraphy") {
+                      const isSelected = selectedShapeIds.includes(shape.id);
+                      return (
+                        <React.Fragment key={shape.id}>
+                          <Line
+                            ref={(node) => {
+                              if (node) shapeRefs.current[shape.id] = node;
+                              else delete shapeRefs.current[shape.id];
+                            }}
+                            key={shape.id}
+                            id={shape.id}
+                            points={shape.points.flatMap((p) => [p.x, p.y])}
+                            stroke={shape.stroke}
+                            fill={shape.fill || "transparent"}
+                            strokeWidth={shape.strokeWidth}
+                            lineJoin="round"
+                            lineCap="round"
+                            closed={false}
+                            draggable={!shape.locked && selectedTool === "Select"}
+                            dash={getDashArray(shape.strokeStyle)}
+                            listening={true}
+                            onDragMove={handleDragMove}
+                            rotation={shape.rotation || 0}
+                            scaleX={shape.scaleX || 1}
+                            scaleY={shape.scaleY || 1}
+                            blur={shape.blur || 0}
+                            shadowBlur={shape.blur || 0}
+                            shadowColor={shape.fill || "#fff"}
+                            offsetX={shape.width ? shape.width / 2 : 0}
+                            offsetY={shape.height ? shape.height / 2 : 0}
+                            skewX={shape.skewX || 0}
+                            skewY={shape.skewY || 0}
+                            onMouseEnter={() => {
+                              if (selectedTool === "Measurement") setHoveredShape(shape);
+                            }}
+                            onMouseLeave={() => {
+                              if (selectedTool === "Measurement") setHoveredShape(null);
+                            }}
+                            onClick={(e) => {
+                              e.cancelBubble = true;
+                              if (shape.locked) return;
+                              handleShapeClick(shape);
+                              if (selectedTool !== "Dropper") {
+                                if (e.evt.ctrlKey && selectedShape) {
+
+                                  dispatch(
+                                    selectNodePoint({
+                                      shapeId: selectedShape.id,
+                                      index,
+                                      x: point.x,
+                                      y: point.y,
+                                    })
+                                  );
+                                } else if (sprayEraserMode) {
+                                  dispatch(deleteShape(shape.id));
+                                } else if (selectedTool === "Eraser" && eraserMode === "delete") {
+                                  dispatch(deleteShape(shape.id));
+                                } else {
+
+                                  if (!selectedShapeIds.includes(shape.id)) {
+                                    dispatch(selectShape(shape.id));
+                                  }
+                                }
+                              }
+                            }}
+                            onDragEnd={(e) => {
+                              const { x, y } = e.target.position();
+                              dispatch(updateShapePosition({ id: shape.id, x, y }));
+                            }}
+                          />
+                          {isSelected && !shape.locked && shapeRefs.current[shape.id] && selectedTool !== "Node" && (
+                            <Transformer
+                              ref={transformerRef}
+                              nodes={selectedShapeIds.map(id => shapeRefs.current[id]).filter(Boolean)}
+                              boundBoxFunc={(oldBox, newBox) => {
+                                if (newBox.width < 5 || newBox.height < 5) {
+                                  return oldBox;
+                                }
+                                return newBox;
+                              }}
+                              enabledAnchors={[
+                                "top-left",
+                                "top-center",
+                                "top-right",
+                                "middle-left",
+                                "middle-right",
+                                "bottom-left",
+                                "bottom-center",
+                                "bottom-right",
+                              ]}
+                              skewEnabled={true}
+                            />
+                          )}
+                        </React.Fragment>
+                      );
+                    } else if (shape.type === "DipPen") {
+                      return (
+                        <Group key={shape.id}>
+                          {shape.points.map((point, index) => {
+                            if (index === 0) return null;
+
+                            const prevPoint = shape.points[index - 1];
+                            const angle = point.angle || 0;
+
+
+                            const taperFactorStart = index < 3 ? index / 3 : 1;
+                            const taperFactorEnd =
+                              index > shape.points.length - 4
+                                ? (shape.points.length - index) / 3
+                                : 1;
+                            const taperFactor = Math.min(taperFactorStart, taperFactorEnd);
+
+                            const nibWidth = point.strokeWidth * taperFactor;
+
+
+                            const topX1 = prevPoint.x - (nibWidth / 2) * Math.cos(angle + Math.PI / 2);
+                            const topY1 = prevPoint.y - (nibWidth / 2) * Math.sin(angle + Math.PI / 2);
+                            const bottomX1 = prevPoint.x + (nibWidth / 2) * Math.cos(angle + Math.PI / 2);
+                            const bottomY1 = prevPoint.y + (nibWidth / 2) * Math.sin(angle + Math.PI / 2);
+
+                            const topX2 = point.x - (nibWidth / 2) * Math.cos(angle + Math.PI / 2);
+                            const topY2 = point.y - (nibWidth / 2) * Math.sin(angle + Math.PI / 2);
+                            const bottomX2 = point.x + (nibWidth / 2) * Math.cos(angle + Math.PI / 2);
+                            const bottomY2 = point.y + (nibWidth / 2) * Math.sin(angle + Math.PI / 2);
+
+                            return (
+                              <Shape
+                                ref={(node) => {
+                                  if (node) shapeRefs.current[shape.id] = node;
+                                  else delete shapeRefs.current[shape.id];
+                                }}
+                                key={index}
+                                id={`${shape.id}`}
+                                sceneFunc={(context, shape) => {
+                                  context.beginPath();
+                                  context.moveTo(topX1, topY1);
+                                  context.lineTo(topX2, topY2);
+                                  context.lineTo(bottomX2, bottomY2);
+                                  context.lineTo(bottomX1, bottomY1);
+                                  context.closePath();
+                                  context.fillStrokeShape(shape);
+                                }}
+                                fill={shape.stroke}
+                                stroke={shape.stroke}
+                                strokeWidth={1}
+                                onDragMove={handleDragMove}
+                              />
+                            );
+                          })}
+                        </Group>
+                      );
+                    } else if (shape.type === "Tracing") {
+                      const isSelected = selectedShapeIds.includes(shape.id);
+                      if (shape.pathData) {
+                        return (
+                          <React.Fragment key={shape.id}>
+                            <Path
+                              ref={node => {
+                                if (node) shapeRefs.current[shape.id] = node;
+                                else delete shapeRefs.current[shape.id];
+                              }}
+                              id={shape.id}
+                              data={shape.pathData}
+                              x={shape.x}
+                              y={shape.y}
+                              stroke={shape.stroke || "black"}
+                              strokeWidth={shape.strokeWidth || 1}
+                              fill={shape.fill || "none"}
+                              draggable={!shape.locked && selectedTool === "Select"}
+                              onDragMove={handleDragMove}
+                              onDragEnd={e => {
+                                const { x, y } = e.target.position();
+                                dispatch(updateShapePosition({ id: shape.id, x, y }));
+                              }}
+                              onClick={e => {
+                                e.cancelBubble = true;
+                                if (!selectedShapeIds.includes(shape.id)) {
+                                  dispatch(selectShape(shape.id));
+                                }
+                              }}
+                            />
+                            {isSelected && !shape.locked && shapeRefs.current[shape.id] && selectedTool !== "Node" && (
+                              <Transformer
+                                ref={transformerRef}
+                                nodes={selectedShapeIds.map(id => shapeRefs.current[id]).filter(Boolean)}
+                                boundBoxFunc={(oldBox, newBox) => {
+                                  if (newBox.width < 5 || newBox.height < 5) {
+                                    return oldBox;
+                                  }
+                                  return newBox;
+                                }}
+                                enabledAnchors={[
+                                  "top-left",
+                                  "top-center",
+                                  "top-right",
+                                  "middle-left",
+                                  "middle-right",
+                                  "bottom-left",
+                                  "bottom-center",
+                                  "bottom-right",
+                                ]}
+                                skewEnabled={true}
+                              />
+                            )}
+                          </React.Fragment>
+                        );
+                      }
+
+                      if (!shape.points) return null;
+                      const allPoints = [];
+                      shape.points.forEach((point) => {
+                        if (Array.isArray(point.shapes)) {
+                          point.shapes.forEach((subShape) => {
+                            allPoints.push({ x: subShape.x, y: subShape.y, r: subShape.radius });
+                          });
+                        }
+                      });
+
+
+                      if (allPoints.length < 3) {
+                        return (
+                          <Group key={shape.id} id={shape.id}>
+                            {allPoints.map((pt, i) => (
+                              <Circle
+                                key={i}
+                                x={pt.x}
+                                y={pt.y}
+                                radius={pt.r}
+                                fill={shape.stroke || "black"}
+                                opacity={0.7}
+                              />
+                            ))}
+                          </Group>
+                        );
+                      }
+
+
+                      const outer = [];
+                      const inner = [];
+                      for (let i = 0; i < allPoints.length; i++) {
+                        const p = allPoints[i];
+                        const prev = allPoints[i - 1] || allPoints[0];
+                        const dx = p.x - prev.x;
+                        const dy = p.y - prev.y;
+                        const len = Math.hypot(dx, dy) || 1;
+
+                        const nx = -dy / len;
+                        const ny = dx / len;
+                        const r = p.r || 5;
+                        outer.push({ x: p.x + nx * r, y: p.y + ny * r });
+                        inner.push({ x: p.x - nx * r, y: p.y - ny * r });
+                      }
+
+                      const polygon = [...outer, ...inner.reverse()];
+                      const pathData = polygon.map((pt, i) =>
+                        (i === 0 ? `M ${pt.x} ${pt.y}` : `L ${pt.x} ${pt.y}`)
+                      ).join(" ") + " Z";
+
+                      return (
+                        <Path
+                          ref={node => {
+                            if (node) shapeRefs.current[shape.id] = node;
+                            else delete shapeRefs.current[shape.id];
+                          }}
+                          key={shape.id}
+                          id={shape.id}
+                          data={pathData}
+                          fill={shape.stroke || "black"}
+                          opacity={0.7}
+                          stroke={shape.stroke || "black"}
+                          strokeWidth={1}
+                          closed
+                          draggable={!shape.locked && selectedTool === "Select"}
+                          onDragMove={handleDragMove}
+                        />
+                      );
+                    } else if (shape.type === "Splotchy") {
+                      const points = shape.points;
+                      if (!points || points.length < 3) return null;
+
+                      const outer = [];
+                      const inner = [];
+                      for (let i = 0; i < points.length; i++) {
+                        const p = points[i];
+                        const prev = points[i - 1] || points[0];
+                        const dx = p.x - prev.x;
+                        const dy = p.y - prev.y;
+                        const len = Math.hypot(dx, dy) || 1;
+                        const nx = -dy / len;
+                        const ny = dx / len;
+                        const r = (p.strokeWidth || 10) / 2;
+                        outer.push({ x: p.x + nx * r, y: p.y + ny * r });
+                        inner.push({ x: p.x - nx * r, y: p.y - ny * r });
+                      }
+                      const polygon = [...outer, ...inner.reverse()];
+                      const pathData = polygon.map((pt, i) =>
+                        (i === 0 ? `M ${pt.x} ${pt.y}` : `L ${pt.x} ${pt.y}`)
+                      ).join(" ") + " Z";
+
+                      return (
+                        <Path
+                          ref={node => {
+                            if (node) shapeRefs.current[shape.id] = node;
+                            else delete shapeRefs.current[shape.id];
+                          }}
+                          key={shape.id}
+                          id={shape.id}
+                          data={pathData}
+                          fill={shape.stroke || "black"}
+                          opacity={0.7}
+                          stroke={shape.stroke || "black"}
+                          strokeWidth={1}
+                          closed
+                          draggable={!shape.locked && selectedTool === "Select"}
+                          onDragMove={handleDragMove}
+                        />
+                      );
+                    } else if (shape.type === "Spiral") {
+                      const isSelected = selectedShapeIds.includes(shape.id);
+                      return (
+                        <React.Fragment key={shape.id}>
+                          <Path
+                            ref={(node) => {
+                              if (node) shapeRefs.current[shape.id] = node;
+                              else delete shapeRefs.current[shape.id];
+                            }}
+                            id={shape.id}
+                            x={0}
+                            y={0}
+                            data={shape.path}
+                            stroke={shape.stroke || "black"}
+                            strokeWidth={shape.strokeWidth || 2}
+                            fill="transparent"
+                            skewX={shape.skewX || 0}
+                            skewY={shape.skewY || 0}
+                            draggable={!shape.locked && selectedShapeId === shape.id}
+                            dash={getDashArray(shape.strokeStyle)}
+                            rotation={shape.rotation || 0}
+                            scaleX={shape.scaleX || 1}
+                            onDragMove={handleDragMove}
+                            scaleY={shape.scaleY || 1}
+                            onClick={(e) => {
+                              e.cancelBubble = true;
+                              if (shape.locked) return;
+                              if (e.evt.ctrlKey && selectedShape) {
+
+                                dispatch(
+                                  selectNodePoint({
+                                    shapeId: selectedShape.id,
+                                    index,
+                                    x: point.x,
+                                    y: point.y,
+                                  })
+                                );
+                              } else {
+
+                                if (!selectedShapeIds.includes(shape.id)) {
+                                  dispatch(selectShape(shape.id));
+                                }
+                              }
+                            }}
+                            onDragEnd={(e) => {
+                              const { x, y } = e.target.position();
+                              dispatch(updateShapePosition({ id: shape.id, x, y }));
+                            }}
+
+                          />
+                          {isSelected && !shape.locked && shapeRefs.current[shape.id] && selectedTool !== "Node" && (
+                            <Transformer
+                              ref={transformerRef}
+                              nodes={selectedShapeIds.map(id => shapeRefs.current[id]).filter(Boolean)}
+                              boundBoxFunc={(oldBox, newBox) => {
+                                if (newBox.width < 5 || newBox.height < 5) {
+                                  return oldBox;
+                                }
+                                return newBox;
+                              }}
+                              enabledAnchors={[
+                                "top-left",
+                                "top-center",
+                                "top-right",
+                                "middle-left",
+                                "middle-right",
+                                "bottom-left",
+                                "bottom-center",
+                                "bottom-right",
+                              ]}
+                              skewEnabled={true}
+                            />
+                          )}
+                        </React.Fragment>
+                      );
+                    } else if (shape.type === "Connector") {
+
+                      const startShape = shapes.find(s => s.id === shape.startId);
+                      const endShape = shapes.find(s => s.id === shape.endId);
+                      if (!startShape || !endShape) return null;
+                      const rawStartX = startShape.x + (shape.startOffset?.x ?? 0);
+                      const rawStartY = startShape.y + (shape.startOffset?.y ?? 0);
+                      const rawEndX = endShape.x + (shape.endOffset?.x ?? 0);
+                      const rawEndY = endShape.y + (shape.endOffset?.y ?? 0);
+                      let dash = [];
+                      let lineCap = "round";
+                      if (connectorLineStyle === "dashed") {
+                        dash = [12, 8];
+                        lineCap = "butt";
+                      }
+                      if (connectorLineStyle === "dotted") {
+                        dash = [0.1, 8];
+                        lineCap = "round";
+                      }
+
+                      const dx = rawEndX - rawStartX;
+                      const dy = rawEndY - rawStartY;
+                      const totalLen = Math.sqrt(dx * dx + dy * dy) || 1;
+
+
+                      let startX = rawStartX + (dx / totalLen) * spacing;
+                      let startY = rawStartY + (dy / totalLen) * spacing;
+                      let endX = rawEndX - (dx / totalLen) * spacing;
+                      let endY = rawEndY - (dy / totalLen) * spacing;
+
+                      const availableLen = Math.sqrt((endX - startX) ** 2 + (endY - startY) ** 2);
+
+
+                      const minLen = 2;
+
+                      if (connectorLength !== 0) {
+                        let desiredLen = connectorLength;
+                        if (connectorLength < 0) {
+
+                          desiredLen = Math.max(minLen, availableLen + connectorLength);
+                        }
+                        if (desiredLen < availableLen) {
+
+                          const midX = (startX + endX) / 2;
+                          const midY = (startY + endY) / 2;
+                          const half = desiredLen / 2;
+                          const dirX = (endX - startX) / availableLen;
+                          const dirY = (endY - startY) / availableLen;
+                          startX = midX - dirX * half;
+                          startY = midY - dirY * half;
+                          endX = midX + dirX * half;
+                          endY = midY + dirY * half;
+                        } else if (desiredLen > availableLen) {
+
+                          const extra = (desiredLen - availableLen) / 2;
+                          const dirX = (endX - startX) / availableLen;
+                          const dirY = (endY - startY) / availableLen;
+                          startX = startX - dirX * extra;
+                          startY = startY - dirY * extra;
+                          endX = endX + dirX * extra;
+                          endY = endY + dirY * extra;
+                        }
+                      }
+
+                      let points = [startX, startY, endX, endY];
+
+                      if (connectorNoOverlap) {
+                        const obstacles = shapes.filter(s =>
+                          ["Rectangle", "Circle", "Star", "Polygon"].includes(s.type) &&
+                          s.id !== shape.startId &&
+                          s.id !== shape.endId
+                        );
+                        points = findGridPath(
+                          { x: startX, y: startY },
+                          { x: endX, y: endY },
+                          obstacles
+                        );
+                      }
+
+                      if (connectorMode === "avoid") {
+                        const offset = 20;
+                        points = [
+                          startX, startY,
+                          startX, startY - offset,
+                          endX, endY - offset,
+                          endX, endY
+                        ];
+                      }
+
+                      if (connectorOrthogonal && points.length === 4) {
+                        points = [
+                          startX, startY,
+                          endX, startY,
+                          endX, endY
+                        ];
+                      }
+
+                      return (
+                        <Line
+                          ref={node => {
+                            if (node) shapeRefs.current[shape.id] = node;
+                            else delete shapeRefs.current[shape.id];
+                          }}
+                          key={shape.id}
+                          id={shape.id}
+                          points={points}
+                          stroke="black"
+                          strokeWidth={2}
+                          lineCap={lineCap}
+                          dash={dash}
+                          lineJoin="round"
+                          onClick={e => {
+                            e.cancelBubble = true;
+                            if (!selectedShapeIds.includes(shape.id)) {
+                              dispatch(selectShape(shape.id));
+                            }
+                          }}
+                        />
+                      );
+                    } else if (shape.type === "Text") {
+                      const isSelected = selectedShapeIds.includes(shape.id);
+                      const textDirection = shape.textDirection || "ltr";
+                      const blockProgression = shape.blockProgression || "normal";
+
+                      if (shape.type === "Text" && shape.putOnPathId) {
+                        const pathShape = shapes.find(s => s.id === shape.putOnPathId);
+
+                        let x1, y1, x2, y2;
+
+                        if (pathShape && Array.isArray(pathShape.points) && pathShape.points.length >= 2) {
+                          const p0 = pathShape.points[0];
+                          const p1 = pathShape.points[1];
+                          x1 = (pathShape.x || 0) + (p0.x ?? (Array.isArray(p0) ? p0[0] : 0));
+                          y1 = (pathShape.y || 0) + (p0.y ?? (Array.isArray(p0) ? p0[1] : 0));
+                          x2 = (pathShape.x || 0) + (p1.x ?? (Array.isArray(p1) ? p1[0] : 0));
+                          y2 = (pathShape.y || 0) + (p1.y ?? (Array.isArray(p1) ? p1[1] : 0));
+                        } else if (pathShape && typeof pathShape.path === "string") {
+
+                          const coordMatches = [...pathShape.path.matchAll(/([MLCQAZHVST])([^MLCQAZHVST]*)/gi)];
+                          let points = [];
+                          for (const match of coordMatches) {
+                            const coords = match[2]
+                              .trim()
+                              .split(/[ ,]+/)
+                              .map(Number)
+                              .filter(n => !isNaN(n));
+                            for (let i = 0; i < coords.length - 1; i += 2) {
+                              points.push({ x: coords[i], y: coords[i + 1] });
+                              if (points.length >= 2) break;
+                            }
+                            if (points.length >= 2) break;
+                          }
+                          if (points.length >= 2) {
+                            x1 = points[0].x;
+                            y1 = points[0].y;
+                            x2 = points[1].x;
+                            y2 = points[1].y;
+                          }
+                          return (
+                            <TextPath
+                              key={shape.id}
+                              data={pathShape.path}
+                              text={shape.text}
+                              fontSize={shape.fontSize || 16}
+                              fontFamily={shape.fontFamily || "Arial"}
+                              fill={shape.fill || "#000"}
+
+                            />
+                          );
+                        }
+
+                        if (x1 !== undefined && y1 !== undefined && x2 !== undefined && y2 !== undefined) {
+                          const dx = x2 - x1;
+                          const dy = y2 - y1;
+                          const angle = Math.atan2(dy, dx) * 180 / Math.PI;
+                          const chars = (shape.text || "").split("");
+                          const fontSize = shape.fontSize || 16;
+                          return (
+                            <Group
+                              key={shape.id}
+                              x={x1}
+                              y={y1 - fontSize * 0.8}
+                            >
+                              {chars.map((char, i) => {
+                                const t = chars.length > 1 ? i / (chars.length - 1) : 0;
+                                const cx = t * dx;
+                                const cy = t * dy;
+                                return (
+                                  <KonvaText
+                                    key={i}
+                                    text={char}
+                                    x={cx}
+                                    y={cy}
+                                    fontSize={fontSize}
+                                    fontFamily={shape.fontFamily || "Arial"}
+                                    fontStyle={shape.fontStyle || "normal"}
+                                    fill={shape.fill || "black"}
+                                    rotation={angle}
+                                    align="center"
+                                  />
+                                );
+                              })}
+                            </Group>
+                          );
+                        } else {
+
+                          return (
+                            <KonvaText
+                              key={shape.id}
+                              x={shape.x}
+                              y={shape.y}
+                              text="Select both a text object and a path object."
+                              fontSize={16}
+                              fill="red"
+                            />
+                          );
+                        }
+                      } else if (shape.type === "Text" && shape.flowIntoFrameId) {
+                        const frameShape = shapes.find(s => s.id === shape.flowIntoFrameId);
+                        if (frameShape) {
+
+                          if (frameShape.type === "Rectangle") {
+                            const padding = 16;
+                            return (
+                              <Group key={shape.id} clipFunc={ctx => {
+                                ctx.rect(frameShape.x, frameShape.y, frameShape.width, frameShape.height);
+                              }}>
+                                <KonvaText
+                                  x={frameShape.x + padding}
+                                  y={frameShape.y + padding}
+                                  width={frameShape.width - 2 * padding}
+                                  height={frameShape.height - 2 * padding}
+                                  text={shape.text}
+                                  fontSize={shape.fontSize || 16}
+                                  fontFamily={shape.fontFamily || "Arial"}
+                                  fill={shape.fill || "#000"}
+                                  align={shape.alignment || "left"}
+                                  verticalAlign="top"
+                                  draggable={false}
+                                  ellipsis={true}
+                                />
+                              </Group>
+                            );
+                          }
+                          if (frameShape.type === "Circle") {
+                            const boxSize = frameShape.radius * Math.sqrt(2);
+                            return (
+                              <Group key={shape.id} clipFunc={ctx => {
+                                ctx.beginPath();
+                                ctx.arc(frameShape.x, frameShape.y, frameShape.radius, 0, Math.PI * 2);
+                                ctx.closePath();
+                              }}>
+                                <KonvaText
+                                  x={frameShape.x - boxSize / 2}
+                                  y={frameShape.y - boxSize / 2}
+                                  width={boxSize}
+                                  height={boxSize}
+                                  text={shape.text}
+                                  fontSize={shape.fontSize || 16}
+                                  fontFamily={shape.fontFamily || "Arial"}
+                                  fill={shape.fill || "#000"}
+                                  align="center"
+                                  verticalAlign="middle"
+                                  draggable={!shape.locked && selectedTool !== "Node" && selectedTool !== "Mesh" && selectedTool !== "Connector"}
+                                />
+                              </Group>
+                            );
+                          }
+                          if ((frameShape.type === "Polygon" || frameShape.type === "Path") && frameShape.points?.length > 2) {
+                            const minX = Math.min(...frameShape.points.map(p => p.x));
+                            const minY = Math.min(...frameShape.points.map(p => p.y));
+                            const maxX = Math.max(...frameShape.points.map(p => p.x));
+                            const maxY = Math.max(...frameShape.points.map(p => p.y));
+                            return (
+                              <Group key={shape.id} clipFunc={ctx => {
+                                ctx.beginPath();
+                                ctx.moveTo(frameShape.points[0].x, frameShape.points[0].y);
+                                frameShape.points.forEach(pt => ctx.lineTo(pt.x, pt.y));
+                                ctx.closePath();
+                              }}>
+                                <KonvaText
+                                  x={minX}
+                                  y={minY}
+                                  width={maxX - minX}
+                                  height={maxY - minY}
+                                  text={shape.text}
+                                  fontSize={shape.fontSize || 16}
+                                  fontFamily={shape.fontFamily || "Arial"}
+                                  fill={shape.fill || "#000"}
+                                  align={shape.alignment || "left"}
+                                  verticalAlign="top"
+                                  draggable={!shape.locked && selectedTool !== "Node" && selectedTool !== "Mesh" && selectedTool !== "Connector"}
+                                />
+                              </Group>
+                            );
+                          }
+                        }
+                        return null;
+                      }
+                      if (blockProgression === "vertical") {
+
+                        const chars = (shape.text || "").split("");
+                        const fontSize = shape.fontSize || 16;
+                        return (
+                          <Group
+                            ref={(node) => {
+                              if (node) shapeRefs.current[shape.id] = node;
+                              else delete shapeRefs.current[shape.id];
+                            }}
+                            key={shape.id}
+                            id={shape.id}
+                            x={textDirection === "rtl" ? shape.x + shape.width : shape.x}
+                            y={shape.y}
+                            draggable={!shape.locked && selectedTool !== "Node" && selectedTool !== "Mesh" && selectedTool !== "Connector"}
+                            onDragMove={handleDragMove}
+                            onClick={(e) => {
+                              e.cancelBubble = true;
+                              if (shape.locked) return;
+                              setTextAreaPosition({
+                                x: shape.x * scale + position.x,
+                                y: shape.y * scale + position.y,
+                              });
+                              setTextContent(shape.text);
+                              setEditingTextId(shape.id);
+                              setTextAreaVisible(true);
+                            }}
+                          >
+                            {chars.map((char, i) => (
+                              <KonvaText
+                                key={i}
+                                text={char}
+                                x={0}
+                                y={i * fontSize}
+                                fontSize={fontSize}
+                                fontFamily={shape.fontFamily || "Arial"}
+                                fontStyle={shape.fontStyle || "normal"}
+                                fill={shape.fill || "black"}
+                                rotation={90}
+                                align="center"
+                                width={fontSize}
+                              />
+                            ))}
+                            {isSelected && !shape.locked && shapeRefs.current[shape.id] && selectedTool !== "Node" && (
+                              <Transformer
+                                ref={transformerRef}
+                                nodes={selectedShapeIds.map(id => shapeRefs.current[id]).filter(Boolean)}
+                                boundBoxFunc={(oldBox, newBox) => {
+                                  if (newBox.width < 5 || newBox.height < 5) {
+                                    return oldBox;
+                                  }
+                                  return newBox;
+                                }}
+                                enabledAnchors={[
+                                  "top-left",
+                                  "top-center",
+                                  "top-right",
+                                  "middle-left",
+                                  "middle-right",
+                                  "bottom-left",
+                                  "bottom-center",
+                                  "bottom-right",
+                                ]}
+                                skewEnabled={true}
+                              />
+                            )}
+                          </Group>
+                        );
+                      }
+                      const renderedText =
+                        blockProgression === "topToBottom"
+                          ? (shape.text || "").split("").join("\n")
+                          : shape.text;
+                      return (
+                        <React.Fragment key={shape.id}>
+                          <KonvaText
+                            ref={(node) => {
+                              if (node) shapeRefs.current[shape.id] = node;
+                              else delete shapeRefs.current[shape.id];
+                            }}
+                            key={shape.id}
+                            id={shape.id}
+                            x={textDirection === "rtl" ? shape.x + shape.width : shape.x}
+                            y={shape.y}
+                            text={renderedText}
+                            fontSize={shape.fontSize || 16}
+                            fontFamily={shape.fontFamily || "Arial"}
+                            fontStyle={shape.fontStyle || "normal"}
+                            align={textDirection === "rtl" ? "right" : shape.alignment || "left"}
+                            width={shape.width || 200}
+                            fill={shape.fill || "black"}
+                            rotation={shape.rotation || 0}
+                            letterSpacing={shape.letterSpacing || 0}
+                            draggable={!shape.locked && selectedTool !== "Node" && selectedTool !== "Mesh" && selectedTool !== "Connector"}
+                            onDragMove={handleDragMove}
+                            onClick={(e) => {
+                              e.cancelBubble = true;
+                              if (shape.locked) return;
+                              setTextAreaPosition({
+                                x: shape.x * scale + position.x,
+                                y: shape.y * scale + position.y,
+                              });
+                              setTextContent(shape.text);
+                              setEditingTextId(shape.id);
+                              setTextAreaVisible(true);
+                            }}
+                          />
+                          {isSelected && !shape.locked && shapeRefs.current[shape.id] && selectedTool !== "Node" && (
+                            <Transformer
+                              ref={transformerRef}
+                              nodes={selectedShapeIds.map(id => shapeRefs.current[id]).filter(Boolean)}
+                              boundBoxFunc={(oldBox, newBox) => {
+                                if (newBox.width < 5 || newBox.height < 5) {
+                                  return oldBox;
+                                }
+                                return newBox;
+                              }}
+                              enabledAnchors={[
+                                "top-left",
+                                "top-center",
+                                "top-right",
+                                "middle-left",
+                                "middle-right",
+                                "bottom-left",
+                                "bottom-center",
+                                "bottom-right",
+                              ]}
+                              skewEnabled={true}
+                            />
+                          )}
+                        </React.Fragment>
+                      );
+                    } if (shape.type === "Mesh") {
+                      return (
+                        <Group key={shape.id}>
+                          {/* Draw mesh polygons (approximate) */}
+                          {shape.nodes.slice(0, -1).map((row, r) =>
+                            row.slice(0, -1).map((node, c) => {
+                              const p1 = node;
+                              const p2 = shape.nodes[r][c + 1];
+                              const p3 = shape.nodes[r + 1][c + 1];
+                              const p4 = shape.nodes[r + 1][c];
+
+
+                              function hexToRgb(hex) {
+                                hex = hex.replace(/^#/, "");
+                                if (hex.length === 3) hex = hex.split("").map(x => x + x).join("");
+                                const num = parseInt(hex, 16);
+                                return {
+                                  r: (num >> 16) & 255,
+                                  g: (num >> 8) & 255,
+                                  b: num & 255
+                                };
+                              }
+                              function rgbToHex({ r, g, b }) {
+                                return (
+                                  "#" +
+                                  [r, g, b]
+                                    .map((x) => {
+                                      const hex = x.toString(16);
+                                      return hex.length === 1 ? "0" + hex : hex;
+                                    })
+                                    .join("")
+                                );
+                              }
+                              function avgColor(colors) {
+                                const rgbs = colors.map(hexToRgb);
+                                const r = Math.round(rgbs.reduce((sum, c) => sum + c.r, 0) / rgbs.length);
+                                const g = Math.round(rgbs.reduce((sum, c) => sum + c.g, 0) / rgbs.length);
+                                const b = Math.round(rgbs.reduce((sum, c) => sum + c.b, 0) / rgbs.length);
+                                return rgbToHex({ r, g, b });
+                              }
+
+                              const fillColor = avgColor([p1.color, p2.color, p3.color, p4.color]);
+
+                              return (
+                                <Line
+                                  key={`${r}-${c}`}
+                                  points={[p1.x, p1.y, p2.x, p2.y, p3.x, p3.y, p4.x, p4.y]}
+                                  closed
+                                  fill={fillColor}
+                                  stroke="#888"
+                                  strokeWidth={1}
+                                />
+                              );
+                            })
+                          )}
+                          {shape.nodes.flat().map((node, idx) => (
+                            <Circle
+                              key={idx}
+                              x={node.x}
+                              y={node.y}
+                              radius={6}
+                              fill={blendWithWhite(node.color, 0.7)}
+                              stroke="#000"
+                              strokeWidth={1}
+                              draggable
+                              onDragMove={e => {
+                                const { x, y } = e.target.position();
+                                dispatch({
+                                  type: "tool/updateMeshNode",
+                                  payload: { meshId: shape.id, nodeIdx: idx, x, y }
+                                });
+                              }}
+                              onClick={e => { }}
+                            />
+                          ))}
+                        </Group>
+                      );
+                    } else if (shape.type === "Path") {
+                      return (
                         <Path
                           ref={(node) => {
                             if (node) shapeRefs.current[shape.id] = node;
                             else delete shapeRefs.current[shape.id];
                           }}
+                          key={shape.id}
                           id={shape.id}
-                          x={0}
-                          y={0}
                           data={shape.path}
                           stroke={shape.stroke || "black"}
                           strokeWidth={shape.strokeWidth || 2}
-                          fill="transparent"
-                          skewX={shape.skewX || 0}
-                          skewY={shape.skewY || 0}
-                          draggable={!shape.locked && selectedShapeId === shape.id}
                           dash={getDashArray(shape.strokeStyle)}
-                          rotation={shape.rotation || 0}
-                          scaleX={shape.scaleX || 1}
-                          onDragMove={handleDragMove}
-                          scaleY={shape.scaleY || 1}
+                          fill={shape.fill || "transparent"}
+                          draggable
                           onClick={(e) => {
                             e.cancelBubble = true;
                             if (shape.locked) return;
@@ -8470,787 +9416,213 @@ const Panel = React.forwardRef(({
                             const { x, y } = e.target.position();
                             dispatch(updateShapePosition({ id: shape.id, x, y }));
                           }}
-
                         />
-                        {isSelected && !shape.locked && shapeRefs.current[shape.id] && selectedTool !== "Node" && (
-                          <Transformer
-                            ref={transformerRef}
-                            nodes={selectedShapeIds.map(id => shapeRefs.current[id]).filter(Boolean)}
-                            boundBoxFunc={(oldBox, newBox) => {
-                              if (newBox.width < 5 || newBox.height < 5) {
-                                return oldBox;
-                              }
-                              return newBox;
-                            }}
-                            enabledAnchors={[
-                              "top-left",
-                              "top-center",
-                              "top-right",
-                              "middle-left",
-                              "middle-right",
-                              "bottom-left",
-                              "bottom-center",
-                              "bottom-right",
-                            ]}
-                            skewEnabled={true}
-                          />
-                        )}
-                      </React.Fragment>
-                    );
-                  } else if (shape.type === "Connector") {
-
-                    const startShape = shapes.find(s => s.id === shape.startId);
-                    const endShape = shapes.find(s => s.id === shape.endId);
-                    if (!startShape || !endShape) return null;
-                    const rawStartX = startShape.x + (shape.startOffset?.x ?? 0);
-                    const rawStartY = startShape.y + (shape.startOffset?.y ?? 0);
-                    const rawEndX = endShape.x + (shape.endOffset?.x ?? 0);
-                    const rawEndY = endShape.y + (shape.endOffset?.y ?? 0);
-                    let dash = [];
-                    let lineCap = "round";
-                    if (connectorLineStyle === "dashed") {
-                      dash = [12, 8];
-                      lineCap = "butt";
-                    }
-                    if (connectorLineStyle === "dotted") {
-                      dash = [0.1, 8];
-                      lineCap = "round";
-                    }
-
-                    const dx = rawEndX - rawStartX;
-                    const dy = rawEndY - rawStartY;
-                    const totalLen = Math.sqrt(dx * dx + dy * dy) || 1;
-
-
-                    let startX = rawStartX + (dx / totalLen) * spacing;
-                    let startY = rawStartY + (dy / totalLen) * spacing;
-                    let endX = rawEndX - (dx / totalLen) * spacing;
-                    let endY = rawEndY - (dy / totalLen) * spacing;
-
-                    const availableLen = Math.sqrt((endX - startX) ** 2 + (endY - startY) ** 2);
-
-
-                    const minLen = 2;
-
-                    if (connectorLength !== 0) {
-                      let desiredLen = connectorLength;
-                      if (connectorLength < 0) {
-
-                        desiredLen = Math.max(minLen, availableLen + connectorLength);
-                      }
-                      if (desiredLen < availableLen) {
-
-                        const midX = (startX + endX) / 2;
-                        const midY = (startY + endY) / 2;
-                        const half = desiredLen / 2;
-                        const dirX = (endX - startX) / availableLen;
-                        const dirY = (endY - startY) / availableLen;
-                        startX = midX - dirX * half;
-                        startY = midY - dirY * half;
-                        endX = midX + dirX * half;
-                        endY = midY + dirY * half;
-                      } else if (desiredLen > availableLen) {
-
-                        const extra = (desiredLen - availableLen) / 2;
-                        const dirX = (endX - startX) / availableLen;
-                        const dirY = (endY - startY) / availableLen;
-                        startX = startX - dirX * extra;
-                        startY = startY - dirY * extra;
-                        endX = endX + dirX * extra;
-                        endY = endY + dirY * extra;
-                      }
-                    }
-
-                    let points = [startX, startY, endX, endY];
-
-                    if (connectorNoOverlap) {
-                      const obstacles = shapes.filter(s =>
-                        ["Rectangle", "Circle", "Star", "Polygon"].includes(s.type) &&
-                        s.id !== shape.startId &&
-                        s.id !== shape.endId
-                      );
-                      points = findGridPath(
-                        { x: startX, y: startY },
-                        { x: endX, y: endY },
-                        obstacles
                       );
                     }
-
-                    if (connectorMode === "avoid") {
-                      const offset = 20;
-                      points = [
-                        startX, startY,
-                        startX, startY - offset,
-                        endX, endY - offset,
-                        endX, endY
-                      ];
-                    }
-
-                    if (connectorOrthogonal && points.length === 4) {
-                      points = [
-                        startX, startY,
-                        endX, startY,
-                        endX, endY
-                      ];
-                    }
-
-                    return (
-                      <Line
-                        ref={node => {
-                          if (node) shapeRefs.current[shape.id] = node;
-                          else delete shapeRefs.current[shape.id];
-                        }}
-                        key={shape.id}
-                        id={shape.id}
-                        points={points}
-                        stroke="black"
-                        strokeWidth={2}
-                        lineCap={lineCap}
-                        dash={dash}
-                        lineJoin="round"
-                        onClick={e => {
-                          e.cancelBubble = true;
-                          if (!selectedShapeIds.includes(shape.id)) {
-                            dispatch(selectShape(shape.id));
-                          }
-                        }}
-                      />
-                    );
-                  } else if (shape.type === "Text") {
-                    const isSelected = selectedShapeIds.includes(shape.id);
-                    const textDirection = shape.textDirection || "ltr";
-                    const blockProgression = shape.blockProgression || "normal";
-
-                    if (shape.type === "Text" && shape.putOnPathId) {
-                      const pathShape = shapes.find(s => s.id === shape.putOnPathId);
-
-                      let x1, y1, x2, y2;
-
-                      if (pathShape && Array.isArray(pathShape.points) && pathShape.points.length >= 2) {
-                        const p0 = pathShape.points[0];
-                        const p1 = pathShape.points[1];
-                        x1 = (pathShape.x || 0) + (p0.x ?? (Array.isArray(p0) ? p0[0] : 0));
-                        y1 = (pathShape.y || 0) + (p0.y ?? (Array.isArray(p0) ? p0[1] : 0));
-                        x2 = (pathShape.x || 0) + (p1.x ?? (Array.isArray(p1) ? p1[0] : 0));
-                        y2 = (pathShape.y || 0) + (p1.y ?? (Array.isArray(p1) ? p1[1] : 0));
-                      } else if (pathShape && typeof pathShape.path === "string") {
-
-                        const coordMatches = [...pathShape.path.matchAll(/([MLCQAZHVST])([^MLCQAZHVST]*)/gi)];
-                        let points = [];
-                        for (const match of coordMatches) {
-                          const coords = match[2]
-                            .trim()
-                            .split(/[ ,]+/)
-                            .map(Number)
-                            .filter(n => !isNaN(n));
-                          for (let i = 0; i < coords.length - 1; i += 2) {
-                            points.push({ x: coords[i], y: coords[i + 1] });
-                            if (points.length >= 2) break;
-                          }
-                          if (points.length >= 2) break;
-                        }
-                        if (points.length >= 2) {
-                          x1 = points[0].x;
-                          y1 = points[0].y;
-                          x2 = points[1].x;
-                          y2 = points[1].y;
-                        }
-                        return (
-                          <TextPath
-                            key={shape.id}
-                            data={pathShape.path}
-                            text={shape.text}
-                            fontSize={shape.fontSize || 16}
-                            fontFamily={shape.fontFamily || "Arial"}
-                            fill={shape.fill || "#000"}
-
-                          />
-                        );
+                    else if (
+                      shape.type === "Pencil" ||
+                      shape.type === "Calligraphy" ||
+                      shape.type === "Path" ||
+                      shape.type === "Bezier" ||
+                      shape.type === "Spiral"
+                    ) {
+                      const pts = shape.points
+                        ? shape.points.map(p => [p.x, p.y])
+                        : [];
+                      if (shape.lpeEffect === "Bend") {
+                        pts = applyBendEffect(pts, 40, 1);
                       }
+                      if (pts.length >= 2) {
+                        const [x1, y1] = pts[0];
+                        const [x2, y2] = pts[pts.length - 1];
+                        const angleEnd = Math.atan2(y2 - pts[pts.length - 2][1], x2 - pts[pts.length - 2][0]);
+                        const angleStart = Math.atan2(pts[1][1] - y1, pts[1][0] - x1);
 
-                      if (x1 !== undefined && y1 !== undefined && x2 !== undefined && y2 !== undefined) {
-                        const dx = x2 - x1;
-                        const dy = y2 - y1;
-                        const angle = Math.atan2(dy, dx) * 180 / Math.PI;
-                        const chars = (shape.text || "").split("");
-                        const fontSize = shape.fontSize || 16;
                         return (
-                          <Group
-                            key={shape.id}
-                            x={x1}
-                            y={y1 - fontSize * 0.8}
-                          >
-                            {chars.map((char, i) => {
-                              const t = chars.length > 1 ? i / (chars.length - 1) : 0;
-                              const cx = t * dx;
-                              const cy = t * dy;
-                              return (
-                                <KonvaText
-                                  key={i}
-                                  text={char}
-                                  x={cx}
-                                  y={cy}
-                                  fontSize={fontSize}
-                                  fontFamily={shape.fontFamily || "Arial"}
-                                  fontStyle={shape.fontStyle || "normal"}
-                                  fill={shape.fill || "black"}
-                                  rotation={angle}
-                                  align="center"
-                                />
-                              );
-                            })}
+                          <Group key={shape.id}>
+                            <Line
+                              points={pts.flat()}
+                              stroke={shape.stroke || shape.strokeColor || "#222"}
+                              strokeWidth={shape.strokeWidth || 2}
+                              lineJoin="round"
+                              lineCap="round"
+                              closed={shape.closed || false}
+                            />
+                            {shape.markerEnd && shape.markerEnd !== "none" &&
+                              renderMarker(shape.markerEnd, x2, y2, angleEnd, shape.stroke || shape.strokeColor || "#222")}
+                            {shape.markerStart && shape.markerStart !== "none" &&
+                              renderMarker(shape.markerStart, x1, y1, angleStart + Math.PI, shape.stroke || shape.strokeColor || "#222")}
                           </Group>
                         );
-                      } else {
-
-                        return (
-                          <KonvaText
-                            key={shape.id}
-                            x={shape.x}
-                            y={shape.y}
-                            text="Select both a text object and a path object."
-                            fontSize={16}
-                            fill="red"
-                          />
-                        );
                       }
-                    } else if (shape.type === "Text" && shape.flowIntoFrameId) {
-                      const frameShape = shapes.find(s => s.id === shape.flowIntoFrameId);
-                      if (frameShape) {
-
-                        if (frameShape.type === "Rectangle") {
-                          const padding = 16;
-                          return (
-                            <Group key={shape.id} clipFunc={ctx => {
-                              ctx.rect(frameShape.x, frameShape.y, frameShape.width, frameShape.height);
-                            }}>
-                              <KonvaText
-                                x={frameShape.x + padding}
-                                y={frameShape.y + padding}
-                                width={frameShape.width - 2 * padding}
-                                height={frameShape.height - 2 * padding}
-                                text={shape.text}
-                                fontSize={shape.fontSize || 16}
-                                fontFamily={shape.fontFamily || "Arial"}
-                                fill={shape.fill || "#000"}
-                                align={shape.alignment || "left"}
-                                verticalAlign="top"
-                                draggable={false}
-                                ellipsis={true}
-                              />
-                            </Group>
-                          );
-                        }
-                        if (frameShape.type === "Circle") {
-                          const boxSize = frameShape.radius * Math.sqrt(2);
-                          return (
-                            <Group key={shape.id} clipFunc={ctx => {
-                              ctx.beginPath();
-                              ctx.arc(frameShape.x, frameShape.y, frameShape.radius, 0, Math.PI * 2);
-                              ctx.closePath();
-                            }}>
-                              <KonvaText
-                                x={frameShape.x - boxSize / 2}
-                                y={frameShape.y - boxSize / 2}
-                                width={boxSize}
-                                height={boxSize}
-                                text={shape.text}
-                                fontSize={shape.fontSize || 16}
-                                fontFamily={shape.fontFamily || "Arial"}
-                                fill={shape.fill || "#000"}
-                                align="center"
-                                verticalAlign="middle"
-                                draggable={!shape.locked && selectedTool !== "Node" && selectedTool !== "Mesh" && selectedTool !== "Connector"}
-                              />
-                            </Group>
-                          );
-                        }
-                        if ((frameShape.type === "Polygon" || frameShape.type === "Path") && frameShape.points?.length > 2) {
-                          const minX = Math.min(...frameShape.points.map(p => p.x));
-                          const minY = Math.min(...frameShape.points.map(p => p.y));
-                          const maxX = Math.max(...frameShape.points.map(p => p.x));
-                          const maxY = Math.max(...frameShape.points.map(p => p.y));
-                          return (
-                            <Group key={shape.id} clipFunc={ctx => {
-                              ctx.beginPath();
-                              ctx.moveTo(frameShape.points[0].x, frameShape.points[0].y);
-                              frameShape.points.forEach(pt => ctx.lineTo(pt.x, pt.y));
-                              ctx.closePath();
-                            }}>
-                              <KonvaText
-                                x={minX}
-                                y={minY}
-                                width={maxX - minX}
-                                height={maxY - minY}
-                                text={shape.text}
-                                fontSize={shape.fontSize || 16}
-                                fontFamily={shape.fontFamily || "Arial"}
-                                fill={shape.fill || "#000"}
-                                align={shape.alignment || "left"}
-                                verticalAlign="top"
-                                draggable={!shape.locked && selectedTool !== "Node" && selectedTool !== "Mesh" && selectedTool !== "Connector"}
-                              />
-                            </Group>
-                          );
-                        }
-                      }
-                      return null;
                     }
-                    if (blockProgression === "vertical") {
+                    return null;
+                  })}
 
-                      const chars = (shape.text || "").split("");
-                      const fontSize = shape.fontSize || 16;
-                      return (
-                        <Group
-                          ref={(node) => {
-                            if (node) shapeRefs.current[shape.id] = node;
-                            else delete shapeRefs.current[shape.id];
-                          }}
-                          key={shape.id}
-                          id={shape.id}
-                          x={textDirection === "rtl" ? shape.x + shape.width : shape.x}
-                          y={shape.y}
-                          draggable={!shape.locked && selectedTool !== "Node" && selectedTool !== "Mesh" && selectedTool !== "Connector"}
-                          onDragMove={handleDragMove}
+                  {selectedTool === "Node" &&
+                    controlPoints.length > 0 &&
+                    controlPoints.map((point, index) => (
+                      <React.Fragment key={index}>
+                        <Circle
+                          key={index}
+                          x={point.x}
+                          y={point.y}
+                          radius={5}
+                          fill={
+                            selectedShape &&
+                              selectedNodePoints.some(
+                                (node) => node.shapeId === selectedShape.id && node.index === index
+                              )
+                              ? "green"
+                              : "red"
+                          }
+                          draggable
                           onClick={(e) => {
                             e.cancelBubble = true;
-                            if (shape.locked) return;
-                            setTextAreaPosition({
-                              x: shape.x * scale + position.x,
-                              y: shape.y * scale + position.y,
-                            });
-                            setTextContent(shape.text);
-                            setEditingTextId(shape.id);
-                            setTextAreaVisible(true);
-                          }}
-                        >
-                          {chars.map((char, i) => (
-                            <KonvaText
-                              key={i}
-                              text={char}
-                              x={0}
-                              y={i * fontSize}
-                              fontSize={fontSize}
-                              fontFamily={shape.fontFamily || "Arial"}
-                              fontStyle={shape.fontStyle || "normal"}
-                              fill={shape.fill || "black"}
-                              rotation={90}
-                              align="center"
-                              width={fontSize}
-                            />
-                          ))}
-                          {isSelected && !shape.locked && shapeRefs.current[shape.id] && selectedTool !== "Node" && (
-                            <Transformer
-                              ref={transformerRef}
-                              nodes={selectedShapeIds.map(id => shapeRefs.current[id]).filter(Boolean)}
-                              boundBoxFunc={(oldBox, newBox) => {
-                                if (newBox.width < 5 || newBox.height < 5) {
-                                  return oldBox;
-                                }
-                                return newBox;
-                              }}
-                              enabledAnchors={[
-                                "top-left",
-                                "top-center",
-                                "top-right",
-                                "middle-left",
-                                "middle-right",
-                                "bottom-left",
-                                "bottom-center",
-                                "bottom-right",
-                              ]}
-                              skewEnabled={true}
-                            />
-                          )}
-                        </Group>
-                      );
-                    }
-                    const renderedText =
-                      blockProgression === "topToBottom"
-                        ? (shape.text || "").split("").join("\n")
-                        : shape.text;
-                    return (
-                      <React.Fragment key={shape.id}>
-                        <KonvaText
-                          ref={(node) => {
-                            if (node) shapeRefs.current[shape.id] = node;
-                            else delete shapeRefs.current[shape.id];
-                          }}
-                          key={shape.id}
-                          id={shape.id}
-                          x={textDirection === "rtl" ? shape.x + shape.width : shape.x}
-                          y={shape.y}
-                          text={renderedText}
-                          fontSize={shape.fontSize || 16}
-                          fontFamily={shape.fontFamily || "Arial"}
-                          fontStyle={shape.fontStyle || "normal"}
-                          align={textDirection === "rtl" ? "right" : shape.alignment || "left"}
-                          width={shape.width || 200}
-                          fill={shape.fill || "black"}
-                          rotation={shape.rotation || 0}
-                          letterSpacing={shape.letterSpacing || 0}
-                          draggable={!shape.locked && selectedTool !== "Node" && selectedTool !== "Mesh" && selectedTool !== "Connector"}
-                          onDragMove={handleDragMove}
-                          onClick={(e) => {
-                            e.cancelBubble = true;
-                            if (shape.locked) return;
-                            setTextAreaPosition({
-                              x: shape.x * scale + position.x,
-                              y: shape.y * scale + position.y,
-                            });
-                            setTextContent(shape.text);
-                            setEditingTextId(shape.id);
-                            setTextAreaVisible(true);
-                          }}
-                        />
-                        {isSelected && !shape.locked && shapeRefs.current[shape.id] && selectedTool !== "Node" && (
-                          <Transformer
-                            ref={transformerRef}
-                            nodes={selectedShapeIds.map(id => shapeRefs.current[id]).filter(Boolean)}
-                            boundBoxFunc={(oldBox, newBox) => {
-                              if (newBox.width < 5 || newBox.height < 5) {
-                                return oldBox;
-                              }
-                              return newBox;
-                            }}
-                            enabledAnchors={[
-                              "top-left",
-                              "top-center",
-                              "top-right",
-                              "middle-left",
-                              "middle-right",
-                              "bottom-left",
-                              "bottom-center",
-                              "bottom-right",
-                            ]}
-                            skewEnabled={true}
-                          />
-                        )}
-                      </React.Fragment>
-                    );
-                  } if (shape.type === "Mesh") {
-                    return (
-                      <Group key={shape.id}>
-                        {/* Draw mesh polygons (approximate) */}
-                        {shape.nodes.slice(0, -1).map((row, r) =>
-                          row.slice(0, -1).map((node, c) => {
-                            const p1 = node;
-                            const p2 = shape.nodes[r][c + 1];
-                            const p3 = shape.nodes[r + 1][c + 1];
-                            const p4 = shape.nodes[r + 1][c];
-
-
-                            function hexToRgb(hex) {
-                              hex = hex.replace(/^#/, "");
-                              if (hex.length === 3) hex = hex.split("").map(x => x + x).join("");
-                              const num = parseInt(hex, 16);
-                              return {
-                                r: (num >> 16) & 255,
-                                g: (num >> 8) & 255,
-                                b: num & 255
-                              };
-                            }
-                            function rgbToHex({ r, g, b }) {
-                              return (
-                                "#" +
-                                [r, g, b]
-                                  .map((x) => {
-                                    const hex = x.toString(16);
-                                    return hex.length === 1 ? "0" + hex : hex;
-                                  })
-                                  .join("")
+                            if (selectedShape) {
+                              dispatch(
+                                selectNodePoint({
+                                  shapeId: selectedShape.id,
+                                  index,
+                                  x: point.x,
+                                  y: point.y,
+                                })
                               );
                             }
-                            function avgColor(colors) {
-                              const rgbs = colors.map(hexToRgb);
-                              const r = Math.round(rgbs.reduce((sum, c) => sum + c.r, 0) / rgbs.length);
-                              const g = Math.round(rgbs.reduce((sum, c) => sum + c.g, 0) / rgbs.length);
-                              const b = Math.round(rgbs.reduce((sum, c) => sum + c.b, 0) / rgbs.length);
-                              return rgbToHex({ r, g, b });
-                            }
-
-                            const fillColor = avgColor([p1.color, p2.color, p3.color, p4.color]);
-
-                            return (
-                              <Line
-                                key={`${r}-${c}`}
-                                points={[p1.x, p1.y, p2.x, p2.y, p3.x, p3.y, p4.x, p4.y]}
-                                closed
-                                fill={fillColor}
-                                stroke="#888"
-                                strokeWidth={1}
-                              />
-                            );
-                          })
-                        )}
-                        {shape.nodes.flat().map((node, idx) => (
-                          <Circle
-                            key={idx}
-                            x={node.x}
-                            y={node.y}
-                            radius={6}
-                            fill={blendWithWhite(node.color, 0.7)}
-                            stroke="#000"
-                            strokeWidth={1}
-                            draggable
-                            onDragMove={e => {
-                              const { x, y } = e.target.position();
-                              dispatch({
-                                type: "tool/updateMeshNode",
-                                payload: { meshId: shape.id, nodeIdx: idx, x, y }
-                              });
-                            }}
-                            onClick={e => { }}
-                          />
-                        ))}
-                      </Group>
-                    );
-                  } else if (shape.type === "Path") {
-                    return (
-                      <Path
-                        ref={(node) => {
-                          if (node) shapeRefs.current[shape.id] = node;
-                          else delete shapeRefs.current[shape.id];
-                        }}
-                        key={shape.id}
-                        id={shape.id}
-                        data={shape.path}
-                        stroke={shape.stroke || "black"}
-                        strokeWidth={shape.strokeWidth || 2}
-                        dash={getDashArray(shape.strokeStyle)}
-                        fill={shape.fill || "transparent"}
-                        draggable
-                        onClick={(e) => {
-                          e.cancelBubble = true;
-                          if (shape.locked) return;
-                          if (e.evt.ctrlKey && selectedShape) {
-
-                            dispatch(
-                              selectNodePoint({
-                                shapeId: selectedShape.id,
-                                index,
-                                x: point.x,
-                                y: point.y,
-                              })
-                            );
-                          } else {
-
-                            if (!selectedShapeIds.includes(shape.id)) {
-                              dispatch(selectShape(shape.id));
-                            }
-                          }
-                        }}
-                        onDragEnd={(e) => {
-                          const { x, y } = e.target.position();
-                          dispatch(updateShapePosition({ id: shape.id, x, y }));
-                        }}
-                      />
-                    );
-                  }
-                  else if (
-                    shape.type === "Pencil" ||
-                    shape.type === "Calligraphy" ||
-                    shape.type === "Path" ||
-                    shape.type === "Bezier" ||
-                    shape.type === "Spiral"
-                  ) {
-                    const pts = shape.points
-                      ? shape.points.map(p => [p.x, p.y])
-                      : [];
-                    if (shape.lpeEffect === "Bend") {
-                      pts = applyBendEffect(pts, 40, 1);
-                    }
-                    if (pts.length >= 2) {
-                      const [x1, y1] = pts[0];
-                      const [x2, y2] = pts[pts.length - 1];
-                      const angleEnd = Math.atan2(y2 - pts[pts.length - 2][1], x2 - pts[pts.length - 2][0]);
-                      const angleStart = Math.atan2(pts[1][1] - y1, pts[1][0] - x1);
-
-                      return (
-                        <Group key={shape.id}>
-                          <Line
-                            points={pts.flat()}
-                            stroke={shape.stroke || shape.strokeColor || "#222"}
-                            strokeWidth={shape.strokeWidth || 2}
-                            lineJoin="round"
-                            lineCap="round"
-                            closed={shape.closed || false}
-                          />
-                          {shape.markerEnd && shape.markerEnd !== "none" &&
-                            renderMarker(shape.markerEnd, x2, y2, angleEnd, shape.stroke || shape.strokeColor || "#222")}
-                          {shape.markerStart && shape.markerStart !== "none" &&
-                            renderMarker(shape.markerStart, x1, y1, angleStart + Math.PI, shape.stroke || shape.strokeColor || "#222")}
-                        </Group>
-                      );
-                    }
-                  }
-                  return null;
-                })}
-
-                {selectedTool === "Node" &&
-                  controlPoints.length > 0 &&
-                  controlPoints.map((point, index) => (
-                    <React.Fragment key={index}>
-                      <Circle
-                        key={index}
-                        x={point.x}
-                        y={point.y}
-                        radius={5}
-                        fill={
-                          selectedShape &&
-                            selectedNodePoints.some(
-                              (node) => node.shapeId === selectedShape.id && node.index === index
-                            )
-                            ? "green"
-                            : "red"
-                        }
-                        draggable
-                        onClick={(e) => {
-                          e.cancelBubble = true;
-                          if (selectedShape) {
-                            dispatch(
-                              selectNodePoint({
-                                shapeId: selectedShape.id,
-                                index,
-                                x: point.x,
-                                y: point.y,
-                              })
-                            );
-                          }
-                        }}
-                        onDragMove={(e) => {
-                          if (isStrokeToPathMode) {
-                            dispatch(updateStrokeControlPoint({
-                              index,
-                              newPosition: { x: e.target.x(), y: e.target.y() },
-                            }));
-                          } else {
-                            handleNodeDrag(e, index);
-                          }
-                        }}
-
-                      />
-                      {point.cornerLPE && (
-                        <Circle
-                          x={point.x + (point.cornerLPE.radius || 10)}
-                          y={point.y}
-                          radius={4}
-                          fill="orange"
-                          draggable
-                          onDragMove={e => {
-                            const dx = e.target.x() - point.x;
-                            const dy = e.target.y() - point.y;
-                            const radius = Math.sqrt(dx * dx + dy * dy);
-                            dispatch({
-                              type: "tool/updateCornerLPE",
-                              payload: {
-                                shapeId: selectedShape.id,
-                                pointIdx: index,
-                                radius
-                              }
-                            });
                           }}
+                          onDragMove={(e) => {
+                            if (isStrokeToPathMode) {
+                              dispatch(updateStrokeControlPoint({
+                                index,
+                                newPosition: { x: e.target.x(), y: e.target.y() },
+                              }));
+                            } else {
+                              handleNodeDrag(e, index);
+                            }
+                          }}
+
                         />
-                      )}
-                      {point.controlPoint1 && (
-                        <>
-                          <Line
-                            points={[point.x, point.y, point.controlPoint1.x, point.controlPoint1.y]}
-                            stroke="blue"
-                            dash={[4, 4]}
-                          />
+                        {point.cornerLPE && (
                           <Circle
-                            x={point.controlPoint1.x}
-                            y={point.controlPoint1.y}
+                            x={point.x + (point.cornerLPE.radius || 10)}
+                            y={point.y}
                             radius={4}
-                            fill="blue"
+                            fill="orange"
                             draggable
                             onDragMove={e => {
-                              const pos = { x: e.target.x(), y: e.target.y() };
+                              const dx = e.target.x() - point.x;
+                              const dy = e.target.y() - point.y;
+                              const radius = Math.sqrt(dx * dx + dy * dy);
                               dispatch({
-                                type: "tool/updateControlPoint",
-                                payload: { shapeId: selectedShape.id, index, handle: "controlPoint1", point: pos }
+                                type: "tool/updateCornerLPE",
+                                payload: {
+                                  shapeId: selectedShape.id,
+                                  pointIdx: index,
+                                  radius
+                                }
                               });
-
-                              if (point.symmetric) {
-                                const mirrored = {
-                                  x: point.x - (pos.x - point.x),
-                                  y: point.y - (pos.y - point.y)
-                                };
-                                dispatch({
-                                  type: "tool/updateControlPoint",
-                                  payload: { shapeId: selectedShape.id, index, handle: "controlPoint2", point: mirrored }
-                                });
-                              }
                             }}
                           />
-                        </>
-                      )}
-                      {point.controlPoint2 && (
-                        <>
-                          <Line
-                            points={[point.x, point.y, point.controlPoint2.x, point.controlPoint2.y]}
-                            stroke="blue"
-                            dash={[4, 4]}
-                          />
-                          <Circle
-                            x={point.controlPoint2.x}
-                            y={point.controlPoint2.y}
-                            radius={4}
-                            fill="blue"
-                            draggable
-                            onDragMove={e => {
-                              const pos = { x: e.target.x(), y: e.target.y() };
-                              dispatch({
-                                type: "tool/updateControlPoint",
-                                payload: { shapeId: selectedShape.id, index, handle: "controlPoint2", point: pos }
-                              });
-
-                              if (point.symmetric) {
-                                const mirrored = {
-                                  x: point.x - (pos.x - point.x),
-                                  y: point.y - (pos.y - point.y)
-                                };
+                        )}
+                        {point.controlPoint1 && (
+                          <>
+                            <Line
+                              points={[point.x, point.y, point.controlPoint1.x, point.controlPoint1.y]}
+                              stroke="blue"
+                              dash={[4, 4]}
+                            />
+                            <Circle
+                              x={point.controlPoint1.x}
+                              y={point.controlPoint1.y}
+                              radius={4}
+                              fill="blue"
+                              draggable
+                              onDragMove={e => {
+                                const pos = { x: e.target.x(), y: e.target.y() };
                                 dispatch({
                                   type: "tool/updateControlPoint",
-                                  payload: { shapeId: selectedShape.id, index, handle: "controlPoint1", point: mirrored }
+                                  payload: { shapeId: selectedShape.id, index, handle: "controlPoint1", point: pos }
                                 });
-                              }
-                            }}
-                          />
-                        </>
-                      )}
-                    </React.Fragment>
+
+                                if (point.symmetric) {
+                                  const mirrored = {
+                                    x: point.x - (pos.x - point.x),
+                                    y: point.y - (pos.y - point.y)
+                                  };
+                                  dispatch({
+                                    type: "tool/updateControlPoint",
+                                    payload: { shapeId: selectedShape.id, index, handle: "controlPoint2", point: mirrored }
+                                  });
+                                }
+                              }}
+                            />
+                          </>
+                        )}
+                        {point.controlPoint2 && (
+                          <>
+                            <Line
+                              points={[point.x, point.y, point.controlPoint2.x, point.controlPoint2.y]}
+                              stroke="blue"
+                              dash={[4, 4]}
+                            />
+                            <Circle
+                              x={point.controlPoint2.x}
+                              y={point.controlPoint2.y}
+                              radius={4}
+                              fill="blue"
+                              draggable
+                              onDragMove={e => {
+                                const pos = { x: e.target.x(), y: e.target.y() };
+                                dispatch({
+                                  type: "tool/updateControlPoint",
+                                  payload: { shapeId: selectedShape.id, index, handle: "controlPoint2", point: pos }
+                                });
+
+                                if (point.symmetric) {
+                                  const mirrored = {
+                                    x: point.x - (pos.x - point.x),
+                                    y: point.y - (pos.y - point.y)
+                                  };
+                                  dispatch({
+                                    type: "tool/updateControlPoint",
+                                    payload: { shapeId: selectedShape.id, index, handle: "controlPoint1", point: mirrored }
+                                  });
+                                }
+                              }}
+                            />
+                          </>
+                        )}
+                      </React.Fragment>
+                    ))}
+
+                  {eraserLines.map((line, i) => (
+                    <Line
+                      key={i}
+                      points={line.points}
+                      stroke={strokeColor}
+                      strokeWidth={Math.max(1, eraserWidth * (1 - eraserThinning))}
+                      tension={0.5}
+                      lineCap={eraserCapString}
+                      globalCompositeOperation="source-over"
+                    />
                   ))}
 
-                {eraserLines.map((line, i) => (
-                  <Line
-                    key={i}
-                    points={line.points}
-                    stroke={strokeColor}
-                    strokeWidth={Math.max(1, eraserWidth * (1 - eraserThinning))}
-                    tension={0.5}
-                    lineCap={eraserCapString}
-                    globalCompositeOperation="source-over"
-                  />
-                ))}
+                  {spiroPoints.map((point, index) => (
+                    <Circle
+                      key={index}
+                      x={point.x}
+                      y={point.y}
+                      radius={5}
+                      fill="red"
+                      draggable
+                      onDragMove={(e) => {
+                        const { x, y } = e.target.position();
+                        dispatch(updateControlPoint({ index, point: { x, y } }));
+                      }}
+                    />
+                  ))}
 
-                {spiroPoints.map((point, index) => (
-                  <Circle
-                    key={index}
-                    x={point.x}
-                    y={point.y}
-                    radius={5}
-                    fill="red"
-                    draggable
-                    onDragMove={(e) => {
-                      const { x, y } = e.target.position();
-                      dispatch(updateControlPoint({ index, point: { x, y } }));
-                    }}
-                  />
-                ))}
-
-                {/* {selectedShape && selectedTool !== "Node" && (
+                  {/* {selectedShape && selectedTool !== "Node" && (
                   <Transformer
                     ref={transformerRef}
                     nodes={[layerRef.current?.findOne(`#${selectedShape.id}`)]}
@@ -9266,849 +9638,908 @@ const Panel = React.forwardRef(({
                   />
                 )} */}
 
-                {newShape && newShape.type === "Rectangle" && (
-                  <Rect
-                    x={newShape.x}
-                    y={newShape.y}
-                    width={newShape.width}
-                    height={newShape.height}
-                    fill={newShape.fill || "black"}
-                    stroke={newShape.stroke}
-                    strokeWidth={newShape.strokeWidth}
-                    draggable
-                    onDragEnd={(e) => handleDragEnd(e, shape.id)}
-                    onTransformEnd={(e) => handleResizeEnd(e, shape.id)}
-                    onDragMove={handleDragMove}
-                  />
-                )}
+                  {newShape && newShape.type === "Rectangle" && (
+                    <Rect
+                      x={newShape.x}
+                      y={newShape.y}
+                      width={newShape.width}
+                      height={newShape.height}
+                      fill={newShape.fill || "black"}
+                      stroke={newShape.stroke}
+                      strokeWidth={newShape.strokeWidth}
+                      draggable
+                      onDragEnd={(e) => handleDragEnd(e, shape.id)}
+                      onTransformEnd={(e) => handleResizeEnd(e, shape.id)}
+                      onDragMove={handleDragMove}
+                    />
+                  )}
 
 
-                {meshPreview && selectedTool === "Mesh" && (
-                  <Rect
-                    x={meshPreview.x}
-                    y={meshPreview.y}
-                    width={meshPreview.width}
-                    height={meshPreview.height}
-                    stroke="#00f"
-                    strokeWidth={2}
-                    dash={[6, 4]}
-                    fill="rgba(0,0,255,0.1)"
-                    listening={false}
-                  />
-                )}
-                {newShape && newShape.type === "Circle" && (
-                  <Circle
-                    x={newShape.x}
-                    y={newShape.y}
-                    radius={newShape.radius}
-                    fill="transparent"
-                    stroke={newShape.stroke}
-                    strokeWidth={newShape.strokeWidth}
-                  />
-                )}
-                {newShape && newShape.type === "Star" && (
-                  <Star
-                    x={newShape.x}
-                    y={newShape.y}
-                    numPoints={newShape.corners}
-                    innerRadius={newShape.innerRadius}
-                    outerRadius={newShape.outerRadius}
-                    fill="transparent"
-                    stroke={newShape.stroke}
-                    strokeWidth={newShape.strokeWidth}
-                  />
-                )}
-                {newShape && newShape.type === "Polygon" && (
-                  <Path
-                    x={newShape.x}
-                    y={newShape.y}
-                    data={generatePolygonPath(newShape.points)}
-                    stroke={newShape.stroke}
-                    strokeWidth={newShape.strokeWidth}
-                    fill={newShape.fill || "transparent"}
-                    closed
-                  />
-                )}
-                {newShape && newShape.type === "Spiral" && (
-                  <Path
-                    x={0}
-                    y={0}
-                    data={newShape.path}
-                    stroke={newShape.stroke}
-                    strokeWidth={newShape.strokeWidth}
-                    fill="transparent"
-                  />
-                )}
-                {newShape && newShape.type === "Pen" && (
-                  <Line
-                    points={newShape.points}
-                    stroke={newShape.stroke}
-                    strokeWidth={newShape.strokeWidth}
-                    lineJoin="round"
-                    lineCap="round"
-                  />
-                )}
-                {newShape && newShape.type === "Bezier" && (
-                  <>
-                    {console.log("Rendering Bézier Curve:", newShape.points)}
-                    {newShape.points.length >= 6 &&
-                      Array.from({ length: Math.floor(newShape.points.length / 6) }).map((_, i) => {
-                        const segmentPoints = newShape.points.slice(i * 6, i * 6 + 6);
+                  {meshPreview && selectedTool === "Mesh" && (
+                    <Rect
+                      x={meshPreview.x}
+                      y={meshPreview.y}
+                      width={meshPreview.width}
+                      height={meshPreview.height}
+                      stroke="#00f"
+                      strokeWidth={2}
+                      dash={[6, 4]}
+                      fill="rgba(0,0,255,0.1)"
+                      listening={false}
+                    />
+                  )}
+                  {newShape && newShape.type === "Circle" && (
+                    <Circle
+                      x={newShape.x}
+                      y={newShape.y}
+                      radius={newShape.radius}
+                      fill="transparent"
+                      stroke={newShape.stroke}
+                      strokeWidth={newShape.strokeWidth}
+                    />
+                  )}
+                  {newShape && newShape.type === "Star" && (
+                    <Star
+                      x={newShape.x}
+                      y={newShape.y}
+                      numPoints={newShape.corners}
+                      innerRadius={newShape.innerRadius}
+                      outerRadius={newShape.outerRadius}
+                      fill="transparent"
+                      stroke={newShape.stroke}
+                      strokeWidth={newShape.strokeWidth}
+                    />
+                  )}
+                  {newShape && newShape.type === "Polygon" && (
+                    <Path
+                      x={newShape.x}
+                      y={newShape.y}
+                      data={generatePolygonPath(newShape.points)}
+                      stroke={newShape.stroke}
+                      strokeWidth={newShape.strokeWidth}
+                      fill={newShape.fill || "transparent"}
+                      closed
+                    />
+                  )}
+                  {newShape && newShape.type === "Spiral" && (
+                    <Path
+                      x={0}
+                      y={0}
+                      data={newShape.path}
+                      stroke={newShape.stroke}
+                      strokeWidth={newShape.strokeWidth}
+                      fill="transparent"
+                    />
+                  )}
+                  {newShape && newShape.type === "Pen" && (
+                    <Line
+                      points={newShape.points}
+                      stroke={newShape.stroke}
+                      strokeWidth={newShape.strokeWidth}
+                      lineJoin="round"
+                      lineCap="round"
+                    />
+                  )}
+                  {newShape && newShape.type === "Bezier" && (
+                    <>
+                      {console.log("Rendering Bézier Curve:", newShape.points)}
+                      {newShape.points.length >= 6 &&
+                        Array.from({ length: Math.floor(newShape.points.length / 6) }).map((_, i) => {
+                          const segmentPoints = newShape.points.slice(i * 6, i * 6 + 6);
+                          return (
+                            <Line
+                              key={`bezier-segment-${i}`}
+                              points={segmentPoints}
+                              stroke={newShape.stroke || "black"}
+                              strokeWidth={newShape.strokeWidth || 2}
+                              bezier={true}
+                              lineJoin="round"
+                              lineCap="round"
+                            />
+                          );
+                        })}
+                    </>
+                  )}
+                  {newShape && newShape.type === "Pencil" && (
+                    <Line
+                      points={newShape.points.flatMap((p) => [p.x, p.y])}
+                      stroke={strokeColor}
+                      fill={fillColor || "black"}
+                      strokeWidth={2}
+                      lineJoin="round"
+                      lineCap="round"
+                      closed={false}
+                    />
+                  )}
+                  {newShape && newShape.type === "Calligraphy" && (
+                    <Line
+                      points={newShape.points.flatMap((p) => [p.x, p.y])}
+                      stroke={newShape.stroke}
+                      fill="transparent"
+                      strokeWidth={newShape.strokeWidth}
+                      lineJoin="round"
+                      lineCap="round"
+                      closed={false}
+                    />
+                  )}
+                  {newShape && calligraphyOption === "Brush" && (
+                    <Group>
+                      {newShape.points.map((point, index) => {
+                        if (index === 0) return null;
+
+                        const prevPoint = newShape.points[index - 1];
+                        const angle = point.angle || 0;
+
+
+                        const topX1 = prevPoint.x - (prevPoint.ellipseWidth / 2) * Math.cos(angle + Math.PI / 2);
+                        const topY1 = prevPoint.y - (prevPoint.ellipseHeight / 2) * Math.sin(angle + Math.PI / 2);
+                        const bottomX1 = prevPoint.x + (prevPoint.ellipseWidth / 2) * Math.cos(angle + Math.PI / 2);
+                        const bottomY1 = prevPoint.y + (prevPoint.ellipseHeight / 2) * Math.sin(angle + Math.PI / 2);
+
+                        const topX2 = point.x - (point.ellipseWidth / 2) * Math.cos(angle + Math.PI / 2);
+                        const topY2 = point.y - (point.ellipseHeight / 2) * Math.sin(angle + Math.PI / 2);
+                        const bottomX2 = point.x + (point.ellipseWidth / 2) * Math.cos(angle + Math.PI / 2);
+                        const bottomY2 = point.y + (point.ellipseHeight / 2) * Math.sin(angle + Math.PI / 2);
+
+                        return (
+                          <Shape
+                            key={index}
+                            sceneFunc={(context, shape) => {
+                              context.beginPath();
+                              context.moveTo(topX1, topY1);
+                              context.lineTo(topX2, topY2);
+                              context.lineTo(bottomX2, bottomY2);
+                              context.lineTo(bottomX1, bottomY1);
+                              context.closePath();
+                              context.fillStrokeShape(shape);
+                            }}
+                            fill={newShape.stroke}
+                            stroke={newShape.stroke}
+                            strokeWidth={1}
+                          />
+                        );
+                      })}
+                    </Group>
+                  )}
+                  {newShape && calligraphyOption === "DipPen" && (
+                    <Group>
+                      {newShape.points.map((point, index) => {
+                        if (index === 0) return null;
+
+                        const prevPoint = newShape.points[index - 1];
+                        const angle = point.angle || 0;
+
+
+                        const taperFactorStart = index < 3 ? index / 3 : 1;
+                        const taperFactorEnd =
+                          index > newShape.points.length - 4
+                            ? (newShape.points.length - index) / 3
+                            : 1;
+                        const taperFactor = Math.min(taperFactorStart, taperFactorEnd);
+
+                        const nibWidth = point.strokeWidth * taperFactor;
+
+
+                        const topX1 = prevPoint.x - (nibWidth / 2) * Math.cos(angle + Math.PI / 2);
+                        const topY1 = prevPoint.y - (nibWidth / 2) * Math.sin(angle + Math.PI / 2);
+                        const bottomX1 = prevPoint.x + (nibWidth / 2) * Math.cos(angle + Math.PI / 2);
+                        const bottomY1 = prevPoint.y + (nibWidth / 2) * Math.sin(angle + Math.PI / 2);
+
+                        const topX2 = point.x - (nibWidth / 2) * Math.cos(angle + Math.PI / 2);
+                        const topY2 = point.y - (nibWidth / 2) * Math.sin(angle + Math.PI / 2);
+                        const bottomX2 = point.x + (nibWidth / 2) * Math.cos(angle + Math.PI / 2);
+                        const bottomY2 = point.y + (nibWidth / 2) * Math.sin(angle + Math.PI / 2);
+
+                        return (
+                          <Shape
+                            key={index}
+                            sceneFunc={(context, shape) => {
+                              context.beginPath();
+                              context.moveTo(topX1, topY1);
+                              context.lineTo(topX2, topY2);
+                              context.lineTo(bottomX2, bottomY2);
+                              context.lineTo(bottomX1, bottomY1);
+                              context.closePath();
+                              context.fillStrokeShape(shape);
+                            }}
+                            fill={newShape.stroke}
+                            stroke={newShape.stroke}
+                            strokeWidth={1}
+                          />
+                        );
+                      })}
+                    </Group>
+                  )}
+                  {newShape && calligraphyOption === "Wiggly" && (
+                    <Group>
+                      {newShape.points.map((point, index) => {
+                        if (index === 0) return null;
+
+                        const prevPoint = newShape.points[index - 1];
+
                         return (
                           <Line
-                            key={`bezier-segment-${i}`}
-                            points={segmentPoints}
-                            stroke={newShape.stroke || "black"}
-                            strokeWidth={newShape.strokeWidth || 2}
-                            bezier={true}
+                            key={index}
+                            points={[prevPoint.x, prevPoint.y, point.x, point.y]}
+                            stroke={newShape.stroke}
+                            strokeWidth={point.strokeWidth}
                             lineJoin="round"
                             lineCap="round"
                           />
                         );
                       })}
-                  </>
-                )}
-                {newShape && newShape.type === "Pencil" && (
-                  <Line
-                    points={newShape.points.flatMap((p) => [p.x, p.y])}
-                    stroke={strokeColor}
-                    fill={fillColor || "black"}
-                    strokeWidth={2}
-                    lineJoin="round"
-                    lineCap="round"
-                    closed={false}
-                  />
-                )}
-                {newShape && newShape.type === "Calligraphy" && (
-                  <Line
-                    points={newShape.points.flatMap((p) => [p.x, p.y])}
-                    stroke={newShape.stroke}
-                    fill="transparent"
-                    strokeWidth={newShape.strokeWidth}
-                    lineJoin="round"
-                    lineCap="round"
-                    closed={false}
-                  />
-                )}
-                {newShape && calligraphyOption === "Brush" && (
-                  <Group>
-                    {newShape.points.map((point, index) => {
-                      if (index === 0) return null;
+                    </Group>
+                  )}
+                  {newShape && calligraphyOption === "Marker" && Array.isArray(newShape.points) && (
+                    <Group>
+                      {newShape.points.map((point, index) => {
+                        if (index === 0) return null;
+                        const prev = newShape.points[index - 1];
+                        return (
+                          <Line
+                            key={index}
+                            points={[prev.x, prev.y, point.x, point.y]}
+                            stroke={newShape.stroke}
+                            strokeWidth={point.strokeWidth}
+                            lineJoin="round"
+                            lineCap="round"
+                          />
+                        );
+                      })}
+                    </Group>
+                  )}
+                  {newShape && calligraphyOption === "Tracing" && Array.isArray(newShape.points) && (
+                    <Group>
+                      {newShape.points.map((point, index) => {
+                        if (!point.shapes || !Array.isArray(point.shapes)) return null;
 
-                      const prevPoint = newShape.points[index - 1];
-                      const angle = point.angle || 0;
+                        return point.shapes.map((shape, shapeIndex) => (
+                          <Circle
+                            key={`${index}-${shapeIndex}`}
+                            x={shape.x}
+                            y={shape.y}
+                            radius={shape.radius}
+                            fill={newShape.stroke}
+                          />
+                        ));
+                      })}
+                    </Group>
+                  )}
+                  {newShape && calligraphyOption === "Splotchy" && (
+                    <Group>
+                      {newShape.points.map((point, index) => {
+                        if (index === 0) return null;
 
+                        const prevPoint = newShape.points[index - 1];
 
-                      const topX1 = prevPoint.x - (prevPoint.ellipseWidth / 2) * Math.cos(angle + Math.PI / 2);
-                      const topY1 = prevPoint.y - (prevPoint.ellipseHeight / 2) * Math.sin(angle + Math.PI / 2);
-                      const bottomX1 = prevPoint.x + (prevPoint.ellipseWidth / 2) * Math.cos(angle + Math.PI / 2);
-                      const bottomY1 = prevPoint.y + (prevPoint.ellipseHeight / 2) * Math.sin(angle + Math.PI / 2);
+                        return (
+                          <Line
+                            key={index}
+                            points={[prevPoint.x, prevPoint.y, point.x, point.y]}
+                            stroke={newShape.stroke}
+                            strokeWidth={point.strokeWidth}
+                            opacity={point.opacity}
+                            lineJoin="round"
+                            lineCap="round"
+                          />
+                        );
+                      })}
 
-                      const topX2 = point.x - (point.ellipseWidth / 2) * Math.cos(angle + Math.PI / 2);
-                      const topY2 = point.y - (point.ellipseHeight / 2) * Math.sin(angle + Math.PI / 2);
-                      const bottomX2 = point.x + (point.ellipseWidth / 2) * Math.cos(angle + Math.PI / 2);
-                      const bottomY2 = point.y + (point.ellipseHeight / 2) * Math.sin(angle + Math.PI / 2);
-
-                      return (
-                        <Shape
-                          key={index}
-                          sceneFunc={(context, shape) => {
-                            context.beginPath();
-                            context.moveTo(topX1, topY1);
-                            context.lineTo(topX2, topY2);
-                            context.lineTo(bottomX2, bottomY2);
-                            context.lineTo(bottomX1, bottomY1);
-                            context.closePath();
-                            context.fillStrokeShape(shape);
-                          }}
-                          fill={newShape.stroke}
-                          stroke={newShape.stroke}
-                          strokeWidth={1}
-                        />
-                      );
-                    })}
-                  </Group>
-                )}
-                {newShape && calligraphyOption === "DipPen" && (
-                  <Group>
-                    {newShape.points.map((point, index) => {
-                      if (index === 0) return null;
-
-                      const prevPoint = newShape.points[index - 1];
-                      const angle = point.angle || 0;
-
-
-                      const taperFactorStart = index < 3 ? index / 3 : 1;
-                      const taperFactorEnd =
-                        index > newShape.points.length - 4
-                          ? (newShape.points.length - index) / 3
-                          : 1;
-                      const taperFactor = Math.min(taperFactorStart, taperFactorEnd);
-
-                      const nibWidth = point.strokeWidth * taperFactor;
-
-
-                      const topX1 = prevPoint.x - (nibWidth / 2) * Math.cos(angle + Math.PI / 2);
-                      const topY1 = prevPoint.y - (nibWidth / 2) * Math.sin(angle + Math.PI / 2);
-                      const bottomX1 = prevPoint.x + (nibWidth / 2) * Math.cos(angle + Math.PI / 2);
-                      const bottomY1 = prevPoint.y + (nibWidth / 2) * Math.sin(angle + Math.PI / 2);
-
-                      const topX2 = point.x - (nibWidth / 2) * Math.cos(angle + Math.PI / 2);
-                      const topY2 = point.y - (nibWidth / 2) * Math.sin(angle + Math.PI / 2);
-                      const bottomX2 = point.x + (nibWidth / 2) * Math.cos(angle + Math.PI / 2);
-                      const bottomY2 = point.y + (nibWidth / 2) * Math.sin(angle + Math.PI / 2);
-
-                      return (
-                        <Shape
-                          key={index}
-                          sceneFunc={(context, shape) => {
-                            context.beginPath();
-                            context.moveTo(topX1, topY1);
-                            context.lineTo(topX2, topY2);
-                            context.lineTo(bottomX2, bottomY2);
-                            context.lineTo(bottomX1, bottomY1);
-                            context.closePath();
-                            context.fillStrokeShape(shape);
-                          }}
-                          fill={newShape.stroke}
-                          stroke={newShape.stroke}
-                          strokeWidth={1}
-                        />
-                      );
-                    })}
-                  </Group>
-                )}
-                {newShape && calligraphyOption === "Wiggly" && (
-                  <Group>
-                    {newShape.points.map((point, index) => {
-                      if (index === 0) return null;
-
-                      const prevPoint = newShape.points[index - 1];
-
-                      return (
-                        <Line
-                          key={index}
-                          points={[prevPoint.x, prevPoint.y, point.x, point.y]}
-                          stroke={newShape.stroke}
-                          strokeWidth={point.strokeWidth}
-                          lineJoin="round"
-                          lineCap="round"
-                        />
-                      );
-                    })}
-                  </Group>
-                )}
-                {newShape && calligraphyOption === "Marker" && Array.isArray(newShape.points) && (
-                  <Group>
-                    {newShape.points.map((point, index) => {
-                      if (index === 0) return null;
-                      const prev = newShape.points[index - 1];
-                      return (
-                        <Line
-                          key={index}
-                          points={[prev.x, prev.y, point.x, point.y]}
-                          stroke={newShape.stroke}
-                          strokeWidth={point.strokeWidth}
-                          lineJoin="round"
-                          lineCap="round"
-                        />
-                      );
-                    })}
-                  </Group>
-                )}
-                {newShape && calligraphyOption === "Tracing" && Array.isArray(newShape.points) && (
-                  <Group>
-                    {newShape.points.map((point, index) => {
-                      if (!point.shapes || !Array.isArray(point.shapes)) return null;
-
-                      return point.shapes.map((shape, shapeIndex) => (
+                      {newShape.points.map((point, index) => (
                         <Circle
-                          key={`${index}-${shapeIndex}`}
-                          x={shape.x}
-                          y={shape.y}
-                          radius={shape.radius}
+                          key={`blotch-${index}`}
+                          x={point.x}
+                          y={point.y}
+                          radius={point.strokeWidth / 2}
                           fill={newShape.stroke}
+                          opacity={point.opacity * 0.8}
                         />
-                      ));
-                    })}
-                  </Group>
-                )}
-                {newShape && calligraphyOption === "Splotchy" && (
-                  <Group>
-                    {newShape.points.map((point, index) => {
-                      if (index === 0) return null;
+                      ))}
+                    </Group>
+                  )}
+                  {newShape && newShape.type === "Text" && (
+                    <KonvaText
+                      x={newShape.x}
+                      y={newShape.y}
+                      text={newShape.text}
+                      fontSize={newShape.fontSize}
+                      fill={newShape.fill}
+                      rotation={newShape.rotation || 0}
+                      scaleX={newShape.scaleX || 1}
+                      scaleY={newShape.scaleY || 1}
+                    />
+                  )}
 
-                      const prevPoint = newShape.points[index - 1];
-
-                      return (
+                  {selectedTool === "Gradient" &&
+                    selectedShape &&
+                    gradientObj?.type === "linear-gradient" &&
+                    gradientObj.start &&
+                    gradientObj.end &&
+                    gradientObj.colors && (
+                      <>
                         <Line
-                          key={index}
-                          points={[prevPoint.x, prevPoint.y, point.x, point.y]}
-                          stroke={newShape.stroke}
-                          strokeWidth={point.strokeWidth}
-                          opacity={point.opacity}
-                          lineJoin="round"
-                          lineCap="round"
+                          points={[
+                            shapeX + gradientObj.start.x, shapeY + gradientObj.start.y,
+                            shapeX + gradientObj.end.x, shapeY + gradientObj.end.y
+                          ]}
+                          stroke="gray"
+                          strokeWidth={2}
+                          dash={[4, 4]}
+                          listening={false}
                         />
-                      );
-                    })}
+                        {gradientObj.colors.map((stop, idx) => {
+                          const x = shapeX + gradientObj.start.x + (gradientObj.end.x - gradientObj.start.x) * stop.pos;
+                          const y = shapeY + gradientObj.start.y + (gradientObj.end.y - gradientObj.start.y) * stop.pos;
+                          return (
+                            <Circle
+                              key={idx}
+                              x={x}
+                              y={y}
+                              radius={8}
+                              fill={stop.color}
+                              stroke="#333"
+                              strokeWidth={2}
+                              draggable
+                              onDragMove={e => {
+                                const { x: absX, y: absY } = e.target.getStage().getPointerPosition();
+                                const gradStartAbs = {
+                                  x: shapeX + gradientObj.start.x,
+                                  y: shapeY + gradientObj.start.y,
+                                };
+                                const gradEndAbs = {
+                                  x: shapeX + gradientObj.end.x,
+                                  y: shapeY + gradientObj.end.y,
+                                };
+                                const dx = gradEndAbs.x - gradStartAbs.x;
+                                const dy = gradEndAbs.y - gradStartAbs.y;
+                                const lengthSq = dx * dx + dy * dy;
+                                let t = ((absX - gradStartAbs.x) * dx + (absY - gradStartAbs.y) * dy) / lengthSq;
+                                t = Number.isFinite(t) ? Math.max(0, Math.min(1, t)) : 0;
+                                const newColors = [
+                                  ...gradientObj.colors,
+                                  { color: "#ffffff", pos: t }
+                                ].sort((a, b) => a.pos - b.pos);
+                                newColors[idx] = { ...newColors[idx], pos: t };
+                                dispatch(updateShapePosition({
+                                  id: selectedShape.id,
+                                  [applyTo]: {
+                                    ...gradientObj,
+                                    colors: newColors,
+                                  },
+                                  gradientTarget: applyTo,
+                                }));
+                              }}
+                            />
+                          );
+                        })}
+                        <Line
+                          points={[
+                            shapeX + gradientObj.start.x, shapeY + gradientObj.start.y,
+                            shapeX + gradientObj.end.x, shapeY + gradientObj.end.y
+                          ]}
+                          stroke="transparent"
+                          strokeWidth={16}
+                          onClick={e => {
+                            const { x: clickX, y: clickY } = e.target.getStage().getPointerPosition();
+                            const dx = gradientObj.end.x - gradientObj.start.x;
+                            const dy = gradientObj.end.y - gradientObj.start.y;
+                            const length = Math.sqrt(dx * dx + dy * dy);
+                            let t = ((clickX - (shapeX + gradientObj.start.x)) * dx + (clickY - (shapeY + gradientObj.start.y)) * dy) / (length * length);
+                            t = Number.isFinite(t) ? Math.max(0, Math.min(1, t)) : 0;
 
-                    {newShape.points.map((point, index) => (
-                      <Circle
-                        key={`blotch-${index}`}
-                        x={point.x}
-                        y={point.y}
-                        radius={point.strokeWidth / 2}
-                        fill={newShape.stroke}
-                        opacity={point.opacity * 0.8}
-                      />
-                    ))}
-                  </Group>
-                )}
-                {newShape && newShape.type === "Text" && (
-                  <KonvaText
-                    x={newShape.x}
-                    y={newShape.y}
-                    text={newShape.text}
-                    fontSize={newShape.fontSize}
-                    fill={newShape.fill}
-                    rotation={newShape.rotation || 0}
-                    scaleX={newShape.scaleX || 1}
-                    scaleY={newShape.scaleY || 1}
-                  />
-                )}
+                            const newColors = [
+                              ...gradientObj.colors,
+                              { color: "#ffffff", pos: t }
+                            ].sort((a, b) => a.pos - b.pos);
+                            dispatch(updateShapePosition({
+                              id: gradientObj.id,
+                              fill: { ...gradientObj, colors: newColors },
+                              gradientTarget: applyTo,
+                            }));
+                          }}
+                          listening={true}
+                        />
+                        <Circle
+                          x={shapeX + gradientObj.start.x}
+                          y={shapeY + gradientObj.start.y}
+                          radius={10}
+                          fill="#fff"
+                          stroke="#333"
+                          strokeWidth={2}
+                          draggable
+                          onDragMove={e => {
+                            const { x, y } = e.target.position();
 
-                {selectedTool === "Gradient" &&
-                  selectedShape &&
-                  gradientObj?.type === "linear-gradient" &&
-                  gradientObj.start &&
-                  gradientObj.end &&
-                  gradientObj.colors && (
-                    <>
+                            const localX = x - shapeX;
+                            const localY = y - shapeY;
+                            dispatch(updateShapePosition({
+                              id: selectedShape.id,
+                              [applyTo]: {
+                                ...gradientObj,
+                                colors: newColors,
+                              },
+                              gradientTarget: applyTo,
+                            }));
+                          }}
+                        />
+                        <Circle
+                          x={shapeX + gradientObj.end.x}
+                          y={shapeY + gradientObj.end.y}
+                          radius={10}
+                          fill="#000"
+                          stroke="#333"
+                          strokeWidth={2}
+                          draggable
+                          onDragMove={e => {
+                            const { x, y } = e.target.position();
+                            const localX = x - shapeX;
+                            const localY = y - shapeY;
+                            dispatch(updateShapePosition({
+                              id: selectedShape.id,
+                              [applyTo]: {
+                                ...gradientObj,
+                                colors: newColors,
+                              },
+                              gradientTarget: applyTo,
+                            }));
+                          }}
+                        />
+                      </>
+                    )}
+                  {selectedTool === "Gradient" &&
+                    selectedShape &&
+                    gradientObj?.type === "radial-gradient" &&
+                    gradientObj.center &&
+                    typeof gradientObj.radius === "number" &&
+                    gradientObj.colors && (
+                      <>
+                        <Circle
+                          x={shapeX + gradientObj.center.x}
+                          y={shapeY + gradientObj.center.y}
+                          radius={gradientObj.radius}
+                          fillRadialGradientStartPoint={gradientObj.center}
+                          fillRadialGradientEndPoint={{
+                            x: gradientObj.center.x,
+                            y: gradientObj.center.y + gradientObj.radius
+                          }}
+
+                          opacity={0.5}
+                          stroke="gray"
+                          strokeWidth={2}
+                          dash={[4, 4]}
+                          listening={false}
+                        />
+                        <Circle
+                          x={shapeX + gradientObj.center.x}
+                          y={shapeY + gradientObj.center.y}
+                          radius={10}
+                          fill="#fff"
+                          stroke="#333"
+                          strokeWidth={2}
+                          draggable
+                          onDragMove={e => {
+                            const { x, y } = e.target.position();
+                            const localX = x - shapeX;
+                            const localY = y - shapeY;
+                            dispatch(updateShapePosition({
+                              id: selectedShape.id,
+                              [applyTo]: {
+                                ...gradientObj,
+                                center: { x: localX, y: localY }
+                              },
+                              gradientTarget: applyTo,
+                            }));
+                          }}
+                        />
+                        <Circle
+                          x={shapeX + gradientObj.center.x}
+                          y={shapeY + gradientObj.center.y + gradientObj.radius}
+                          radius={10}
+                          fill="#000"
+                          stroke="#333"
+                          strokeWidth={2}
+                          draggable
+                          onDragMove={e => {
+                            const { x, y } = e.target.position();
+                            const dx = x - (shapeX + gradientObj.center.x);
+                            const dy = y - (shapeY + gradientObj.center.y);
+                            const newRadius = Math.max(5, Math.sqrt(dx * dx + dy * dy));
+                            dispatch(updateShapePosition({
+                              id: selectedShape.id,
+                              [applyTo]: {
+                                ...gradientObj,
+                                radius: newRadius
+                              },
+                              gradientTarget: applyTo,
+                            }));
+                          }}
+                        />
+                        {gradientObj.colors.map((stop, idx) => {
+                          const angle = 0;
+                          const r = gradientObj.radius * stop.pos;
+                          const x = shapeX + gradientObj.center.x + r * Math.cos(angle);
+                          const y = shapeY + gradientObj.center.y + r * Math.sin(angle);
+                          return (
+                            <Circle
+                              key={idx}
+                              x={x}
+                              y={y}
+                              radius={8}
+                              fill={stop.color}
+                              stroke="#333"
+                              strokeWidth={2}
+                              draggable
+                              onDragMove={e => {
+                                const dx = e.target.x() - (shapeX + gradientObj.center.x);
+                                const dy = e.target.y() - (shapeY + gradientObj.center.y);
+                                let t = Math.sqrt(dx * dx + dy * dy) / gradientObj.radius;
+                                t = Math.max(0, Math.min(1, t));
+                                const newColors = gradientObj.colors.map((s, i) =>
+                                  i === idx ? { ...s, pos: t } : s
+                                );
+                                dispatch(updateShapePosition({
+                                  id: selectedShape.id,
+                                  [applyTo]: {
+                                    ...gradientObj,
+                                    colors: newColors
+                                  },
+                                  gradientTarget: applyTo,
+                                }));
+                              }}
+                            />
+                          );
+                        })}
+                      </>
+                    )}
+
+                  {allMeasurementLines.map((line, idx) => (
+                    <React.Fragment key={idx}>
+                      {renderAngleArc(line.x1, line.y1, line.x2, line.y2)}
                       <Line
-                        points={[
-                          shapeX + gradientObj.start.x, shapeY + gradientObj.start.y,
-                          shapeX + gradientObj.end.x, shapeY + gradientObj.end.y
-                        ]}
-                        stroke="gray"
+                        points={[line.x1, line.y1, line.x2, line.y2]}
+                        stroke="orange"
                         strokeWidth={2}
                         dash={[4, 4]}
-                        listening={false}
                       />
-                      {gradientObj.colors.map((stop, idx) => {
-                        const x = shapeX + gradientObj.start.x + (gradientObj.end.x - gradientObj.start.x) * stop.pos;
-                        const y = shapeY + gradientObj.start.y + (gradientObj.end.y - gradientObj.start.y) * stop.pos;
-                        return (
-                          <Circle
-                            key={idx}
-                            x={x}
-                            y={y}
-                            radius={8}
-                            fill={stop.color}
-                            stroke="#333"
-                            strokeWidth={2}
-                            draggable
-                            onDragMove={e => {
-                              const { x: absX, y: absY } = e.target.getStage().getPointerPosition();
-                              const gradStartAbs = {
-                                x: shapeX + gradientObj.start.x,
-                                y: shapeY + gradientObj.start.y,
-                              };
-                              const gradEndAbs = {
-                                x: shapeX + gradientObj.end.x,
-                                y: shapeY + gradientObj.end.y,
-                              };
-                              const dx = gradEndAbs.x - gradStartAbs.x;
-                              const dy = gradEndAbs.y - gradStartAbs.y;
-                              const lengthSq = dx * dx + dy * dy;
-                              let t = ((absX - gradStartAbs.x) * dx + (absY - gradStartAbs.y) * dy) / lengthSq;
-                              t = Number.isFinite(t) ? Math.max(0, Math.min(1, t)) : 0;
-                              const newColors = [
-                                ...gradientObj.colors,
-                                { color: "#ffffff", pos: t }
-                              ].sort((a, b) => a.pos - b.pos);
-                              newColors[idx] = { ...newColors[idx], pos: t };
-                              dispatch(updateShapePosition({
-                                id: selectedShape.id,
-                                [applyTo]: {
-                                  ...gradientObj,
-                                  colors: newColors,
-                                },
-                                gradientTarget: applyTo,
-                              }));
-                            }}
-                          />
-                        );
-                      })}
+                      <KonvaText
+                        x={(line.x1 + line.x2) / 2}
+                        y={(line.y1 + line.y2) / 2 - measurementFontSize}
+                        text={formatMeasurement(line, measurementScale, measurementPrecision, measurementUnit, true)}
+                        fontSize={measurementFontSize}
+                        fill="orange"
+                        align="center"
+                      />
+                      {markDimension && renderDimensionMarkers(line, 16, measurementOffset)}
+                    </React.Fragment>
+                  ))}
+                  {measurementDraft && (
+                    <>
+                      {renderAngleArc(measurementDraft.x1, measurementDraft.y1, measurementDraft.x2, measurementDraft.y2)}
                       <Line
-                        points={[
-                          shapeX + gradientObj.start.x, shapeY + gradientObj.start.y,
-                          shapeX + gradientObj.end.x, shapeY + gradientObj.end.y
-                        ]}
-                        stroke="transparent"
-                        strokeWidth={16}
-                        onClick={e => {
-                          const { x: clickX, y: clickY } = e.target.getStage().getPointerPosition();
-                          const dx = gradientObj.end.x - gradientObj.start.x;
-                          const dy = gradientObj.end.y - gradientObj.start.y;
-                          const length = Math.sqrt(dx * dx + dy * dy);
-                          let t = ((clickX - (shapeX + gradientObj.start.x)) * dx + (clickY - (shapeY + gradientObj.start.y)) * dy) / (length * length);
-                          t = Number.isFinite(t) ? Math.max(0, Math.min(1, t)) : 0;
-
-                          const newColors = [
-                            ...gradientObj.colors,
-                            { color: "#ffffff", pos: t }
-                          ].sort((a, b) => a.pos - b.pos);
-                          dispatch(updateShapePosition({
-                            id: gradientObj.id,
-                            fill: { ...gradientObj, colors: newColors },
-                            gradientTarget: applyTo,
-                          }));
-                        }}
-                        listening={true}
-                      />
-                      <Circle
-                        x={shapeX + gradientObj.start.x}
-                        y={shapeY + gradientObj.start.y}
-                        radius={10}
-                        fill="#fff"
-                        stroke="#333"
+                        points={[measurementDraft.x1, measurementDraft.y1, measurementDraft.x2, measurementDraft.y2]}
+                        stroke="orange"
                         strokeWidth={2}
-                        draggable
-                        onDragMove={e => {
-                          const { x, y } = e.target.position();
-
-                          const localX = x - shapeX;
-                          const localY = y - shapeY;
-                          dispatch(updateShapePosition({
-                            id: selectedShape.id,
-                            [applyTo]: {
-                              ...gradientObj,
-                              colors: newColors,
-                            },
-                            gradientTarget: applyTo,
-                          }));
-                        }}
+                        dash={[4, 4]}
                       />
-                      <Circle
-                        x={shapeX + gradientObj.end.x}
-                        y={shapeY + gradientObj.end.y}
-                        radius={10}
-                        fill="#000"
-                        stroke="#333"
-                        strokeWidth={2}
-                        draggable
-                        onDragMove={e => {
-                          const { x, y } = e.target.position();
-                          const localX = x - shapeX;
-                          const localY = y - shapeY;
-                          dispatch(updateShapePosition({
-                            id: selectedShape.id,
-                            [applyTo]: {
-                              ...gradientObj,
-                              colors: newColors,
-                            },
-                            gradientTarget: applyTo,
-                          }));
-                        }}
+                      <KonvaText
+                        x={(measurementDraft.x1 + measurementDraft.x2) / 2}
+                        y={(measurementDraft.y1 + measurementDraft.y2) / 2 - measurementFontSize}
+                        text={formatMeasurement(measurementDraft, measurementScale, measurementPrecision, measurementUnit, true)}
+                        fontSize={measurementFontSize}
+                        fill="orange"
+                        align="center"
                       />
                     </>
                   )}
-                {selectedTool === "Gradient" &&
-                  selectedShape &&
-                  gradientObj?.type === "radial-gradient" &&
-                  gradientObj.center &&
-                  typeof gradientObj.radius === "number" &&
-                  gradientObj.colors && (
-                    <>
-                      <Circle
-                        x={shapeX + gradientObj.center.x}
-                        y={shapeY + gradientObj.center.y}
-                        radius={gradientObj.radius}
-                        fillRadialGradientStartPoint={gradientObj.center}
-                        fillRadialGradientEndPoint={{
-                          x: gradientObj.center.x,
-                          y: gradientObj.center.y + gradientObj.radius
-                        }}
+                  {hoveredShape && selectedTool === "Measurement" && (
+                    <Group>
+                      <Rect
+                        x={(hoveredShape.x ?? 0) * scale + position.x + 12}
+                        y={(hoveredShape.y ?? 0) * scale + position.y + 12}
+                        width={200}
+                        height={120}
+                        fill="rgba(255,255,255,0.9)"
+                        stroke="orange"
+                        strokeWidth={1}
+                        cornerRadius={8}
+                        shadowBlur={4}
+                      />
+                      <KonvaText
+                        x={(hoveredShape.x ?? 0) * scale + position.x + 20}
+                        y={(hoveredShape.y ?? 0) * scale + position.y + 20}
+                        text={
+                          hoveredShape.type === "Pencil" || hoveredShape.type === "Calligraphy"
+                            ? (() => {
+                              const points = hoveredShape.points || [];
+                              const length = points.length > 1
+                                ? points.reduce((sum, p, i, arr) => {
+                                  if (i === 0) return 0;
+                                  const prev = arr[i - 1];
 
-                        opacity={0.5}
-                        stroke="gray"
-                        strokeWidth={2}
-                        dash={[4, 4]}
-                        listening={false}
-                      />
-                      <Circle
-                        x={shapeX + gradientObj.center.x}
-                        y={shapeY + gradientObj.center.y}
-                        radius={10}
-                        fill="#fff"
-                        stroke="#333"
-                        strokeWidth={2}
-                        draggable
-                        onDragMove={e => {
-                          const { x, y } = e.target.position();
-                          const localX = x - shapeX;
-                          const localY = y - shapeY;
-                          dispatch(updateShapePosition({
-                            id: selectedShape.id,
-                            [applyTo]: {
-                              ...gradientObj,
-                              center: { x: localX, y: localY }
-                            },
-                            gradientTarget: applyTo,
-                          }));
-                        }}
-                      />
-                      <Circle
-                        x={shapeX + gradientObj.center.x}
-                        y={shapeY + gradientObj.center.y + gradientObj.radius}
-                        radius={10}
-                        fill="#000"
-                        stroke="#333"
-                        strokeWidth={2}
-                        draggable
-                        onDragMove={e => {
-                          const { x, y } = e.target.position();
-                          const dx = x - (shapeX + gradientObj.center.x);
-                          const dy = y - (shapeY + gradientObj.center.y);
-                          const newRadius = Math.max(5, Math.sqrt(dx * dx + dy * dy));
-                          dispatch(updateShapePosition({
-                            id: selectedShape.id,
-                            [applyTo]: {
-                              ...gradientObj,
-                              radius: newRadius
-                            },
-                            gradientTarget: applyTo,
-                          }));
-                        }}
-                      />
-                      {gradientObj.colors.map((stop, idx) => {
-                        const angle = 0;
-                        const r = gradientObj.radius * stop.pos;
-                        const x = shapeX + gradientObj.center.x + r * Math.cos(angle);
-                        const y = shapeY + gradientObj.center.y + r * Math.sin(angle);
-                        return (
-                          <Circle
-                            key={idx}
-                            x={x}
-                            y={y}
-                            radius={8}
-                            fill={stop.color}
-                            stroke="#333"
-                            strokeWidth={2}
-                            draggable
-                            onDragMove={e => {
-                              const dx = e.target.x() - (shapeX + gradientObj.center.x);
-                              const dy = e.target.y() - (shapeY + gradientObj.center.y);
-                              let t = Math.sqrt(dx * dx + dy * dy) / gradientObj.radius;
-                              t = Math.max(0, Math.min(1, t));
-                              const newColors = gradientObj.colors.map((s, i) =>
-                                i === idx ? { ...s, pos: t } : s
+                                  const x1 = Array.isArray(p) ? p[0] : p.x;
+                                  const y1 = Array.isArray(p) ? p[1] : p.y;
+                                  const x0 = Array.isArray(prev) ? prev[0] : prev.x;
+                                  const y0 = Array.isArray(prev) ? prev[1] : prev.y;
+                                  return sum + Math.hypot(x1 - x0, y1 - y0);
+                                }, 0)
+                                : 0;
+                              return (
+                                `points: ${points.length}\n` +
+                                `length: ${Math.round(length)}`
                               );
-                              dispatch(updateShapePosition({
-                                id: selectedShape.id,
-                                [applyTo]: {
-                                  ...gradientObj,
-                                  colors: newColors
-                                },
-                                gradientTarget: applyTo,
-                              }));
-                            }}
-                          />
-                        );
-                      })}
-                    </>
-                  )}
-
-                {allMeasurementLines.map((line, idx) => (
-                  <React.Fragment key={idx}>
-                    {renderAngleArc(line.x1, line.y1, line.x2, line.y2)}
-                    <Line
-                      points={[line.x1, line.y1, line.x2, line.y2]}
-                      stroke="orange"
-                      strokeWidth={2}
-                      dash={[4, 4]}
-                    />
-                    <KonvaText
-                      x={(line.x1 + line.x2) / 2}
-                      y={(line.y1 + line.y2) / 2 - measurementFontSize}
-                      text={formatMeasurement(line, measurementScale, measurementPrecision, measurementUnit, true)}
-                      fontSize={measurementFontSize}
-                      fill="orange"
-                      align="center"
-                    />
-                    {markDimension && renderDimensionMarkers(line, 16, measurementOffset)}
-                  </React.Fragment>
-                ))}
-                {measurementDraft && (
-                  <>
-                    {renderAngleArc(measurementDraft.x1, measurementDraft.y1, measurementDraft.x2, measurementDraft.y2)}
-                    <Line
-                      points={[measurementDraft.x1, measurementDraft.y1, measurementDraft.x2, measurementDraft.y2]}
-                      stroke="orange"
-                      strokeWidth={2}
-                      dash={[4, 4]}
-                    />
-                    <KonvaText
-                      x={(measurementDraft.x1 + measurementDraft.x2) / 2}
-                      y={(measurementDraft.y1 + measurementDraft.y2) / 2 - measurementFontSize}
-                      text={formatMeasurement(measurementDraft, measurementScale, measurementPrecision, measurementUnit, true)}
-                      fontSize={measurementFontSize}
-                      fill="orange"
-                      align="center"
-                    />
-                  </>
-                )}
-                {hoveredShape && selectedTool === "Measurement" && (
-                  <Group>
-                    <Rect
-                      x={(hoveredShape.x ?? 0) * scale + position.x + 12}
-                      y={(hoveredShape.y ?? 0) * scale + position.y + 12}
-                      width={200}
-                      height={120}
-                      fill="rgba(255,255,255,0.9)"
-                      stroke="orange"
-                      strokeWidth={1}
-                      cornerRadius={8}
-                      shadowBlur={4}
-                    />
-                    <KonvaText
-                      x={(hoveredShape.x ?? 0) * scale + position.x + 20}
-                      y={(hoveredShape.y ?? 0) * scale + position.y + 20}
-                      text={
-                        hoveredShape.type === "Pencil" || hoveredShape.type === "Calligraphy"
-                          ? (() => {
-                            const points = hoveredShape.points || [];
-                            const length = points.length > 1
-                              ? points.reduce((sum, p, i, arr) => {
-                                if (i === 0) return 0;
-                                const prev = arr[i - 1];
-
-                                const x1 = Array.isArray(p) ? p[0] : p.x;
-                                const y1 = Array.isArray(p) ? p[1] : p.y;
-                                const x0 = Array.isArray(prev) ? prev[0] : prev.x;
-                                const y0 = Array.isArray(prev) ? prev[1] : prev.y;
-                                return sum + Math.hypot(x1 - x0, y1 - y0);
-                              }, 0)
-                              : 0;
-                            return (
-                              `points: ${points.length}\n` +
-                              `length: ${Math.round(length)}`
-                            );
-                          })()
-                          : hoveredShape.type === "Circle"
-                            ? (
-                              `x: ${Math.round(hoveredShape.x)}\n` +
-                              `y: ${Math.round(hoveredShape.y)}\n` +
-                              `radius: ${Math.round(hoveredShape.radius)}\n` +
-                              `diameter: ${Math.round(hoveredShape.radius * 2)}\n` +
-                              `circumf.: ${Math.round(2 * Math.PI * hoveredShape.radius)}\n` +
-                              `area: ${Math.round(Math.PI * hoveredShape.radius * hoveredShape.radius)}`
-                            )
-                            : hoveredShape.type === "Polygon"
+                            })()
+                            : hoveredShape.type === "Circle"
                               ? (
                                 `x: ${Math.round(hoveredShape.x)}\n` +
                                 `y: ${Math.round(hoveredShape.y)}\n` +
-                                `sides: ${hoveredShape.corners || (hoveredShape.points ? hoveredShape.points.length : "")}\n` +
-                                (hoveredShape.radius ? `radius: ${Math.round(hoveredShape.radius)}\n` : "") +
-                                (hoveredShape.points && hoveredShape.points.length > 1
-                                  ? `perimeter: ${Math.round(
-                                    hoveredShape.points.reduce((sum, p, i, arr) => {
-                                      const next = arr[(i + 1) % arr.length];
-                                      return sum + Math.hypot((next.x || 0) - (p.x || 0), (next.y || 0) - (p.y || 0));
-                                    }, 0)
-                                  )}\n`
-                                  : "")
+                                `radius: ${Math.round(hoveredShape.radius)}\n` +
+                                `diameter: ${Math.round(hoveredShape.radius * 2)}\n` +
+                                `circumf.: ${Math.round(2 * Math.PI * hoveredShape.radius)}\n` +
+                                `area: ${Math.round(Math.PI * hoveredShape.radius * hoveredShape.radius)}`
                               )
-                              : hoveredShape.type === "Star"
+                              : hoveredShape.type === "Polygon"
                                 ? (
                                   `x: ${Math.round(hoveredShape.x)}\n` +
                                   `y: ${Math.round(hoveredShape.y)}\n` +
-                                  `points: ${hoveredShape.corners}\n` +
-                                  `innerR: ${Math.round(hoveredShape.innerRadius)}\n` +
-                                  `outerR: ${Math.round(hoveredShape.outerRadius)}`
-                                )
-                                : (
-                                  `x: ${Math.round(hoveredShape.x)}\n` +
-                                  `y: ${Math.round(hoveredShape.y)}\n` +
-                                  (hoveredShape.width !== undefined
-                                    ? `width: ${Math.round(hoveredShape.width)}\n`
-                                    : hoveredShape.radius !== undefined
-                                      ? `radius: ${Math.round(hoveredShape.radius)}\n`
-                                      : "") +
-                                  (hoveredShape.height !== undefined
-                                    ? `height: ${Math.round(hoveredShape.height)}\n`
-                                    : "") +
-                                  (hoveredShape.type === "Line" && hoveredShape.points
-                                    ? `length: ${Math.round(
-                                      Math.sqrt(
-                                        Math.pow(hoveredShape.points[2] - hoveredShape.points[0], 2) +
-                                        Math.pow(hoveredShape.points[3] - hoveredShape.points[1], 2)
-                                      )
-                                    )}`
+                                  `sides: ${hoveredShape.corners || (hoveredShape.points ? hoveredShape.points.length : "")}\n` +
+                                  (hoveredShape.radius ? `radius: ${Math.round(hoveredShape.radius)}\n` : "") +
+                                  (hoveredShape.points && hoveredShape.points.length > 1
+                                    ? `perimeter: ${Math.round(
+                                      hoveredShape.points.reduce((sum, p, i, arr) => {
+                                        const next = arr[(i + 1) % arr.length];
+                                        return sum + Math.hypot((next.x || 0) - (p.x || 0), (next.y || 0) - (p.y || 0));
+                                      }, 0)
+                                    )}\n`
                                     : "")
                                 )
-                      }
-                      fontSize={16}
-                      fill="black"
-                    />
-                  </Group>
-                )}
-                {guides.map((guide, idx) =>
-                  guide.orientation === "vertical" ? (
-                    <Line
-                      key={`guide-v-${idx}`}
-                      points={[guide.position, 0, guide.position, height]}
-                      stroke="blue"
-                      strokeWidth={1}
-                      dash={[4, 4]}
-                      listening={false}
-                    />
-                  ) : (
-                    <Line
-                      key={`guide-h-${idx}`}
-                      points={[0, guide.position, width, guide.position]}
-                      stroke="blue"
-                      strokeWidth={1}
-                      dash={[4, 4]}
-                      listening={false}
-                    />
-                  )
-                )}
-                {phantomMeasure && measurementDraft && (
-                  <>
-                    <Line
-                      points={[
-                        measurementDraft.x1, measurementDraft.y1,
-                        measurementDraft.x2, measurementDraft.y2
-                      ]}
-                      stroke="purple"
-                      strokeWidth={2}
-                      dash={[8, 8]}
-                      opacity={0.7}
-                    />
-                    <KonvaText
-                      x={(measurementDraft.x1 + measurementDraft.x2) / 2}
-                      y={(measurementDraft.y1 + measurementDraft.y2) / 2 - measurementFontSize}
-                      text={formatMeasurement(measurementDraft, measurementScale, measurementPrecision, measurementUnit, true)}
-                      fontSize={measurementFontSize}
-                      fill="purple"
-                      align="center"
-                      opacity={0.7}
-                    />
-                  </>
-                )}
+                                : hoveredShape.type === "Star"
+                                  ? (
+                                    `x: ${Math.round(hoveredShape.x)}\n` +
+                                    `y: ${Math.round(hoveredShape.y)}\n` +
+                                    `points: ${hoveredShape.corners}\n` +
+                                    `innerR: ${Math.round(hoveredShape.innerRadius)}\n` +
+                                    `outerR: ${Math.round(hoveredShape.outerRadius)}`
+                                  )
+                                  : (
+                                    `x: ${Math.round(hoveredShape.x)}\n` +
+                                    `y: ${Math.round(hoveredShape.y)}\n` +
+                                    (hoveredShape.width !== undefined
+                                      ? `width: ${Math.round(hoveredShape.width)}\n`
+                                      : hoveredShape.radius !== undefined
+                                        ? `radius: ${Math.round(hoveredShape.radius)}\n`
+                                        : "") +
+                                    (hoveredShape.height !== undefined
+                                      ? `height: ${Math.round(hoveredShape.height)}\n`
+                                      : "") +
+                                    (hoveredShape.type === "Line" && hoveredShape.points
+                                      ? `length: ${Math.round(
+                                        Math.sqrt(
+                                          Math.pow(hoveredShape.points[2] - hoveredShape.points[0], 2) +
+                                          Math.pow(hoveredShape.points[3] - hoveredShape.points[1], 2)
+                                        )
+                                      )}`
+                                      : "")
+                                  )
+                        }
+                        fontSize={16}
+                        fill="black"
+                      />
+                    </Group>
+                  )}
+                  {guides.map((guide, idx) =>
+                    guide.orientation === "vertical" ? (
+                      <Line
+                        key={`guide-v-${idx}`}
+                        points={[guide.position, 0, guide.position, height]}
+                        stroke="blue"
+                        strokeWidth={1}
+                        dash={[4, 4]}
+                        listening={false}
+                      />
+                    ) : (
+                      <Line
+                        key={`guide-h-${idx}`}
+                        points={[0, guide.position, width, guide.position]}
+                        stroke="blue"
+                        strokeWidth={1}
+                        dash={[4, 4]}
+                        listening={false}
+                      />
+                    )
+                  )}
+                  {phantomMeasure && measurementDraft && (
+                    <>
+                      <Line
+                        points={[
+                          measurementDraft.x1, measurementDraft.y1,
+                          measurementDraft.x2, measurementDraft.y2
+                        ]}
+                        stroke="purple"
+                        strokeWidth={2}
+                        dash={[8, 8]}
+                        opacity={0.7}
+                      />
+                      <KonvaText
+                        x={(measurementDraft.x1 + measurementDraft.x2) / 2}
+                        y={(measurementDraft.y1 + measurementDraft.y2) / 2 - measurementFontSize}
+                        text={formatMeasurement(measurementDraft, measurementScale, measurementPrecision, measurementUnit, true)}
+                        fontSize={measurementFontSize}
+                        fill="purple"
+                        align="center"
+                        opacity={0.7}
+                      />
+                    </>
+                  )}
 
 
-                {selectedTool === "ShapeBuilder" && shapeBuilderRegions.length > 0 &&
-                  shapeBuilderRegions.map((region, idx) => (
-                    <Path
-                      key={idx}
-                      data={generatePolygonPath(region[0].map(([x, y]) => ({ x, y })))}
-                      fill={selectedRegionIndices.includes(idx) ? "rgba(0,128,255,0.4)" : "rgba(128,128,128,0.2)"}
-                      stroke="#007bff"
-                      strokeWidth={selectedRegionIndices.includes(idx) ? 3 : 1}
-                      onClick={() => {
-                        setSelectedRegionIndices(indices =>
-                          indices.includes(idx)
-                            ? indices.filter(i => i !== idx)
-                            : [...indices, idx]
-                        );
-                      }}
-                      listening={true}
-                      closed
+                  {selectedTool === "ShapeBuilder" && shapeBuilderRegions.length > 0 &&
+                    shapeBuilderRegions.map((region, idx) => (
+                      <Path
+                        key={idx}
+                        data={generatePolygonPath(region[0].map(([x, y]) => ({ x, y })))}
+                        fill={selectedRegionIndices.includes(idx) ? "rgba(0,128,255,0.4)" : "rgba(128,128,128,0.2)"}
+                        stroke="#007bff"
+                        strokeWidth={selectedRegionIndices.includes(idx) ? 3 : 1}
+                        onClick={() => {
+                          setSelectedRegionIndices(indices =>
+                            indices.includes(idx)
+                              ? indices.filter(i => i !== idx)
+                              : [...indices, idx]
+                          );
+                        }}
+                        listening={true}
+                        closed
+                      />
+                    ))
+                  }
+                </Layer>
+                <Layer>
+                  {shapes.filter(s => s.type === "SVG").map(shape => (
+                    <SvgImage
+                      key={shape.id}
+                      id={shape.id}
+                      svg={shape.svg}
+                      x={shape.x}
+                      y={shape.y}
+                      width={shape.width}
+                      height={shape.height}
+                      draggable={shape.draggable}
+                      onClick={() => dispatch(selectShape(shape.id))}
                     />
-                  ))
-                }
-              </Layer>
-              <Layer>
-                {shapes.filter(s => s.type === "SVG").map(shape => (
-                  <SvgImage
-                    key={shape.id}
-                    id={shape.id}
-                    svg={shape.svg}
-                    x={shape.x}
-                    y={shape.y}
-                    width={shape.width}
-                    height={shape.height}
-                    draggable={shape.draggable}
-                    onClick={() => dispatch(selectShape(shape.id))}
-                  />
-                ))}
-              </Layer>
-            </Stage>
+                  ))}
+                </Layer>
+              </Stage>
+            )}
           </div>
-        </div>
-      </div>
-      {colorPicker.visible && (
-        <input
-          type="color"
-          style={{
-            position: "absolute",
-            left: colorPicker.x,
-            top: colorPicker.y,
-            zIndex: 2000,
-            width: 32,
-            height: 32,
-            border: "2px solid #333",
-            borderRadius: "50%",
-            padding: 0,
-            cursor: "pointer"
-          }}
-          value={gradientObj.colors[colorPicker.idx]?.color || "#ffffff"}
-          onChange={e => {
-            const newColors = gradientObj.colors.map((s, i) =>
-              i === colorPicker.idx ? { ...s, color: e.target.value } : s
-            );
-            dispatch(updateShapePosition({
-              id: selectedShape.id,
-              [applyTo]: {
-                ...gradientObj,
-                colors: newColors
-              },
-              gradientTarget: applyTo,
-            }));
-            setColorPicker({ ...colorPicker, visible: false });
-          }}
-          onBlur={() => setColorPicker({ ...colorPicker, visible: false })}
-          autoFocus
-        />
-      )}
-      {isCustomCursorVisible && toolCursors[selectedTool] && (
+        </div >
+      </div >
+      {
+        colorPicker.visible && (
+          <input
+            type="color"
+            style={{
+              position: "absolute",
+              left: colorPicker.x,
+              top: colorPicker.y,
+              zIndex: 2000,
+              width: 32,
+              height: 32,
+              border: "2px solid #333",
+              borderRadius: "50%",
+              padding: 0,
+              cursor: "pointer"
+            }}
+            value={gradientObj.colors[colorPicker.idx]?.color || "#ffffff"}
+            onChange={e => {
+              const newColors = gradientObj.colors.map((s, i) =>
+                i === colorPicker.idx ? { ...s, color: e.target.value } : s
+              );
+              dispatch(updateShapePosition({
+                id: selectedShape.id,
+                [applyTo]: {
+                  ...gradientObj,
+                  colors: newColors
+                },
+                gradientTarget: applyTo,
+              }));
+              setColorPicker({ ...colorPicker, visible: false });
+            }}
+            onBlur={() => setColorPicker({ ...colorPicker, visible: false })}
+            autoFocus
+          />
+        )
+      }
+      {
+        isCustomCursorVisible && toolCursors[selectedTool] && (
+          <div
+            style={{
+              position: "absolute",
+              top: `${(cursorPosition.y * scale) + position.y}px`,
+              left: `${(cursorPosition.x * scale) + position.x}px`,
+              pointerEvents: "none",
+              zIndex: 1000,
+              transform: `translate(-30%, -100%)`,
+            }}
+          >
+            {toolCursors[selectedTool]}
+          </div>
+        )
+      }
+      {console.log("Rendering TextArea:", textAreaVisible, "Position:", textAreaPosition)}
+      {
+        textAreaVisible && (
+          <textarea
+            style={{
+              position: "absolute",
+              top: `${textAreaPosition.y}px`,
+              left: `${textAreaPosition.x}px`,
+              fontSize: "16px",
+              border: "1px solid black",
+              resize: "none",
+              zIndex: 1000,
+              direction: selectedShape?.textDirection || "ltr",
+              textAlign: selectedShape?.textDirection === "rtl" ? "right" : "left",
+            }}
+            dir={selectedShape?.textDirection || "ltr"}
+            value={textContent}
+            onChange={(e) => setTextContent(e.target.value)}
+            onBlur={handleTextAreaBlur}
+            onKeyDown={handleTextAreaKeyDown}
+            autoFocus
+          />
+        )
+      }
+      {showMessagesModal && (
         <div
           style={{
-            position: "absolute",
-            top: `${(cursorPosition.y * scale) + position.y}px`,
-            left: `${(cursorPosition.x * scale) + position.x}px`,
-            pointerEvents: "none",
-            zIndex: 1000,
-            transform: `translate(-30%, -100%)`,
+            position: "fixed",
+            top: 0,
+            left: 0,
+            width: "100vw",
+            height: "100vh",
+            // background: "rgba(0,0,0,0.3)",
+            zIndex: 9999,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center"
           }}
+          onClick={() => setShowMessagesModal(false)}
         >
-          {toolCursors[selectedTool]}
+          <div
+            style={{
+              background: "#fff",
+              padding: 24,
+              borderRadius: 8,
+              minWidth: 320,
+              maxWidth: 480,
+              maxHeight: "60vh",
+              overflowY: "auto",
+              boxShadow: "0 8px 32px rgba(0,0,0,0.18)"
+            }}
+            onClick={e => e.stopPropagation()}
+          >
+            <h4 style={{ marginBottom: 16 }}>Messages</h4>
+            <ul style={{ padding: 0, listStyle: "none" }}>
+              {messages.map((msg, idx) => (
+                <li key={idx} style={{
+                  marginBottom: 12,
+                  color: msg.type === "warning" ? "#b85c00" : "#222",
+                  background: msg.type === "warning" ? "#fffbe6" : "#f4f4f4",
+                  borderLeft: msg.type === "warning" ? "4px solid #ff9800" : "4px solid #2196f3",
+                  padding: "8px 12px",
+                  borderRadius: 4
+                }}>
+                  {msg.text}
+                </li>
+              ))}
+            </ul>
+            <div style={{ marginTop: 24, textAlign: "right" }}>
+              <button onClick={() => setShowMessagesModal(false)} style={{ border: "none", borderRadius: 4, padding: "6px 16px" }}>
+                Close
+              </button>
+            </div>
+          </div>
         </div>
-      )}
-      {console.log("Rendering TextArea:", textAreaVisible, "Position:", textAreaPosition)}
-      {textAreaVisible && (
-        <textarea
-          style={{
-            position: "absolute",
-            top: `${textAreaPosition.y}px`,
-            left: `${textAreaPosition.x}px`,
-            fontSize: "16px",
-            border: "1px solid black",
-            resize: "none",
-            zIndex: 1000,
-            direction: selectedShape?.textDirection || "ltr",
-            textAlign: selectedShape?.textDirection === "rtl" ? "right" : "left",
-          }}
-          dir={selectedShape?.textDirection || "ltr"}
-          value={textContent}
-          onChange={(e) => setTextContent(e.target.value)}
-          onBlur={handleTextAreaBlur}
-          onKeyDown={handleTextAreaKeyDown}
-          autoFocus
-        />
       )}
     </>
   );

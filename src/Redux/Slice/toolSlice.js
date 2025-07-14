@@ -156,6 +156,11 @@ const toolSlice = createSlice({
     externalScripts: [],
     embeddedScripts: [],
     markers: [],
+    splitMode: "None",
+    splitPosition: 0.5,
+    wideScreen: false,
+    openDocuments: [],
+    currentDocumentIndex: 0,
   },
 
   reducers: {
@@ -5624,6 +5629,21 @@ const toolSlice = createSlice({
         selectedShape.lpeEffect = action.payload;
       }
     },
+    setSplitMode: (state, action) => {
+      state.splitMode = action.payload;
+    },
+    setSplitPosition: (state, action) => {
+      state.splitPosition = action.payload;
+    },
+    setWideScreen: (state, action) => {
+      state.wideScreen = action.payload;
+    },
+    setOpenDocuments: (state, action) => {
+      state.openDocuments = action.payload;
+    },
+    setCurrentDocumentIndex: (state, action) => {
+      state.currentDocumentIndex = action.payload;
+    },
   },
 
 });
@@ -5874,6 +5894,11 @@ export const {
   setMarkerForSelectedShape,
   addMarker,
   applyPathEffectToSelectedShape,
+  setSplitMode,
+  setSplitPosition,
+  setWideScreen,
+  setOpenDocuments,
+  setCurrentDocumentIndex,
 } = toolSlice.actions;
 
 export default toolSlice.reducer;

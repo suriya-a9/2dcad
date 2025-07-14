@@ -13,7 +13,7 @@ import * as React from "react";
 import Ruler from "../Ruler/Ruler";
 import html2canvas from "html2canvas";
 import { useSelector } from "react-redux";
-import { zoomIn, zoomOut, setZoomLevel } from "../../Redux/Slice/toolSlice";
+import { setLayersAndSelection, setSelectedTool, setStrokeColor, setFillColor } from "../../Redux/Slice/toolSlice";
 const Main = () => {
 
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -53,10 +53,13 @@ const Main = () => {
   const showCheckerboard = useSelector(state => state.tool.showCheckerboard);
   const [isFillStrokeDialogOpen, setIsFillStrokeDialogOpen] = useState(false);
   const [isAlignPanelOpen, setIsAlignPanelOpen] = useState(false);
+  const wideScreen = useSelector(state => state.tool.wideScreen);
   const handleOpenFillStrokeDialog = () => {
     console.log("Open Fill & Stroke dialog");
     setIsFillStrokeDialogOpen(true);
   };
+  const openDocuments = useSelector(state => state.tool.openDocuments);
+  const currentDocumentIndex = useSelector(state => state.tool.currentDocumentIndex);
   useEffect(() => {
     function handleAddGuides(e) {
       setGuidelines(prev => [...prev, ...(e.detail || [])]);
@@ -64,6 +67,30 @@ const Main = () => {
     window.addEventListener("addGuides", handleAddGuides);
     return () => window.removeEventListener("addGuides", handleAddGuides);
   }, []);
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const duplicate = params.get("duplicate");
+    if (duplicate) {
+      try {
+        const state = JSON.parse(decodeURIComponent(escape(atob(duplicate))));
+        if (state.layers) dispatch(setLayersAndSelection({ layers: state.layers, selectedLayerIndex: state.selectedLayerIndex }));
+        if (state.selectedTool) dispatch(setSelectedTool(state.selectedTool));
+        if (state.strokeColor) dispatch(setStrokeColor(state.strokeColor));
+        if (state.fillColor) dispatch(setFillColor(state.fillColor));
+      } catch (e) {
+        console.error("Failed to restore duplicated window state", e);
+      }
+    }
+  }, [dispatch]);
+  useEffect(() => {
+    const doc = openDocuments[currentDocumentIndex];
+    if (doc) {
+      dispatch(setLayersAndSelection({ layers: doc.layers, selectedLayerIndex: doc.selectedLayerIndex }));
+      dispatch(setSelectedTool(doc.selectedTool));
+      dispatch(setStrokeColor(doc.strokeColor));
+      dispatch(setFillColor(doc.fillColor));
+    }
+  }, [currentDocumentIndex, openDocuments, dispatch]);
   const handleCloseFillStrokeDialog = () => setIsFillStrokeDialogOpen(false);
   // const width = useSelector(state => state.tool.width);
   // const height = useSelector(state => state.tool.height);
@@ -863,52 +890,57 @@ const Main = () => {
           </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'stretch' }}>
-          <div style={{ flexGrow: '1', position: 'fixed', top: '125px' }}>
-            <LeftSidebar />
-          </div>
-          <Ruler
-            orientation="horizontal"
-            length={width * zoomLevel + 1000}
-            scale={zoomLevel}
-            position={canvasPosition}
-            canvasSize={{ width, height }}
-            canvasPosition={canvasPosition}
-            unit={unit}
-            onClick={handleRulerClick}
-            onRightClick={handleRulerRightClick}
-            highlightRange={
-              selectedBounds
-                ? {
-                  start: selectedBounds.x * zoomLevel + canvasPosition.x,
-                  end: (selectedBounds.x + selectedBounds.width) * zoomLevel + canvasPosition.x
-                }
-                : null
-            }
-            onDragGuide={(orientation, position) => handleDragGuide(orientation, position)}
-            style={{ zIndex: '20' }}
-          />
-
-          <Ruler
-            orientation="vertical"
-            length={height * zoomLevel + 1000}
-            scale={zoomLevel}
-            position={canvasPosition}
-            canvasSize={{ width, height }}
-            canvasPosition={canvasPosition}
-            unit={unit}
-            onClick={handleRulerClick}
-            highlightRange={
-              selectedBounds
-                ? {
-                  start: selectedBounds.y * zoomLevel + canvasPosition.y,
-                  end: (selectedBounds.y + selectedBounds.height) * zoomLevel + canvasPosition.y
-                }
-                : null
-            }
-            onDragGuide={(orientation, position) => handleDragGuide(orientation, position)}
-            onRightClick={handleRulerRightClick}
-            style={{ zIndex: '20' }}
-          />
+          {!wideScreen && (
+            <div style={{ flexGrow: '1', position: 'fixed', top: '125px' }}>
+              <LeftSidebar />
+            </div>
+          )}
+          {!wideScreen && (
+            <Ruler
+              orientation="horizontal"
+              length={width * zoomLevel + 1000}
+              scale={zoomLevel}
+              position={canvasPosition}
+              canvasSize={{ width, height }}
+              canvasPosition={canvasPosition}
+              unit={unit}
+              onClick={handleRulerClick}
+              onRightClick={handleRulerRightClick}
+              highlightRange={
+                selectedBounds
+                  ? {
+                    start: selectedBounds.x * zoomLevel + canvasPosition.x,
+                    end: (selectedBounds.x + selectedBounds.width) * zoomLevel + canvasPosition.x
+                  }
+                  : null
+              }
+              onDragGuide={(orientation, position) => handleDragGuide(orientation, position)}
+              style={{ zIndex: '20' }}
+            />
+          )}
+          {!wideScreen && (
+            <Ruler
+              orientation="vertical"
+              length={height * zoomLevel + 1000}
+              scale={zoomLevel}
+              position={canvasPosition}
+              canvasSize={{ width, height }}
+              canvasPosition={canvasPosition}
+              unit={unit}
+              onClick={handleRulerClick}
+              highlightRange={
+                selectedBounds
+                  ? {
+                    start: selectedBounds.y * zoomLevel + canvasPosition.y,
+                    end: (selectedBounds.y + selectedBounds.height) * zoomLevel + canvasPosition.y
+                  }
+                  : null
+              }
+              onDragGuide={(orientation, position) => handleDragGuide(orientation, position)}
+              onRightClick={handleRulerRightClick}
+              style={{ zIndex: '20' }}
+            />
+          )}
           {contextMenu.visible && (
             <div
               className="context-menu"
@@ -1213,12 +1245,13 @@ const Main = () => {
               ))}
             </div>
           </div>
-
-          <div style={{ flexGrow: '1', position: 'fixed', top: '125px', bottom: '50px', right: '0px' }}>
-            <RightSidebar toggleSidebar={toggleSidebar} isSidebarOpen={isSidebarOpen} handleSave={handleSave} activeTab={activeTab} setActiveTab={(tab) => console.log("Active Tab:", tab)} handleDownloadPdf={handleDownloadPdf} selectedGroupId={selectedGroupId} setSelectedGroupId={setSelectedGroupId} onZoomIn={handleZoomIn} onZoomOut={handleZoomOut} handleOpenFillStrokeDialog={handleOpenFillStrokeDialog} isFillStrokeDialogOpen={isFillStrokeDialogOpen} handleCloseFillStrokeDialog={handleCloseFillStrokeDialog} isAlignPanelOpen={isAlignPanelOpen} setIsAlignPanelOpen={setIsAlignPanelOpen} />
-          </div>
+          {!wideScreen && (
+            <div style={{ flexGrow: '1', position: 'fixed', top: '125px', bottom: '50px', right: '0px' }}>
+              <RightSidebar toggleSidebar={toggleSidebar} isSidebarOpen={isSidebarOpen} handleSave={handleSave} activeTab={activeTab} setActiveTab={(tab) => console.log("Active Tab:", tab)} handleDownloadPdf={handleDownloadPdf} selectedGroupId={selectedGroupId} setSelectedGroupId={setSelectedGroupId} onZoomIn={handleZoomIn} onZoomOut={handleZoomOut} handleOpenFillStrokeDialog={handleOpenFillStrokeDialog} isFillStrokeDialogOpen={isFillStrokeDialogOpen} handleCloseFillStrokeDialog={handleCloseFillStrokeDialog} isAlignPanelOpen={isAlignPanelOpen} setIsAlignPanelOpen={setIsAlignPanelOpen} />
+            </div>
+          )}
         </div>
-        {/* <div style={{ display: 'flex', alignItems: 'stretch' }}>
+        <div style={{ display: 'flex', alignItems: 'stretch' }}>
           <div style={{ flexGrow: '1', position: 'fixed', bottom: '0px', overflowY: 'scroll', scrollbarWidth: 'thin' }}>
             <ColorPalette />
             <div
@@ -1267,7 +1300,7 @@ const Main = () => {
               />
             </div>
           </div>
-        </div> */}
+        </div>
       </div >
     </>
   )

@@ -18,12 +18,16 @@ import { GiStraightPipe } from "react-icons/gi";
 import { PiPath } from "react-icons/pi";
 import { FaObjectGroup, FaObjectUngroup, FaExpand, FaRegFile, FaRegDotCircle, FaBan, FaVectorSquare } from "react-icons/fa";
 import { MdGridOn, MdOutlineGradient, MdOutlineFormatColorFill, MdOutlineBorderColor } from "react-icons/md";
-import { textToGlyphsHandler } from "../Panel/Panel";
+import { textToGlyphsHandler, renderShape } from "../Panel/Panel";
 import { setSelectedTool } from "../../Redux/Slice/toolSlice";
 import { GiPerspectiveDiceSixFacesRandom, GiPaintBrush, GiJigsawBox } from "react-icons/gi";
 import PathEffectsDialog from "../Dialogs/PathEffectsDialog";
 import { EditorState, ContentState } from "draft-js";
 import { MdCenterFocusStrong } from "react-icons/md";
+import {
+  Stage,
+  Layer,
+} from "react-konva";
 import {
   updateShapePosition,
   selecteAllShapes,
@@ -138,6 +142,9 @@ import {
   popShapesOutOfGroups,
   addMarker,
   applyPathEffectToSelectedShape,
+  setSplitMode,
+  setWideScreen,
+  setCurrentDocumentIndex,
 } from "../../Redux/Slice/toolSlice";
 import {
   TbDeselect,
@@ -167,6 +174,99 @@ const PAINT_SERVERS = [
     svg: `<svg width="32" height="32"><defs><pattern id="checkerboard" width="8" height="8" patternUnits="userSpaceOnUse"><rect width="8" height="8" fill="#fff"/><rect width="4" height="4" fill="#000"/><rect x="4" y="4" width="4" height="4" fill="#000"/></pattern></defs><rect width="32" height="32" fill="url(#checkerboard)" /></svg>`
   },
 ];
+const SWATCHES = [
+  "Document swatches", "Android icon palette", "Blues", "Bootstrap 5", "Echo Icon Theme Palette",
+  "GNOME HIG Colors", "Gold", "Gray", "Greens", "Hilite", "Inkscape default", "Khaki",
+  "LaTeX Beamer", "MATLAB Jet (72)", "MunsellChart", "Reds", "Royal", "Solarized colors",
+  "SVG", "Tango icons", "Topographic", "Ubuntu", "WebHex"
+];
+const SWATCH_PALETTES = {
+  "Android icon palette": [
+    { name: "None", color: null },
+    { color: "#FFFFFF" }, { color: "#BFBFBF" }, { color: "#808080" }, { color: "#404040" }, { color: "#000000" },
+    { color: "#6699FF" }, { color: "#3366CC" }, { color: "#003399" },
+    { color: "#99CC33" }, { color: "#00CC00" }, { color: "#669900" },
+    { color: "#FFCC00" }, { color: "#FF9900" }, { color: "#FF6600" },
+    { color: "#CC0000" }
+  ],
+  "Blues": [
+    { name: "None", color: null },
+    { color: "#808080" },
+    { color: "#FFFFFF" },
+    { color: "#000010" },
+    { color: "#000018" },
+    { color: "#000020" },
+    { color: "#000028" },
+    { color: "#000030" },
+    { color: "#000038" },
+    { color: "#000040" },
+    { color: "#000044" },
+    { color: "#00004C" },
+    { color: "#000050" },
+    { color: "#000058" },
+    { color: "#00005C" },
+    { color: "#000060" },
+    { color: "#000068" },
+    { color: "#000070" },
+    { color: "#000074" },
+    { color: "#00007C" },
+    { color: "#000080" },
+    { color: "#000088" },
+    { color: "#00008C" },
+    { color: "#000094" },
+    { color: "#000098" },
+    { color: "#0000A0" },
+    { color: "#0000A4" },
+    { color: "#0000AC" },
+    { color: "#0000B4" },
+    { color: "#0000B8" },
+    { color: "#0000C0" },
+    { color: "#0000C4" },
+    { color: "#0000CC" },
+    { color: "#0000D4" },
+    { color: "#0000D8" },
+    { color: "#0000E0" },
+    { color: "#0000E4" },
+    { color: "#0000EC" },
+    { color: "#0000F4" },
+    { color: "#0000F8" },
+    { color: "#0000FF" },
+    { color: "#0038FC" },
+    { color: "#0044FC" },
+    { color: "#005CFC" },
+    { color: "#0068FC" },
+    { color: "#0074FC" },
+    { color: "#0084FC" },
+    { color: "#0094FC" },
+    { color: "#00A4FC" },
+    { color: "#00B4FC" },
+    { color: "#00C4FC" },
+    { color: "#00D4FC" },
+    { color: "#00E4FC" },
+    { color: "#00F4FC" },
+    { color: "#00FCFC" },
+  ],
+  "Bootstrap 5": [
+    { name: "None", color: null },
+    { color: "#0d6efd" }, { color: "#6c757d" }, { color: "#198754" }, { color: "#dc3545" }, { color: "#ffc107" }, { color: "#0dcaf0" }
+  ],
+  "Gold": [
+    { name: "None", color: null },
+    { color: "#FFD700" }, { color: "#FFC300" }, { color: "#FFB300" }, { color: "#FFA000" }
+  ],
+  "Gray": [
+    { name: "None", color: null },
+    { color: "#F5F5F5" }, { color: "#BDBDBD" }, { color: "#757575" }, { color: "#212121" }
+  ],
+  "Greens": [
+    { name: "None", color: null },
+    { color: "#E8F5E9" }, { color: "#A5D6A7" }, { color: "#66BB6A" }, { color: "#388E3C" }, { color: "#1B5E20" }
+  ],
+  "Reds": [
+    { name: "None", color: null },
+    { color: "#FFEBEE" }, { color: "#EF9A9A" }, { color: "#E57373" }, { color: "#C62828" }, { color: "#B71C1C" }
+  ],
+};
 const Topbar = ({
   editorState,
   onEditorStateChange,
@@ -211,9 +311,20 @@ const Topbar = ({
   const [showTransformModal, setShowTransformModal] = useState(false);
   const [moveX, setMoveX] = useState(0);
   const [moveY, setMoveY] = useState(0);
+  const openDocuments = useSelector(state => state.tool.openDocuments);
+  const currentDocumentIndex = useSelector(state => state.tool.currentDocumentIndex);
   const [showPathEffectsDialog, setShowPathEffectsDialog] = useState(false);
+  const wideScreen = useSelector(state => state.tool.wideScreen);
+  const [showMessagesModal, setShowMessagesModal] = useState(false);
+  const [showSwatchesModal, setShowSwatchesModal] = useState(false);
+  const [selectedSwatch, setSelectedSwatch] = useState(null);
+  const [showColorPicker, setShowColorPicker] = useState(false);
+  const [colorPickerValue, setColorPickerValue] = useState("#000000");
+  const [showPaletteGrid, setShowPaletteGrid] = useState(false);
+  const [paletteColors, setPaletteColors] = useState([]);
+  const [showCommandPalette, setShowCommandPalette] = useState(false);
+  const [commandSearch, setCommandSearch] = useState("");
   const navigate = useNavigate();
-
   let selectedShapeId = useSelector((state) => state.tool.selectedShapeId);
   const shapes = useSelector(
     (state) => state.tool.layers[state.tool.selectedLayerIndex].shapes || []
@@ -221,7 +332,10 @@ const Topbar = ({
   const selectedLayerIndex = useSelector(
     (state) => state.tool.selectedLayerIndex
   );
-
+  const [messages, setMessages] = useState([
+    { type: "info", text: "Welcome to 2DCAD!" },
+    { type: "warning", text: "Remember to save your work frequently." },
+  ]);
   const selectedShape =
     shapes.find((shape) => shape.id === selectedShapeId) || {};
   console.log("topbar-id", selectedShape);
@@ -1352,6 +1466,24 @@ const Topbar = ({
 
     alert("Marker created! You can now use it in Fill & Stroke dialog.");
   };
+  const handleSplitModeChange = (value) => {
+    dispatch(setSplitMode(value));
+    if (value === "Split") {
+      dispatch(setSplitPosition(0.5));
+    }
+  };
+  const handlePreviousWindow = () => {
+    if (currentDocumentIndex > 0) {
+      dispatch(setCurrentDocumentIndex(currentDocumentIndex - 1));
+    }
+  };
+
+  const handleNextWindow = () => {
+    if (currentDocumentIndex < openDocuments.length - 1) {
+      dispatch(setCurrentDocumentIndex(currentDocumentIndex + 1));
+    }
+  };
+  const [showIconPreview, setShowIconPreview] = useState(false);
   const EditOptions = [
     { id: 1, label: "Undo...", onClick: () => dispatch(undo()) },
     { id: 2, label: "Redo...", onClick: () => dispatch(redo()) },
@@ -1635,11 +1767,12 @@ const Topbar = ({
     },
     {
       id: 12,
-      label: "Show/ Hide Dialogues",
+      label: "Show/Hide Dialogs",
     },
     {
       id: 13,
       label: "Command Palette",
+      onClick: () => setShowCommandPalette(true),
     },
     {
       id: 14,
@@ -1648,18 +1781,22 @@ const Topbar = ({
     {
       id: 15,
       label: "Swatches",
+      onClick: () => setShowSwatchesModal(true),
     },
     {
       id: 16,
       label: "Messages",
+      onClick: () => setShowMessagesModal(true),
     },
     {
       id: 17,
       label: "Previous Window",
+      onClick: handlePreviousWindow,
     },
     {
       id: 18,
       label: "Next Window",
+      onClick: handleNextWindow,
     },
     {
       id: 19,
@@ -1668,10 +1805,25 @@ const Topbar = ({
     {
       id: 20,
       label: "Icon Preview",
+      onClick: () => {
+        console.log("Icon Preview clicked");
+        setShowIconPreview(true);
+      },
     },
     {
       id: 21,
       label: "Duplicate Window",
+      onClick: () => {
+        const state = {
+          layers,
+          selectedLayerIndex,
+          selectedTool,
+          strokeColor,
+          fillColor,
+        };
+        const stateString = btoa(unescape(encodeURIComponent(JSON.stringify(state))));
+        window.open(`${window.location.pathname}?duplicate=${stateString}`, "_blank");
+      },
     },
     {
       id: 22,
@@ -2180,6 +2332,22 @@ const Topbar = ({
     setShowSymbolsModal(false);
   };
 
+
+  const COMMANDS = [
+    { label: "Undo", action: () => dispatch(undo()) },
+    { label: "Redo", action: () => dispatch(redo()) },
+    { label: "Cut", action: () => dispatch(cut()) },
+    { label: "Copy", action: () => dispatch(copy()) },
+    { label: "Paste", action: () => dispatch(paste()) },
+    { label: "Select All", action: () => dispatch(selecteAllShapes()) },
+    { label: "Deselect All", action: () => dispatch(deselectAllShapes()) },
+    { label: "Zoom In", action: handleZoomIn },
+    { label: "Zoom Out", action: handleZoomOut },
+    { label: "Duplicate Shape", action: handleDuplicateShape },
+    { label: "Delete Shape", action: handleDelete },
+    { label: "Raise to Top", action: handleRaiseToTop },
+    { label: "Lower to Bottom", action: handleLowerToBottom },
+  ];
   return (
     <>
       {fontPanelModal}
@@ -2449,6 +2617,12 @@ const Topbar = ({
                                     id={item.id}
                                     name={item.name}
                                     value={item.value}
+                                    checked={item.id === "WideScreen" ? wideScreen : undefined}
+                                    onChange={e => {
+                                      if (item.id === "WideScreen") {
+                                        dispatch(setWideScreen(e.target.checked));
+                                      }
+                                    }}
                                     style={{ marginLeft: "5px" }}
                                   />
                                   <a
@@ -2470,7 +2644,12 @@ const Topbar = ({
                           return (
                             <li key={item.id} className="paste-dropdown">
                               <div className="icon-div">
-                                <a className="dropdown-item">{item.label}</a>
+                                <a
+                                  className="dropdown-item"
+                                  onClick={item.onClick}
+                                >
+                                  {item.label}
+                                </a>
                                 {item.icon}
                               </div>
                               {item.subItems && (
@@ -2496,6 +2675,12 @@ const Topbar = ({
                                             id={subItem.id}
                                             name={subItem.name}
                                             value={subItem.value}
+                                            checked={useSelector(state => state.tool.splitMode) === subItem.value}
+                                            onChange={() => {
+                                              if (item.label === "Split Mode") {
+                                                handleSplitModeChange(subItem.value);
+                                              }
+                                            }}
                                           />
                                           <label htmlFor={subItem.id}>
                                             {subItem.label}
@@ -3370,6 +3555,410 @@ const Topbar = ({
           dispatch(updateShapePosition({ id, powerStrokeWidth: width, lpeEffect: "Power stroke" }));
         }}
       />
+      {showIconPreview && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            width: "100vw",
+            height: "100vh",
+            background: "rgba(0,0,0,0.3)",
+            zIndex: 9999,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center"
+          }}
+          onClick={() => setShowIconPreview(false)}
+        >
+          <div
+            style={{
+              background: "#fff",
+              padding: 24,
+              borderRadius: 8,
+              minWidth: 220,
+              boxShadow: "0 8px 32px rgba(0,0,0,0.18)",
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center"
+            }}
+            onClick={e => e.stopPropagation()}
+          >
+            <h4 style={{ marginBottom: 16 }}>Icon Preview</h4>
+            <div style={{ display: "flex", gap: 16 }}>
+              {[16, 24, 32].map(size => (
+                <IconPreviewCanvas key={size} size={size} />
+              ))}
+            </div>
+            <button
+              style={{
+                marginTop: 24,
+                border: "none",
+                borderRadius: 4,
+                padding: "6px 16px"
+              }}
+              onClick={() => setShowIconPreview(false)}
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      )}
+      {showMessagesModal && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            width: "100vw",
+            height: "100vh",
+            background: "rgba(0,0,0,0.3)",
+            zIndex: 9999,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center"
+          }}
+          onClick={() => setShowMessagesModal(false)}
+        >
+          <div
+            style={{
+              background: "#fff",
+              padding: 24,
+              borderRadius: 8,
+              minWidth: 320,
+              maxWidth: 480,
+              maxHeight: "60vh",
+              overflowY: "auto",
+              boxShadow: "0 8px 32px rgba(0,0,0,0.18)"
+            }}
+            onClick={e => e.stopPropagation()}
+          >
+            <h4 style={{ marginBottom: 16 }}>Messages</h4>
+            <ul style={{ padding: 0, listStyle: "none" }}>
+              {messages.map((msg, idx) => (
+                <li key={idx} style={{
+                  marginBottom: 12,
+                  color: msg.type === "warning" ? "#b85c00" : "#222",
+                  background: msg.type === "warning" ? "#fffbe6" : "#f4f4f4",
+                  borderLeft: msg.type === "warning" ? "4px solid #ff9800" : "4px solid #2196f3",
+                  padding: "8px 12px",
+                  borderRadius: 4
+                }}>
+                  {msg.text}
+                </li>
+              ))}
+            </ul>
+            <div style={{ marginTop: 24, textAlign: "right" }}>
+              <button onClick={() => setShowMessagesModal(false)} style={{ border: "none", borderRadius: 4, padding: "6px 16px" }}>
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {showSwatchesModal && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            width: "100vw",
+            height: "100vh",
+            background: "rgba(0,0,0,0.3)",
+            zIndex: 9999,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center"
+          }}
+          onClick={() => setShowSwatchesModal(false)}
+        >
+          <div
+            style={{
+              background: "#fff",
+              padding: 24,
+              borderRadius: 8,
+              minWidth: 320,
+              maxWidth: 480,
+              maxHeight: "60vh",
+              overflowY: "auto",
+              boxShadow: "0 8px 32px rgba(0,0,0,0.18)"
+            }}
+            onClick={e => e.stopPropagation()}
+          >
+            <h4 style={{ marginBottom: 16 }}>Swatches</h4>
+            <ul style={{ padding: 0, listStyle: "none" }}>
+              {SWATCHES.map((swatch, idx) => (
+                <li key={idx} style={{ marginBottom: 8 }}>
+                  <button
+                    style={{
+                      width: "100%",
+                      textAlign: "left",
+                      padding: "8px 12px",
+                      border: "1px solid #ccc",
+                      borderRadius: 4,
+                      background: "#f8f8f8",
+                      cursor: "pointer"
+                    }}
+                    onClick={() => {
+                      setSelectedSwatch(swatch);
+                      if (SWATCH_PALETTES[swatch]) {
+                        setPaletteColors(SWATCH_PALETTES[swatch]);
+                        setShowPaletteGrid(true);
+                        setShowSwatchesModal(false);
+                      } else {
+                        setShowColorPicker(true);
+                        setShowSwatchesModal(false);
+                      }
+                    }}
+                  >
+                    {swatch}
+                  </button>
+                </li>
+              ))}
+            </ul>
+            <div style={{ marginTop: 24, textAlign: "right" }}>
+              <button onClick={() => setShowSwatchesModal(false)} style={{ border: "none", borderRadius: 4, padding: "6px 16px" }}>
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {showColorPicker && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            width: "100vw",
+            height: "100vh",
+            background: "rgba(0,0,0,0.3)",
+            zIndex: 10000,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center"
+          }}
+          onClick={() => setShowColorPicker(false)}
+        >
+          <div
+            style={{
+              background: "#fff",
+              padding: 24,
+              borderRadius: 8,
+              minWidth: 220,
+              boxShadow: "0 8px 32px rgba(0,0,0,0.18)",
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center"
+            }}
+            onClick={e => e.stopPropagation()}
+          >
+            <h4 style={{ marginBottom: 16 }}>{selectedSwatch} - Pick Fill Color</h4>
+            <input
+              type="color"
+              value={colorPickerValue}
+              onChange={e => setColorPickerValue(e.target.value)}
+              style={{ width: 80, height: 80, border: "none", marginBottom: 16 }}
+            />
+            <button
+              style={{ border: "none", borderRadius: 4, padding: "6px 16px", marginTop: 8 }}
+              onClick={() => {
+                if (selectedShapeId) {
+                  dispatch(updateShapePosition({ id: selectedShapeId, fill: colorPickerValue }));
+                }
+                setShowColorPicker(false);
+                setShowSwatchesModal(false);
+              }}
+            >
+              Apply Fill
+            </button>
+            <button
+              style={{ border: "none", borderRadius: 4, padding: "6px 16px", marginTop: 8 }}
+              onClick={() => setShowColorPicker(false)}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+      {showPaletteGrid && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            width: "100vw",
+            height: "100vh",
+            background: "rgba(0,0,0,0.3)",
+            zIndex: 10000,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center"
+          }}
+          onClick={() => setShowPaletteGrid(false)}
+        >
+          <div
+            style={{
+              background: "#222",
+              padding: 24,
+              borderRadius: 8,
+              minWidth: 320,
+              boxShadow: "0 8px 32px rgba(0,0,0,0.18)",
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center"
+            }}
+            onClick={e => e.stopPropagation()}
+          >
+            <h4 style={{ marginBottom: 16, color: "#fff" }}>{selectedSwatch} Palette</h4>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 16 }}>
+              {paletteColors.map((swatch, idx) => (
+                <button
+                  key={idx}
+                  style={{
+                    width: 40,
+                    height: 40,
+                    background: swatch.color || "none",
+                    border: swatch.color ? "1px solid #888" : "none",
+                    borderRadius: swatch.color ? 4 : 0,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    color: "#fff",
+                    fontWeight: 500,
+                    cursor: "pointer",
+                    position: "relative"
+                  }}
+                  onClick={() => {
+                    if (selectedShapeId && swatch.color) {
+                      dispatch(updateShapePosition({ id: selectedShapeId, fill: swatch.color }));
+                      setShowPaletteGrid(false);
+                      setShowSwatchesModal(false);
+                    } else if (swatch.name === "None") {
+                      dispatch(updateShapePosition({ id: selectedShapeId, fill: "none" }));
+                      setShowPaletteGrid(false);
+                      setShowSwatchesModal(false);
+                    }
+                  }}
+                  title={swatch.color || swatch.name}
+                >
+                  {swatch.name === "None" ? (
+                    <span style={{
+                      color: "#fff",
+                      fontSize: 18,
+                      fontWeight: "bold",
+                      textDecoration: "line-through"
+                    }}>X</span>
+                  ) : (
+                    <span style={{
+                      position: "absolute",
+                      bottom: 2,
+                      left: 2,
+                      fontSize: 10,
+                      color: "#fff",
+                      textShadow: "0 0 2px #000"
+                    }}></span>
+                  )}
+                </button>
+              ))}
+            </div>
+            <button
+              style={{ border: "none", borderRadius: 4, padding: "6px 16px", marginTop: 8 }}
+              onClick={() => setShowPaletteGrid(false)}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+      {showCommandPalette && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            width: "100vw",
+            height: "100vh",
+            background: "rgba(0,0,0,0.3)",
+            zIndex: 10001,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center"
+          }}
+          onClick={() => setShowCommandPalette(false)}
+        >
+          <div
+            style={{
+              background: "#222",
+              padding: 24,
+              borderRadius: 8,
+              minWidth: 400,
+              maxWidth: 600,
+              boxShadow: "0 8px 32px rgba(0,0,0,0.18)",
+              color: "#fff"
+            }}
+            onClick={e => e.stopPropagation()}
+          >
+            <h4 style={{ marginBottom: 16 }}>Command Palette</h4>
+            <input
+              type="text"
+              autoFocus
+              placeholder="Type to search commands..."
+              value={commandSearch}
+              onChange={e => setCommandSearch(e.target.value)}
+              style={{
+                width: "100%",
+                padding: "8px 12px",
+                borderRadius: 4,
+                border: "1px solid #888",
+                marginBottom: 16,
+                fontSize: 16,
+                background: "#333",
+                color: "#fff"
+              }}
+              onKeyDown={e => {
+                if (e.key === "Escape") setShowCommandPalette(false);
+              }}
+            />
+            <ul style={{ listStyle: "none", padding: 0, maxHeight: 300, overflowY: "auto" }}>
+              {COMMANDS.filter(cmd =>
+                cmd.label.toLowerCase().includes(commandSearch.toLowerCase())
+              ).map((cmd, idx) => (
+                <li key={idx} style={{ marginBottom: 8 }}>
+                  <button
+                    style={{
+                      width: "100%",
+                      textAlign: "left",
+                      padding: "8px 12px",
+                      border: "none",
+                      borderRadius: 4,
+                      background: "#444",
+                      color: "#fff",
+                      cursor: "pointer"
+                    }}
+                    onClick={() => {
+                      cmd.action();
+                      setShowCommandPalette(false);
+                    }}
+                  >
+                    {cmd.label}
+                  </button>
+                </li>
+              ))}
+              {COMMANDS.filter(cmd =>
+                cmd.label.toLowerCase().includes(commandSearch.toLowerCase())
+              ).length === 0 && (
+                  <li style={{ color: "#aaa", padding: "8px 12px" }}>No commands found.</li>
+                )}
+            </ul>
+            <div style={{ marginTop: 24, textAlign: "right" }}>
+              <button onClick={() => setShowCommandPalette(false)} style={{ border: "none", borderRadius: 4, padding: "6px 16px", background: "#555", color: "#fff" }}>
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 };
@@ -7144,6 +7733,32 @@ function UnicodePanel({ onClose }) {
       <div style={{ marginTop: 16, display: "flex", justifyContent: "flex-end" }}>
         <button onClick={onClose} style={{ border: "none", borderRadius: 4, padding: "6px 16px" }}>Close</button>
       </div>
+    </div>
+  );
+}
+function IconPreviewCanvas({ size }) {
+  const shapes = useSelector(state => {
+    const layers = state.tool.layers || [];
+    const selectedLayer = layers[state.tool.selectedLayerIndex] || {};
+    return selectedLayer.shapes || [];
+  });
+  const width = useSelector(state => state.tool.width);
+  const height = useSelector(state => state.tool.height);
+
+  const scale = Math.min(size / width, size / height);
+
+  console.log("IconPreviewCanvas shapes:", shapes, "width:", width, "height:", height);
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+      <Stage width={size} height={size} scaleX={scale} scaleY={scale} style={{ background: "#fff", border: "1px solid #ccc" }}>
+        <Layer>
+          {shapes.map(shape =>
+            renderShape(shape)
+          )}
+        </Layer>
+      </Stage>
+      <div style={{ fontSize: 12, marginTop: 4 }}>{size}x{size}</div>
     </div>
   );
 }

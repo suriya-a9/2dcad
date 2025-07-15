@@ -145,6 +145,7 @@ import {
   setSplitMode,
   setWideScreen,
   setCurrentDocumentIndex,
+  updateSelection,
 } from "../../Redux/Slice/toolSlice";
 import {
   TbDeselect,
@@ -324,6 +325,10 @@ const Topbar = ({
   const [paletteColors, setPaletteColors] = useState([]);
   const [showCommandPalette, setShowCommandPalette] = useState(false);
   const [commandSearch, setCommandSearch] = useState("");
+  const [showFindReplaceModal, setShowFindReplaceModal] = useState(false);
+  const [findText, setFindText] = useState("");
+  const [replaceText, setReplaceText] = useState("");
+  const [findResults, setFindResults] = useState([]);
   const navigate = useNavigate();
   let selectedShapeId = useSelector((state) => state.tool.selectedShapeId);
   const shapes = useSelector(
@@ -1484,6 +1489,352 @@ const Topbar = ({
     }
   };
   const [showIconPreview, setShowIconPreview] = useState(false);
+  const handleFindText = () => {
+    const results = [];
+    layers.forEach((layer, layerIdx) => {
+      layer.shapes.forEach((shape) => {
+        if (shape.type === "Text" && shape.text && shape.text.includes(findText)) {
+          results.push({ layerIdx, shapeId: shape.id, text: shape.text });
+        }
+      });
+    });
+    setFindResults(results);
+  };
+
+  const handleReplaceText = () => {
+    layers.forEach((layer, layerIdx) => {
+      layer.shapes.forEach((shape) => {
+        if (shape.type === "Text" && shape.text && shape.text.includes(findText)) {
+          dispatch({
+            type: "tool/updateShapePosition",
+            payload: { id: shape.id, text: shape.text.replaceAll(findText, replaceText) }
+          });
+        }
+      });
+    });
+    setShowFindReplaceModal(false);
+    setFindText("");
+    setReplaceText("");
+    setFindResults([]);
+  };
+  function getShapeBoundingBox(shape) {
+    if (shape.type === "Polygon" && Array.isArray(shape.points)) {
+      const xs = shape.points.map(pt => (pt.x ?? pt[0]) + (shape.x || 0));
+      const ys = shape.points.map(pt => (pt.y ?? pt[1]) + (shape.y || 0));
+      return {
+        minX: Math.min(...xs),
+        minY: Math.min(...ys),
+        maxX: Math.max(...xs),
+        maxY: Math.max(...ys),
+      };
+    }
+    if (shape.type === "Star") {
+      const num = (shape.corners || 5) * 2;
+      const pts = Array.from({ length: num }).map((_, i) => {
+        const angle = (Math.PI * 2 * i) / num - Math.PI / 2;
+        const r = i % 2 === 0 ? shape.outerRadius : shape.innerRadius;
+        return {
+          x: shape.x + r * Math.cos(angle),
+          y: shape.y + r * Math.sin(angle),
+        };
+      });
+      const xs = pts.map(pt => pt.x);
+      const ys = pts.map(pt => pt.y);
+      return {
+        minX: Math.min(...xs),
+        minY: Math.min(...ys),
+        maxX: Math.max(...xs),
+        maxY: Math.max(...ys),
+      };
+    }
+    if ((shape.type === "Pencil" || shape.type === "Calligraphy") && Array.isArray(shape.points)) {
+      const xs = shape.points.map(pt => pt.x);
+      const ys = shape.points.map(pt => pt.y);
+      return {
+        minX: Math.min(...xs),
+        minY: Math.min(...ys),
+        maxX: Math.max(...xs),
+        maxY: Math.max(...ys),
+      };
+    }
+    if (shape.type === "Bezier" && Array.isArray(shape.points)) {
+      const xs = shape.points.map(pt => pt.x);
+      const ys = shape.points.map(pt => pt.y);
+      return {
+        minX: Math.min(...xs),
+        minY: Math.min(...ys),
+        maxX: Math.max(...xs),
+        maxY: Math.max(...ys),
+      };
+    }
+    return null;
+  }
+  const handleMakeBitmapCopy = async () => {
+    if (!selectedShapeId) {
+      alert("Select a shape first.");
+      return;
+    }
+    const shape = shapes.find(s => s.id === selectedShapeId);
+    if (!shape) {
+      alert("Shape not found.");
+      return;
+    }
+
+    let width = shape.width || (shape.radius ? shape.radius * 2 : 64);
+    let height = shape.height || (shape.radius ? shape.radius * 2 : 64);
+    let shapeForSvg = { ...shape, x: 0, y: 0 };
+
+    if (
+      shape.type === "Polygon" ||
+      shape.type === "Star" ||
+      shape.type === "Pencil" ||
+      shape.type === "Calligraphy" ||
+      shape.type === "Bezier"
+    ) {
+      const bbox = getShapeBoundingBox(shape);
+      if (bbox) {
+        width = bbox.maxX - bbox.minX || 64;
+        height = bbox.maxY - bbox.minY || 64;
+        if (shape.type === "Polygon" && Array.isArray(shape.points)) {
+          shapeForSvg = {
+            ...shape,
+            x: 0,
+            y: 0,
+            points: shape.points.map(pt => ({
+              x: (pt.x ?? pt[0]) + (shape.x || 0) - bbox.minX,
+              y: (pt.y ?? pt[1]) + (shape.y || 0) - bbox.minY,
+            })),
+          };
+        } else if (shape.type === "Star") {
+          shapeForSvg = {
+            ...shape,
+            x: shape.x - bbox.minX,
+            y: shape.y - bbox.minY,
+          };
+        } else if ((shape.type === "Pencil" || shape.type === "Calligraphy") && Array.isArray(shape.points)) {
+          shapeForSvg = {
+            ...shape,
+            x: 0,
+            y: 0,
+            points: shape.points.map(pt => ({
+              x: pt.x - bbox.minX,
+              y: pt.y - bbox.minY,
+            })),
+          };
+        } else if (shape.type === "Bezier" && Array.isArray(shape.points)) {
+          shapeForSvg = {
+            ...shape,
+            x: 0,
+            y: 0,
+            points: shape.points.map(pt => ({
+              x: pt.x - bbox.minX,
+              y: pt.y - bbox.minY,
+            })),
+          };
+        }
+      }
+    } else if (shape.type === "Circle") {
+      shapeForSvg = {
+        ...shape,
+        x: width / 2,
+        y: height / 2,
+      };
+    }
+
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext("2d");
+
+    const svgString = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}">
+    ${shapeToSVGElement(shapeForSvg)}
+  </svg>`;
+
+    const img = new window.Image();
+    const svgBlob = new Blob([svgString], { type: "image/svg+xml" });
+    const url = URL.createObjectURL(svgBlob);
+
+    img.onload = () => {
+      ctx.clearRect(0, 0, width, height);
+      ctx.drawImage(img, 0, 0, width, height);
+
+      const pngDataUrl = canvas.toDataURL("image/png");
+
+      dispatch({
+        type: "tool/addShape",
+        payload: {
+          id: `bitmap-copy-${Date.now()}`,
+          type: "Image",
+          url: pngDataUrl,
+          x: (shape.x || 0) + 20,
+          y: (shape.y || 0) + 20,
+          width,
+          height,
+          name: "Bitmap Copy",
+          draggable: true,
+          selected: false,
+        }
+      });
+
+      URL.revokeObjectURL(url);
+      alert("Bitmap copy created!");
+    };
+    img.onerror = () => {
+      alert("Failed to create bitmap copy.");
+      URL.revokeObjectURL(url);
+    };
+    img.src = url;
+  };
+  function isSamePaint(a, b) {
+    // Normalize color strings to hex
+    function normalizeColor(c) {
+      if (typeof c === "string") {
+        const color = c.trim().toLowerCase();
+        if (color === "black" || color === "#000" || color === "#000000") return "#000000";
+        if (color === "white" || color === "#fff" || color === "#ffffff") return "#ffffff";
+        if (color === "none" || color === "" || color === "transparent") return "none";
+        return color;
+      }
+      if (c === null || c === undefined) return "none";
+      return c;
+    }
+    // Compare objects (gradients/patterns)
+    if (typeof a === "object" && typeof b === "object") {
+      return JSON.stringify(a) === JSON.stringify(b);
+    }
+    return normalizeColor(a) === normalizeColor(b);
+  }
+
+  const handleSelectSameFillAndStroke = () => {
+    if (!selectedShapeId) {
+      alert("Select a shape first.");
+      return;
+    }
+    const allShapes = layers.flatMap(layer => layer.shapes);
+    const referenceShape = allShapes.find(s => s.id === selectedShapeId);
+    if (!referenceShape) return;
+
+    const matchedIds = allShapes
+      .filter(s =>
+        isSamePaint(s.fill, referenceShape.fill) &&
+        isSamePaint(s.stroke, referenceShape.stroke)
+      )
+      .map(s => s.id);
+
+    if (matchedIds.length === 0) {
+      alert("No shapes found with the same fill and stroke.");
+      return;
+    }
+
+    dispatch({
+      type: "tool/setSelectedShapeIds",
+      payload: matchedIds
+    });
+  };
+  const handleInvertSelection = () => {
+    const allShapes = layers.flatMap(layer => layer.shapes);
+    const selectedIds = selectedShapeIds || [];
+    const unselectedIds = allShapes
+      .filter(s => !selectedIds.includes(s.id))
+      .map(s => s.id);
+    console.log("Invert selection, new selected IDs:", unselectedIds);
+    dispatch(updateSelection(unselectedIds));
+  };
+  const handleResizePageToSelection = () => {
+    if (!selectedShapeIds || selectedShapeIds.length === 0) {
+      alert("Select one or more shapes first.");
+      return;
+    }
+
+    const allShapes = layers.flatMap(layer => layer.shapes);
+    const selectedShapes = allShapes.filter(s => selectedShapeIds.includes(s.id));
+
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    selectedShapes.forEach(shape => {
+      let x = shape.x || 0, y = shape.y || 0, w = shape.width || 0, h = shape.height || 0;
+      if (shape.type === "Circle") {
+        x -= shape.radius;
+        y -= shape.radius;
+        w = h = shape.radius * 2;
+      }
+      minX = Math.min(minX, x);
+      minY = Math.min(minY, y);
+      maxX = Math.max(maxX, x + w);
+      maxY = Math.max(maxY, y + h);
+    });
+
+    if (!isFinite(minX) || !isFinite(minY) || !isFinite(maxX) || !isFinite(maxY)) {
+      alert("Could not calculate bounding box.");
+      return;
+    }
+
+    const bboxCenterX = minX + (maxX - minX) / 2;
+    const bboxCenterY = minY + (maxY - minY) / 2;
+
+    const newWidth = maxX - minX;
+    const newHeight = maxY - minY;
+
+    const offsetX = (minX + newWidth / 2) - bboxCenterX;
+    const offsetY = (minY + newHeight / 2) - bboxCenterY;
+
+    dispatch({
+      type: "tool/setPageSizeAndPosition",
+      payload: {
+        x: minX,
+        y: minY,
+        width: newWidth,
+        height: newHeight
+      }
+    });
+
+    selectedShapes.forEach(shape => {
+      dispatch({
+        type: "tool/updateShapePosition",
+        payload: {
+          id: shape.id,
+          x: (shape.x || 0) + offsetX,
+          y: (shape.y || 0) + offsetY
+        }
+      });
+    });
+  };
+  const page = useSelector(state => state.tool.page);
+  // const pageMargin = useSelector(state => state.tool.pageMargin || { left: 0, top: 0, right: 0, bottom: 0 });
+  const handleCreateGuidesAroundPage = () => {
+    const width = page?.width || 800;
+    const height = page?.height || 600;
+    const x = page?.x || 0;
+    const y = page?.y || 0;
+
+    const guides = [
+      { orientation: "vertical", position: x + pageMargin.left },
+      { orientation: "vertical", position: x + width - pageMargin.right },
+      { orientation: "horizontal", position: y + pageMargin.top },
+      { orientation: "horizontal", position: y + height - pageMargin.bottom }
+    ];
+
+    window.dispatchEvent(new CustomEvent("addGuides", { detail: guides }));
+
+    alert("Guides created around the page!");
+  };
+  const [showXmlEditor, setShowXmlEditor] = useState(false);
+  const [xmlContent, setXmlContent] = useState("");
+
+  function generateSVGXML(layers, width, height) {
+    const shapesXml = layers.flatMap(layer =>
+      layer.shapes.map(shape => shapeToSVGElement(shape))
+    ).join("\n");
+    return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}">
+${shapesXml}
+</svg>`;
+  }
+
+  const handleOpenXmlEditor = () => {
+    const width = page?.width || 800;
+    const height = page?.height || 600;
+    setXmlContent(generateSVGXML(layers, width, height));
+    setShowXmlEditor(true);
+  };
   const EditOptions = [
     { id: 1, label: "Undo...", onClick: () => dispatch(undo()) },
     { id: 2, label: "Redo...", onClick: () => dispatch(redo()) },
@@ -1513,7 +1864,7 @@ const Topbar = ({
         { id: 79, label: "Height Separately" },
       ],
     },
-    { id: 8, label: "Find/Replace ...." },
+    { id: 8, label: "Find/Replace ....", onClick: () => setShowFindReplaceModal(true) },
     { id: 9, label: "Duplicate...", onClick: handleDuplicateShape },
     {
       id: 10,
@@ -1529,27 +1880,27 @@ const Topbar = ({
         { id: 108, label: "Path (LPE)" },
       ],
     },
-    { id: 11, label: "Make a Bitmap Copy" },
+    { id: 11, label: "Make a Bitmap Copy", onClick: handleMakeBitmapCopy },
     { id: 12, label: " Select All...", onClick: handleSelectAll },
-    { id: 13, label: "Select All in All Layers" },
+    { id: 13, label: "Select All in All Layers", onClick: () => dispatch(selectAllShapesInAllLayers()) },
     {
       id: 14,
       label: "Select Same",
       subMenu: [
-        { id: 141, label: "Fill and Stroke" },
+        { id: 141, label: "Fill and Stroke", onClick: handleSelectSameFillAndStroke },
         { id: 142, label: "Fill Color" },
         { id: 143, label: "Stroke Color" },
         { id: 144, label: "Stroke Style" },
         { id: 145, label: "Object Type" },
       ],
     },
-    { id: 15, label: "Invert Selection" },
+    { id: 15, label: "Invert Selection", onClick: handleInvertSelection },
     { id: 16, label: "Deselect... ", onClick: handleDeselectAll },
-    { id: 17, label: "Resize Page to selection" },
-    { id: 18, label: "Create guide around the current page" },
+    { id: 17, label: "Resize Page to selection", onClick: handleResizePageToSelection },
+    { id: 18, label: "Create guide around the current page", onClick: handleCreateGuidesAroundPage },
     { id: 19, label: "Lock all guides" },
     { id: 20, label: "Delete all guides" },
-    { id: 21, label: "XML Editor" },
+    { id: 21, label: "XML Editor", onClick: handleOpenXmlEditor },
   ];
 
   const ViewOptions = [
@@ -2375,7 +2726,7 @@ const Topbar = ({
                         <li>
                           <a
                             className="dropdown-item"
-                            onClick={handleCreateNewPage}
+                            onClick={() => window.open(window.location.pathname, "_blank")}
                           >
                             New...
                           </a>
@@ -2555,7 +2906,7 @@ const Topbar = ({
                       >
                         Edit
                       </a>
-                      <ul className="dropdown-menu" style={{ cursor: "pointer" }}>
+                      <ul className="dropdown-menu" style={{ cursor: "pointer", height: '500px', overflow: 'scroll' }}>
                         {EditOptions.map((item) => (
                           <li
                             key={item.id}
@@ -3955,6 +4306,115 @@ const Topbar = ({
               <button onClick={() => setShowCommandPalette(false)} style={{ border: "none", borderRadius: 4, padding: "6px 16px", background: "#555", color: "#fff" }}>
                 Close
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {showFindReplaceModal && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            width: "100vw",
+            height: "100vh",
+            background: "rgba(0,0,0,0.3)",
+            zIndex: 10001,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center"
+          }}
+          onClick={() => setShowFindReplaceModal(false)}
+        >
+          <div
+            style={{
+              background: "#fff",
+              padding: 24,
+              borderRadius: 8,
+              minWidth: 400,
+              maxWidth: 600,
+              boxShadow: "0 8px 32px rgba(0,0,0,0.18)",
+              color: "#222"
+            }}
+            onClick={e => e.stopPropagation()}
+          >
+            <h4 style={{ marginBottom: 16 }}>Find/Replace Text</h4>
+            <div style={{ marginBottom: 12 }}>
+              <input
+                type="text"
+                placeholder="Find text..."
+                value={findText}
+                onChange={e => setFindText(e.target.value)}
+                style={{ width: "100%", padding: "8px", marginBottom: 8 }}
+              />
+              <input
+                type="text"
+                placeholder="Replace with..."
+                value={replaceText}
+                onChange={e => setReplaceText(e.target.value)}
+                style={{ width: "100%", padding: "8px" }}
+              />
+            </div>
+            <div style={{ marginBottom: 12 }}>
+              <button
+                style={{ marginRight: 8, padding: "6px 16px" }}
+                onClick={handleFindText}
+              >
+                Find
+              </button>
+              <button
+                style={{ padding: "6px 16px" }}
+                onClick={handleReplaceText}
+                disabled={!findResults.length}
+              >
+                Replace
+              </button>
+              <button
+                style={{ marginLeft: 8, padding: "6px 16px" }}
+                onClick={() => setShowFindReplaceModal(false)}
+              >
+                Close
+              </button>
+            </div>
+            {findResults.length > 0 && (
+              <div style={{ marginTop: 8 }}>
+                <b>Found:</b>
+                <ul style={{ paddingLeft: 20 }}>
+                  {findResults.map((res, idx) => (
+                    <li key={idx}>
+                      Layer {res.layerIdx + 1}, Shape ID: {res.shapeId}, Text: <span style={{ color: "#007bff" }}>{res.text}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+      {showXmlEditor && (
+        <div style={{
+          position: "fixed", top: 0, left: 0, width: "100vw", height: "100vh",
+          background: "rgba(0,0,0,0.3)", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center"
+        }}
+          onClick={() => setShowXmlEditor(false)}
+        >
+          <div style={{
+            background: "#fff", padding: 24, borderRadius: 8, minWidth: 600, minHeight: 400,
+            boxShadow: "0 8px 32px rgba(0,0,0,0.18)", position: "relative"
+          }}
+            onClick={e => e.stopPropagation()}
+          >
+            <h4>XML Editor</h4>
+            <textarea
+              value={xmlContent}
+              onChange={e => setXmlContent(e.target.value)}
+              style={{ width: "100%", height: "320px", fontFamily: "monospace", fontSize: 14, marginBottom: 16 }}
+            />
+            <div style={{ textAlign: "right" }}>
+              <button onClick={() => setShowXmlEditor(false)} style={{ border: "none", borderRadius: 4, padding: "6px 16px" }}>
+                Close
+              </button>
+              {/* Optionally, add a "Save" button to parse and update shapes from XML */}
             </div>
           </div>
         </div>

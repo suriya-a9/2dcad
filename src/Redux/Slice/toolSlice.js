@@ -5644,6 +5644,12 @@ const toolSlice = createSlice({
     setCurrentDocumentIndex: (state, action) => {
       state.currentDocumentIndex = action.payload;
     },
+    setPageSizeAndPosition: (state, action) => {
+      const { x, y, width, height } = action.payload;
+      state.page = { ...state.page, x, y, width, height };
+      state.width = width;
+      state.height = height;
+    }
   },
 
 });
@@ -5899,6 +5905,7 @@ export const {
   setWideScreen,
   setOpenDocuments,
   setCurrentDocumentIndex,
+  setPageSizeAndPosition,
 } = toolSlice.actions;
 
 export default toolSlice.reducer;

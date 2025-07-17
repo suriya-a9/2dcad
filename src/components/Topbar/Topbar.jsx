@@ -2043,18 +2043,11 @@ const Topbar = ({
     const referenceShape = allShapes.find(s => s.id === selectedShapeId);
     if (!referenceShape) return;
 
-    console.log("Reference fill:", referenceShape.fill, "stroke:", referenceShape.stroke);
-
     const matchedIds = allShapes
       .filter(s => {
         const sameFill = isSamePaint(s.fill, referenceShape.fill);
         const sameStroke = isSamePaint(s.stroke, referenceShape.stroke);
-        if (sameFill && sameStroke) {
-          return true;
-        }
-        // Debug log
-        console.log("Not matched:", s.id, s.fill, s.stroke);
-        return false;
+        return sameFill && sameStroke;
       })
       .map(s => s.id);
 
@@ -2064,7 +2057,7 @@ const Topbar = ({
     }
 
     dispatch({
-      type: "tool/setSelectedShapeIds",
+      type: "tool/updateSelection",
       payload: matchedIds
     });
   };
@@ -2076,8 +2069,6 @@ const Topbar = ({
     const allShapes = layers.flatMap(layer => layer.shapes);
     const referenceShape = allShapes.find(s => s.id === selectedShapeId);
     if (!referenceShape) return;
-    console.log("Reference fill:", referenceShape.fill);
-    allShapes.forEach(s => console.log(s.id, s.fill));
     const matchedIds = allShapes
       .filter(s =>
         typeof s.fill === "string" &&
@@ -2092,7 +2083,82 @@ const Topbar = ({
     }
 
     dispatch({
-      type: "tool/setSelectedShapeIds",
+      type: "tool/updateSelection",
+      payload: matchedIds
+    });
+  };
+  const handleSelectSameStrokeColor = () => {
+    if (!selectedShapeId) {
+      alert("Select a shape first.");
+      return;
+    }
+    const allShapes = layers.flatMap(layer => layer.shapes);
+    const referenceShape = allShapes.find(s => s.id === selectedShapeId);
+    if (!referenceShape) return;
+
+    const matchedIds = allShapes
+      .filter(s =>
+        typeof s.stroke === "string" &&
+        typeof referenceShape.stroke === "string" &&
+        isSamePaint(s.stroke, referenceShape.stroke)
+      )
+      .map(s => s.id);
+
+    if (matchedIds.length === 0) {
+      alert("No shapes found with the same stroke color.");
+      return;
+    }
+
+    dispatch({
+      type: "tool/updateSelection",
+      payload: matchedIds
+    });
+  };
+  const handleSelectSameStrokeStyle = () => {
+    if (!selectedShapeId) {
+      alert("Select a shape first.");
+      return;
+    }
+    const allShapes = layers.flatMap(layer => layer.shapes);
+    const referenceShape = allShapes.find(s => s.id === selectedShapeId);
+    if (!referenceShape) return;
+
+    const matchedIds = allShapes
+      .filter(s =>
+        s.strokeStyle === referenceShape.strokeStyle
+      )
+      .map(s => s.id);
+
+    if (matchedIds.length === 0) {
+      alert("No shapes found with the same stroke style.");
+      return;
+    }
+
+    dispatch({
+      type: "tool/updateSelection",
+      payload: matchedIds
+    });
+  };
+  const handleSelectSameObjectType = () => {
+    if (!selectedShapeId) {
+      alert("Select a shape first.");
+      return;
+    }
+    const allShapes = layers.flatMap(layer => layer.shapes);
+    const referenceShape = allShapes.find(s => s.id === selectedShapeId);
+    if (!referenceShape) return;
+
+    const matchedIds = allShapes
+      .filter(s => s.type === referenceShape.type)
+      .map(s => s.id);
+
+    if (matchedIds.length === 0) {
+      alert("No shapes found with the same object type.");
+      return;
+    }
+
+    dispatch({
+      type: "tool/updateSelection",
       payload: matchedIds
     });
   };
@@ -2291,9 +2357,9 @@ ${shapesXml}
       subMenu: [
         { id: 141, label: "Fill and Stroke", onClick: handleSelectSameFillAndStroke },
         { id: 142, label: "Fill Color", onClick: handleSelectSameFillColor },
-        { id: 143, label: "Stroke Color" },
-        { id: 144, label: "Stroke Style" },
-        { id: 145, label: "Object Type" },
+        { id: 143, label: "Stroke Color", onClick: handleSelectSameStrokeColor },
+        { id: 144, label: "Stroke Style", onClick: handleSelectSameStrokeStyle },
+        { id: 145, label: "Object Type", onClick: handleSelectSameObjectType },
       ],
     },
     { id: 15, label: "Invert Selection", onClick: handleInvertSelection },
@@ -3296,8 +3362,6 @@ ${shapesXml}
                         </li>
                       </ul>
                     </li>
-
-
                     <li className="nav-item dropdown">
                       <a
                         className="nav-link dropdown-toggle"

@@ -329,6 +329,7 @@ const Topbar = ({
   const [findText, setFindText] = useState("");
   const [replaceText, setReplaceText] = useState("");
   const [findResults, setFindResults] = useState([]);
+  const copiedStyleRef = useRef(null);
   const navigate = useNavigate();
   let selectedShapeId = useSelector((state) => state.tool.selectedShapeId);
   const shapes = useSelector(
@@ -456,7 +457,337 @@ const Topbar = ({
 
   const handleCopy = useCallback(() => {
     dispatch(copy());
-  }, [dispatch]);
+    const shape = shapes.find(s => s.id === selectedShapeId);
+    if (shape) {
+      let width = shape.width;
+      let height = shape.height;
+      if (shape.type === "Circle" && shape.radius !== undefined) {
+        width = height = shape.radius * 2;
+      } else if (shape.type === "Star" || shape.type === "Polygon") {
+        const bbox = getShapeBoundingBox(shape);
+        if (bbox) {
+          width = bbox.maxX - bbox.minX;
+          height = bbox.maxY - bbox.minY;
+        }
+      } else if (shape.type === "Bezier" && Array.isArray(shape.points)) {
+        const bbox = getShapeBoundingBox(shape);
+        if (bbox) {
+          width = bbox.maxX - bbox.minX;
+          height = bbox.maxY - bbox.minY;
+        }
+      } else if ((shape.type === "Pencil" || shape.type === "Calligraphy") && Array.isArray(shape.points)) {
+        const bbox = getShapeBoundingBox(shape);
+        if (bbox) {
+          width = bbox.maxX - bbox.minX;
+          height = bbox.maxY - bbox.minY;
+        }
+      }
+      copiedStyleRef.current = {
+        fill: shape.fill,
+        stroke: shape.stroke,
+        strokeWidth: shape.strokeWidth,
+      };
+      copiedSizeRef.current = {
+        type: shape.type,
+        width,
+        height,
+        radius: shape.radius,
+        outerRadius: shape.outerRadius,
+        innerRadius: shape.innerRadius,
+        points: shape.points ? JSON.parse(JSON.stringify(shape.points)) : undefined,
+        corners: shape.corners,
+        spokeRatio: shape.spokeRatio,
+        rounded: shape.rounded,
+        randomized: shape.randomized,
+        fill: shape.fill,
+        stroke: shape.stroke,
+        strokeWidth: shape.strokeWidth,
+      };
+    }
+  }, [dispatch, shapes, selectedShapeId]);
+
+  const copiedSizeRef = useRef(null);
+
+  const handlePasteSize = () => {
+    if (!copiedSizeRef.current) {
+      alert("No size copied yet.");
+      return;
+    }
+    if (!selectedShapeIds || selectedShapeIds.length === 0) {
+      alert("Select a shape to paste size.");
+      return;
+    }
+    selectedShapeIds.forEach(id => {
+      const shape = shapes.find(s => s.id === id);
+      if (!shape) return;
+
+      let payload = { id };
+
+      if (shape.type === "Rectangle") {
+        payload.width = copiedSizeRef.current.width;
+        payload.height = copiedSizeRef.current.height;
+      }
+      else if (shape.type === "Circle") {
+        if (copiedSizeRef.current.radius !== undefined) {
+          payload.radius = copiedSizeRef.current.radius;
+        } else if (copiedSizeRef.current.width !== undefined) {
+          payload.radius = copiedSizeRef.current.width / 2;
+        }
+      }
+      else if (shape.type === "Polygon") {
+        if (copiedSizeRef.current.points) {
+          payload.points = JSON.parse(JSON.stringify(copiedSizeRef.current.points));
+        }
+      }
+      else if (shape.type === "Star") {
+        if (copiedSizeRef.current.outerRadius !== undefined) {
+          payload.outerRadius = copiedSizeRef.current.outerRadius;
+        }
+        if (copiedSizeRef.current.innerRadius !== undefined) {
+          payload.innerRadius = copiedSizeRef.current.innerRadius;
+        }
+        if (copiedSizeRef.current.corners !== undefined) {
+          payload.corners = copiedSizeRef.current.corners;
+        }
+        if (copiedSizeRef.current.spokeRatio !== undefined) {
+          payload.spokeRatio = copiedSizeRef.current.spokeRatio;
+        }
+        if (copiedSizeRef.current.rounded !== undefined) {
+          payload.rounded = copiedSizeRef.current.rounded;
+        }
+        if (copiedSizeRef.current.randomized !== undefined) {
+          payload.randomized = copiedSizeRef.current.randomized;
+        }
+      }
+      payload.fill = copiedSizeRef.current.fill;
+      payload.stroke = copiedSizeRef.current.stroke;
+      payload.strokeWidth = copiedSizeRef.current.strokeWidth;
+
+      dispatch(updateShapePosition(payload));
+    });
+  };
+
+  const handlePasteWidth = () => {
+    if (!copiedSizeRef.current || copiedSizeRef.current.width === undefined) {
+      alert("No width copied yet.");
+      return;
+    }
+    if (!selectedShapeIds || selectedShapeIds.length === 0) {
+      alert("Select a shape to paste width.");
+      return;
+    }
+    selectedShapeIds.forEach(id => {
+      const shape = shapes.find(s => s.id === id);
+      if (!shape) return;
+
+      let payload = { id };
+
+      if (shape.type === "Rectangle") {
+        payload.width = copiedSizeRef.current.width;
+      } else if (shape.type === "Circle") {
+        payload.radius = copiedSizeRef.current.width / 2;
+      } else if (shape.type === "Star") {
+        payload.outerRadius = copiedSizeRef.current.width / 2;
+      } else if (shape.type === "Polygon" && copiedSizeRef.current.points) {
+        const origBBox = getShapeBoundingBox(shape);
+        const copyBBox = getShapeBoundingBox({ ...shape, points: copiedSizeRef.current.points });
+        if (origBBox && copyBBox) {
+          const scale = copiedSizeRef.current.width / (copyBBox.maxX - copyBBox.minX || 1);
+          payload.points = shape.points.map(pt => ({
+            x: (pt.x ?? pt[0]) * scale,
+            y: pt.y ?? pt[1]
+          }));
+        }
+      }
+
+      dispatch(updateShapePosition(payload));
+    });
+  };
+
+  const handlePasteHeight = () => {
+    if (!copiedSizeRef.current || copiedSizeRef.current.height === undefined) {
+      alert("No height copied yet.");
+      return;
+    }
+    if (!selectedShapeIds || selectedShapeIds.length === 0) {
+      alert("Select a shape to paste height.");
+      return;
+    }
+    selectedShapeIds.forEach(id => {
+      const shape = shapes.find(s => s.id === id);
+      if (!shape) return;
+
+      let payload = { id };
+
+      if (shape.type === "Rectangle") {
+        payload.height = copiedSizeRef.current.height;
+      } else if (shape.type === "Circle") {
+        payload.radius = copiedSizeRef.current.height / 2;
+      } else if (shape.type === "Star") {
+        payload.outerRadius = copiedSizeRef.current.height / 2;
+      } else if (shape.type === "Polygon" && copiedSizeRef.current.points) {
+        const origBBox = getShapeBoundingBox(shape);
+        const copyBBox = getShapeBoundingBox({ ...shape, points: copiedSizeRef.current.points });
+        if (origBBox && copyBBox) {
+          const scale = copiedSizeRef.current.height / (copyBBox.maxY - copyBBox.minY || 1);
+          payload.points = shape.points.map(pt => ({
+            x: pt.x ?? pt[0],
+            y: (pt.y ?? pt[1]) * scale
+          }));
+        }
+      }
+
+      dispatch(updateShapePosition(payload));
+    });
+  };
+
+  const handlePasteSizeSeparately = () => {
+    if (!copiedSizeRef.current) {
+      alert("No size copied yet.");
+      return;
+    }
+    if (!selectedShapeIds || selectedShapeIds.length === 0) {
+      alert("Select shapes to paste size.");
+      return;
+    }
+    selectedShapeIds.forEach(id => {
+      const shape = shapes.find(s => s.id === id);
+      if (!shape) return;
+
+      let payload = { id };
+
+      if (shape.type === "Rectangle") {
+        payload.width = copiedSizeRef.current.width;
+        payload.height = copiedSizeRef.current.height;
+      }
+      else if (shape.type === "Circle") {
+        if (copiedSizeRef.current.radius !== undefined) {
+          payload.radius = copiedSizeRef.current.radius;
+        } else if (copiedSizeRef.current.width !== undefined) {
+          payload.radius = copiedSizeRef.current.width / 2;
+        }
+      }
+      else if (shape.type === "Polygon") {
+        if (copiedSizeRef.current.points) {
+          payload.points = JSON.parse(JSON.stringify(copiedSizeRef.current.points));
+        }
+      }
+      else if (shape.type === "Star") {
+        if (copiedSizeRef.current.outerRadius !== undefined) {
+          payload.outerRadius = copiedSizeRef.current.outerRadius;
+        }
+        if (copiedSizeRef.current.innerRadius !== undefined) {
+          payload.innerRadius = copiedSizeRef.current.innerRadius;
+        }
+        if (copiedSizeRef.current.corners !== undefined) {
+          payload.corners = copiedSizeRef.current.corners;
+        }
+        if (copiedSizeRef.current.spokeRatio !== undefined) {
+          payload.spokeRatio = copiedSizeRef.current.spokeRatio;
+        }
+        if (copiedSizeRef.current.rounded !== undefined) {
+          payload.rounded = copiedSizeRef.current.rounded;
+        }
+        if (copiedSizeRef.current.randomized !== undefined) {
+          payload.randomized = copiedSizeRef.current.randomized;
+        }
+      }
+      payload.fill = copiedSizeRef.current.fill;
+      payload.stroke = copiedSizeRef.current.stroke;
+      payload.strokeWidth = copiedSizeRef.current.strokeWidth;
+
+      dispatch(updateShapePosition(payload));
+    });
+  };
+
+  const handlePasteWidthSeparately = () => {
+    if (!copiedSizeRef.current || copiedSizeRef.current.width === undefined) {
+      alert("No width copied yet.");
+      return;
+    }
+    if (!selectedShapeIds || selectedShapeIds.length === 0) {
+      alert("Select shapes to paste width.");
+      return;
+    }
+    selectedShapeIds.forEach(id => {
+      const shape = shapes.find(s => s.id === id);
+      if (!shape) return;
+
+      let payload = { id };
+
+      if (shape.type === "Rectangle") {
+        payload.width = copiedSizeRef.current.width;
+      } else if (shape.type === "Circle") {
+        payload.radius = copiedSizeRef.current.width / 2;
+      } else if (shape.type === "Star") {
+        payload.outerRadius = copiedSizeRef.current.width / 2;
+      } else if (shape.type === "Polygon" && shape.points) {
+        const origBBox = getShapeBoundingBox(shape);
+        const copyBBox = getShapeBoundingBox({ ...shape, points: copiedSizeRef.current.points });
+        if (origBBox && copyBBox) {
+          const scale = copiedSizeRef.current.width / (copyBBox.maxX - copyBBox.minX || 1);
+          payload.points = shape.points.map(pt => ({
+            x: (pt.x ?? pt[0]) * scale,
+            y: pt.y ?? pt[1]
+          }));
+        }
+      }
+      dispatch(updateShapePosition(payload));
+    });
+  };
+
+  const handlePasteHeightSeparately = () => {
+    if (!copiedSizeRef.current || copiedSizeRef.current.height === undefined) {
+      alert("No height copied yet.");
+      return;
+    }
+    if (!selectedShapeIds || selectedShapeIds.length === 0) {
+      alert("Select shapes to paste height.");
+      return;
+    }
+    selectedShapeIds.forEach(id => {
+      const shape = shapes.find(s => s.id === id);
+      if (!shape) return;
+
+      let payload = { id };
+
+      if (shape.type === "Rectangle") {
+        payload.height = copiedSizeRef.current.height;
+      } else if (shape.type === "Circle") {
+        payload.radius = copiedSizeRef.current.height / 2;
+      } else if (shape.type === "Star") {
+        payload.outerRadius = copiedSizeRef.current.height / 2;
+      } else if (shape.type === "Polygon" && shape.points) {
+        const origBBox = getShapeBoundingBox(shape);
+        const copyBBox = getShapeBoundingBox({ ...shape, points: copiedSizeRef.current.points });
+        if (origBBox && copyBBox) {
+          const scale = copiedSizeRef.current.height / (copyBBox.maxY - copyBBox.minY || 1);
+          payload.points = shape.points.map(pt => ({
+            x: pt.x ?? pt[0],
+            y: (pt.y ?? pt[1]) * scale
+          }));
+        }
+      }
+      dispatch(updateShapePosition(payload));
+    });
+  };
+
+  const handlePasteStyle = () => {
+    if (!copiedStyleRef.current) {
+      alert("No style copied yet.");
+      return;
+    }
+    if (!selectedShapeIds || selectedShapeIds.length === 0) {
+      alert("Select a shape to paste style.");
+      return;
+    }
+    selectedShapeIds.forEach(id => {
+      dispatch(updateShapePosition({
+        id,
+        ...copiedStyleRef.current
+      }));
+    });
+  };
 
   const handlePaste = useCallback(() => {
     dispatch(paste());
@@ -1686,7 +2017,6 @@ const Topbar = ({
     img.src = url;
   };
   function isSamePaint(a, b) {
-    // Normalize color strings to hex
     function normalizeColor(c) {
       if (typeof c === "string") {
         const color = c.trim().toLowerCase();
@@ -1698,7 +2028,6 @@ const Topbar = ({
       if (c === null || c === undefined) return "none";
       return c;
     }
-    // Compare objects (gradients/patterns)
     if (typeof a === "object" && typeof b === "object") {
       return JSON.stringify(a) === JSON.stringify(b);
     }
@@ -1714,15 +2043,51 @@ const Topbar = ({
     const referenceShape = allShapes.find(s => s.id === selectedShapeId);
     if (!referenceShape) return;
 
+    console.log("Reference fill:", referenceShape.fill, "stroke:", referenceShape.stroke);
+
     const matchedIds = allShapes
-      .filter(s =>
-        isSamePaint(s.fill, referenceShape.fill) &&
-        isSamePaint(s.stroke, referenceShape.stroke)
-      )
+      .filter(s => {
+        const sameFill = isSamePaint(s.fill, referenceShape.fill);
+        const sameStroke = isSamePaint(s.stroke, referenceShape.stroke);
+        if (sameFill && sameStroke) {
+          return true;
+        }
+        // Debug log
+        console.log("Not matched:", s.id, s.fill, s.stroke);
+        return false;
+      })
       .map(s => s.id);
 
     if (matchedIds.length === 0) {
       alert("No shapes found with the same fill and stroke.");
+      return;
+    }
+
+    dispatch({
+      type: "tool/setSelectedShapeIds",
+      payload: matchedIds
+    });
+  };
+  const handleSelectSameFillColor = () => {
+    if (!selectedShapeId) {
+      alert("Select a shape first.");
+      return;
+    }
+    const allShapes = layers.flatMap(layer => layer.shapes);
+    const referenceShape = allShapes.find(s => s.id === selectedShapeId);
+    if (!referenceShape) return;
+    console.log("Reference fill:", referenceShape.fill);
+    allShapes.forEach(s => console.log(s.id, s.fill));
+    const matchedIds = allShapes
+      .filter(s =>
+        typeof s.fill === "string" &&
+        typeof referenceShape.fill === "string" &&
+        isSamePaint(s.fill, referenceShape.fill)
+      )
+      .map(s => s.id);
+
+    if (matchedIds.length === 0) {
+      alert("No shapes found with the same fill color.");
       return;
     }
 
@@ -1835,6 +2200,43 @@ ${shapesXml}
     setXmlContent(generateSVGXML(layers, width, height));
     setShowXmlEditor(true);
   };
+
+  const handleCloneOriginalPathLPE = () => {
+    if (!selectedShapeId) {
+      alert("Select a shape to clone.");
+      return;
+    }
+    const allShapes = layers.flatMap(layer => layer.shapes);
+    const original = allShapes.find(s => s.id === selectedShapeId);
+    if (!original) {
+      alert("Original shape not found.");
+      return;
+    }
+
+    const clone = {
+      id: `clone-lpe-${Date.now()}`,
+      type: "Clone",
+      cloneOf: original.id,
+      x: (original.x || 0) + 40,
+      y: (original.y || 0) + 40,
+      width: original.width,
+      height: original.height,
+      radius: original.radius,
+      lpeEffect: "CloneOriginalPath",
+      name: (original.name || original.type || "Shape") + " (clone LPE)",
+      isClone: true,
+    };
+
+    dispatch({
+      type: "tool/addShape",
+      payload: clone,
+    });
+
+    dispatch({
+      type: "tool/updateSelection",
+      payload: [clone.id],
+    });
+  };
   const EditOptions = [
     { id: 1, label: "Undo...", onClick: () => dispatch(undo()) },
     { id: 2, label: "Redo...", onClick: () => dispatch(redo()) },
@@ -1853,15 +2255,15 @@ ${shapesXml}
       id: 7,
       label: "Paste...",
       subMenu: [
-        { id: 71, label: "In Place" },
-        { id: 72, label: "On Page" },
-        { id: 73, label: "Style" },
-        { id: 74, label: "Size" },
-        { id: 75, label: "Width" },
-        { id: 76, label: "Height" },
-        { id: 77, label: "Size Separately" },
-        { id: 78, label: "Width Separately" },
-        { id: 79, label: "Height Separately" },
+        { id: 71, label: "In Place", onClick: handlePaste },
+        { id: 72, label: "On Page", onClick: handlePaste },
+        { id: 73, label: "Style", onClick: handlePasteStyle },
+        { id: 74, label: "Size", onClick: handlePasteSize },
+        { id: 75, label: "Width", onClick: handlePasteWidth },
+        { id: 76, label: "Height", onClick: handlePasteHeight },
+        { id: 77, label: "Size Separately", onClick: handlePasteSizeSeparately },
+        { id: 78, label: "Width Separately", onClick: handlePasteWidthSeparately },
+        { id: 79, label: "Height Separately", onClick: handlePasteHeightSeparately },
       ],
     },
     { id: 8, label: "Find/Replace ....", onClick: () => setShowFindReplaceModal(true) },
@@ -1877,7 +2279,7 @@ ${shapesXml}
         { id: 105, label: "Relink to Copied", onClick: () => dispatch(relinkClone()) },
         { id: 106, label: "Select Original", onClick: () => dispatch(selectOriginal()) },
         { id: 107, label: "Clone Original" },
-        { id: 108, label: "Path (LPE)" },
+        { id: 108, label: "Clone original path LPE", onClick: handleCloneOriginalPathLPE },
       ],
     },
     { id: 11, label: "Make a Bitmap Copy", onClick: handleMakeBitmapCopy },
@@ -1888,7 +2290,7 @@ ${shapesXml}
       label: "Select Same",
       subMenu: [
         { id: 141, label: "Fill and Stroke", onClick: handleSelectSameFillAndStroke },
-        { id: 142, label: "Fill Color" },
+        { id: 142, label: "Fill Color", onClick: handleSelectSameFillColor },
         { id: 143, label: "Stroke Color" },
         { id: 144, label: "Stroke Style" },
         { id: 145, label: "Object Type" },
@@ -2906,7 +3308,7 @@ ${shapesXml}
                       >
                         Edit
                       </a>
-                      <ul className="dropdown-menu" style={{ cursor: "pointer", height: '500px', overflow: 'scroll' }}>
+                      <ul className="dropdown-menu" style={{ cursor: "pointer" }}>
                         {EditOptions.map((item) => (
                           <li
                             key={item.id}
@@ -2927,12 +3329,15 @@ ${shapesXml}
                               <ul className="paste-dropdown-item">
                                 {item.subMenu.map((sub) => (
                                   <li key={sub.id}>
-                                    <a href="#"
-                                      onClick={(e) => {
+                                    <a
+                                      href="#"
+                                      onClick={e => {
                                         e.preventDefault();
                                         if (sub.onClick) sub.onClick();
                                       }}
-                                    >{sub.label}</a>
+                                    >
+                                      {sub.label}
+                                    </a>
                                   </li>
                                 ))}
                               </ul>
@@ -3245,7 +3650,7 @@ ${shapesXml}
                       >
                         Object
                       </a>
-                      <ul className="dropdown-menu" style={{ cursor: "pointer", height: '500px', overflow: 'scroll' }}>
+                      <ul className="dropdown-menu" style={{ cursor: "pointer" }}>
                         {ObjectOptions.map((item, index) =>
                           item === "divider" ? (
                             <hr key={index} style={{ margin: "0px" }} />
@@ -4414,7 +4819,6 @@ ${shapesXml}
               <button onClick={() => setShowXmlEditor(false)} style={{ border: "none", borderRadius: 4, padding: "6px 16px" }}>
                 Close
               </button>
-              {/* Optionally, add a "Save" button to parse and update shapes from XML */}
             </div>
           </div>
         </div>

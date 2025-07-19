@@ -96,6 +96,8 @@ const RightSidebar = ({
   handleCloseFillStrokeDialog,
   isAlignPanelOpen,
   setIsAlignPanelOpen,
+  isDocPropsOpen,
+  setIsDocPropsOpen,
 }) => {
   const dispatch = useDispatch();
   const fileInputRef = useRef(null);
@@ -124,7 +126,7 @@ const RightSidebar = ({
   const [paramAngleEnd, setParamAngleEnd] = useState(360);
   const [rotateObjects, setRotateObjects] = useState(false);
   const [selectedRightIcon, setSelectedRightIcon] = useState(null);
-  const [isDocPropsOpen, setIsDocPropsOpen] = useState(false);
+  // const [isDocPropsOpen, setIsDocPropsOpen] = useState(false);
   console.log("isAlignPanelOpen in RightSidebar:", isAlignPanelOpen);
   const alignOptions = [
     { key: "left", label: "Align Left", icon: <FaAlignLeft /> },
@@ -1019,7 +1021,7 @@ const RightSidebar = ({
               <RiFileSettingsLine
                 data-tooltip-content="Document Properties"
                 data-tooltip-id="tool-top"
-                onClick={() => setIsDocPropsOpen(true)}
+                onClick={() => setIsDocPropsOpen && setIsDocPropsOpen(true)}
                 style={{ cursor: "pointer" }}
               />
             </div>
@@ -1034,7 +1036,7 @@ const RightSidebar = ({
 
         <DocumentPropertiesDialog
           isOpen={isDocPropsOpen}
-          onClose={() => setIsDocPropsOpen(false)}
+          onClose={() => setIsDocPropsOpen && setIsDocPropsOpen(false)}
         />
         <FillStrokeDialog
           isOpen={isFillStrokeDialogOpen}

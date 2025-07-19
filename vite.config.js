@@ -6,15 +6,18 @@ export default defineConfig({
   plugins: [
     react(),
     visualizer({
-      open: true, // Opens the visualization in the browser
+      open: true,
     }),
   ],
+  server: {
+    open: true,
+  },
   build: {
     chunkSizeWarningLimit: 1000,
     rollupOptions: {
       output: {
         manualChunks: {
-          vendor: ['react', 'react-dom'], // Separate common libraries into a vendor chunk
+          vendor: ['react', 'react-dom'],
         },
       },
     },

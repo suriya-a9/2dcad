@@ -146,6 +146,7 @@ import {
   setWideScreen,
   setCurrentDocumentIndex,
   updateSelection,
+  loadDocument,
 } from "../../Redux/Slice/toolSlice";
 import {
   TbDeselect,
@@ -291,6 +292,7 @@ const Topbar = ({
   onZoomNext,
   handleOpenFillStrokeDialog,
   setIsAlignPanelOpen,
+  setIsDocPropsOpen,
 }) => {
   const selectedTool = useSelector((state) => state.tool.selectedTool);
   const dispatch = useDispatch();
@@ -357,9 +359,19 @@ const Topbar = ({
     }
   };
 
+  function addRecentFile(fileName, fileContent) {
+    let recent = JSON.parse(localStorage.getItem("recentFiles") || "[]");
+    recent = recent.filter(f => f.name !== fileName);
+    recent.unshift({ name: fileName, content: fileContent });
+    if (recent.length > 10) recent = recent.slice(0, 10);
+    localStorage.setItem("recentFiles", JSON.stringify(recent));
+  }
   const handleSaveClick = () => {
     dispatch(saveState());
+    dispatch(markSaved());
     if (handleSave) handleSave();
+    const savedData = JSON.stringify({ layers, selectedTool, strokeColor, fillColor });
+    addRecentFile("design.json", savedData);
     alert("Design saved successfully!");
   };
   const handlePathEffects = () => {
@@ -415,12 +427,7 @@ const Topbar = ({
   };
   const handleSaveAsClick = () => {
     const name = prompt("Enter a name for the file:") || "design";
-    const savedData = {
-      layers: layers,
-      selectedTool: selectedTool,
-      strokeColor: strokeColor,
-      fillColor: fillColor,
-    };
+    const savedData = JSON.stringify({ layers, selectedTool, strokeColor, fillColor });
 
     const blob = new Blob([JSON.stringify(savedData, null, 2)], {
       type: "application/json",
@@ -434,7 +441,7 @@ const Topbar = ({
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-
+    addRecentFile(`${name}.json`, savedData);
     alert("Design saved successfully as " + name + ".json!");
   };
 
@@ -1149,11 +1156,24 @@ const Topbar = ({
   const handleDeselectAll = () => {
     dispatch(deselectAllShapes());
   };
-
+  const [showCloseTabModal, setShowCloseTabModal] = useState(false);
   const handleQuit = () => {
-    navigate("/");
+    localStorage.setItem("2dcad_quit", Date.now());
+    window.close();
+    setTimeout(() => {
+      if (!window.closed) {
+        setShowCloseTabModal(true);
+      }
+    }, 300);
   };
-
+  const handleCloseWindow = () => {
+    window.close();
+    setTimeout(() => {
+      if (!window.closed) {
+        alert("Please close this tab manually.");
+      }
+    }, 300);
+  };
   const handleFillAndStroke = () => {
     if (selectedShapeId) {
       const newFillColor = fillColor;
@@ -2303,6 +2323,28 @@ ${shapesXml}
       payload: [clone.id],
     });
   };
+  const [showRecentModal, setShowRecentModal] = useState(false);
+  const [recentFiles, setRecentFiles] = useState([]);
+
+  const handleOpenRecent = () => {
+    const recent = JSON.parse(localStorage.getItem("recentFiles") || "[]");
+    setRecentFiles(recent);
+    setShowRecentModal(true);
+  };
+
+  const handleOpenRecentFile = (file) => {
+    try {
+      const data = JSON.parse(file.content);
+      dispatch(loadDocument(data));
+      setShowRecentModal(false);
+      alert(`Loaded file: ${file.name}`);
+    } catch (err) {
+      alert("Failed to load file: " + file.name);
+      setShowRecentModal(false);
+    }
+  };
+  const [showImportWebImageModal, setShowImportWebImageModal] = useState(false);
+  const [webImageUrl, setWebImageUrl] = useState("");
   const EditOptions = [
     { id: 1, label: "Undo...", onClick: () => dispatch(undo()) },
     { id: 2, label: "Redo...", onClick: () => dispatch(redo()) },
@@ -3200,7 +3242,7 @@ ${shapesXml}
                           </a>
                         </li>
                         <li>
-                          <a className="dropdown-item">New Form Template</a>
+                          <a className="dropdown-item">New From Template</a>
                         </li>
                         <li>
                           <a
@@ -3211,7 +3253,9 @@ ${shapesXml}
                           </a>
                         </li>
                         <li>
-                          <a className="dropdown-item">Open Recent</a>
+                          <a className="dropdown-item" onClick={handleOpenRecent}>
+                            Open Recent
+                          </a>
                         </li>
                         <hr style={{ margin: "0px" }} />
                         <li>
@@ -3257,7 +3301,7 @@ ${shapesXml}
                           multiple
                         />
                         <li>
-                          <a className="dropdown-item" href="#">
+                          <a className="dropdown-item" onClick={() => setShowImportWebImageModal(true)}>
                             Import Web Image...
                           </a>
                         </li>
@@ -3345,13 +3389,13 @@ ${shapesXml}
                         </li>
                         <hr style={{ margin: "0px" }} />
                         <li>
-                          <a className="dropdown-item" onClick={handleCleanUp}>
+                          <a className="dropdown-item" onClick={() => setIsDocPropsOpen(true)}>
                             Document Properties
                           </a>
                         </li>
                         <hr style={{ margin: "0px" }} />
                         <li>
-                          <a className="dropdown-item" href="#">
+                          <a className="dropdown-item" onClick={handleCloseWindow}>
                             Close...
                           </a>
                         </li>
@@ -4882,6 +4926,161 @@ ${shapesXml}
             <div style={{ textAlign: "right" }}>
               <button onClick={() => setShowXmlEditor(false)} style={{ border: "none", borderRadius: 4, padding: "6px 16px" }}>
                 Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {showRecentModal && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            width: "100vw",
+            height: "100vh",
+            background: "rgba(0,0,0,0.3)",
+            zIndex: 9999,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center"
+          }}
+          onClick={() => setShowRecentModal(false)}
+        >
+          <div
+            style={{
+              background: "#fff",
+              padding: 24,
+              borderRadius: 8,
+              minWidth: 320,
+              boxShadow: "0 8px 32px rgba(0,0,0,0.18)"
+            }}
+            onClick={e => e.stopPropagation()}
+          >
+            <h4>Open Recent Files</h4>
+            <ul style={{ listStyle: "none", padding: 0 }}>
+              {recentFiles.length === 0 && <li>No recent files.</li>}
+              {recentFiles.map((file, idx) => (
+                <li key={idx} style={{ marginBottom: 8 }}>
+                  <button
+                    style={{
+                      width: "100%",
+                      textAlign: "left",
+                      padding: "8px 12px",
+                      border: "1px solid #ccc",
+                      borderRadius: 4,
+                      background: "#f8f8f8",
+                      cursor: "pointer"
+                    }}
+                    onClick={() => handleOpenRecentFile(file)}
+                  >
+                    {file.name}
+                  </button>
+                </li>
+              ))}
+            </ul>
+            <div style={{ marginTop: 24, textAlign: "right" }}>
+              <button onClick={() => setShowRecentModal(false)} style={{ border: "none", borderRadius: 4, padding: "6px 16px" }}>
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {showImportWebImageModal && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            width: "100vw",
+            height: "100vh",
+            background: "rgba(0,0,0,0.3)",
+            zIndex: 9999,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center"
+          }}
+          onClick={() => setShowImportWebImageModal(false)}
+        >
+          <div
+            style={{
+              background: "#fff",
+              padding: 24,
+              borderRadius: 8,
+              minWidth: 320,
+              boxShadow: "0 8px 32px rgba(0,0,0,0.18)"
+            }}
+            onClick={e => e.stopPropagation()}
+          >
+            <h4>Import Web Image</h4>
+            <input
+              type="text"
+              placeholder="Enter image URL"
+              value={webImageUrl}
+              onChange={e => setWebImageUrl(e.target.value)}
+              style={{ width: "100%", marginBottom: 16 }}
+            />
+            <div style={{ textAlign: "right" }}>
+              <button
+                onClick={() => {
+                  if (webImageUrl.trim()) {
+                    dispatch(addImage({ url: webImageUrl.trim(), name: "Web Image" }));
+                    setShowImportWebImageModal(false);
+                    setWebImageUrl("");
+                  }
+                }}
+                style={{ border: "none", borderRadius: 4, padding: "6px 16px", marginRight: 8 }}
+              >
+                Import
+              </button>
+              <button
+                onClick={() => setShowImportWebImageModal(false)}
+                style={{ border: "none", borderRadius: 4, padding: "6px 16px" }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {showCloseTabModal && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            width: "100vw",
+            height: "100vh",
+            background: "rgba(0,0,0,0.3)",
+            zIndex: 10001,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center"
+          }}
+          onClick={() => setShowCloseTabModal(false)}
+        >
+          <div
+            style={{
+              background: "#fff",
+              padding: 24,
+              borderRadius: 8,
+              minWidth: 320,
+              boxShadow: "0 8px 32px rgba(0,0,0,0.18)"
+            }}
+            onClick={e => e.stopPropagation()}
+          >
+            <h4>Close Tab</h4>
+            <p>
+              This tab cannot be closed automatically.<br />
+              Please close it manually.
+            </p>
+            <div style={{ textAlign: "right" }}>
+              <button
+                onClick={() => setShowCloseTabModal(false)}
+                style={{ border: "none", borderRadius: 4, padding: "6px 16px" }}
+              >
+                OK
               </button>
             </div>
           </div>

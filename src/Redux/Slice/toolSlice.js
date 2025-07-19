@@ -161,6 +161,7 @@ const toolSlice = createSlice({
     wideScreen: false,
     openDocuments: [],
     currentDocumentIndex: 0,
+    isDirty: false,
   },
 
   reducers: {
@@ -361,11 +362,13 @@ const toolSlice = createSlice({
           { x: newShape.x + newShape.width, y: newShape.y + newShape.height },
           { x: newShape.x, y: newShape.y + newShape.height },
         ];
+        state.isDirty = true;
       } else if (newShape.type === "Circle") {
         const { x, y, radius } = newShape;
         newShape.points = [
           { x: x, y: y - radius },
         ];
+        state.isDirty = true;
       } else if (newShape.type === "Star") {
         const { x, y, innerRadius, outerRadius, numPoints } = newShape;
         newShape.points = [];
@@ -376,6 +379,7 @@ const toolSlice = createSlice({
             x: x + radius * Math.cos(angle),
             y: y + radius * Math.sin(angle),
           });
+          state.isDirty = true;
         }
       }
 
@@ -393,11 +397,13 @@ const toolSlice = createSlice({
       });
       state.history.push(JSON.parse(JSON.stringify(state)));
       state.future = [];
+      state.isDirty = true;
       console.log("New shape added with name:", newShape.name);
     },
     addShapes: (state, action) => {
       const selectedLayer = state.layers[state.selectedLayerIndex];
       selectedLayer.shapes.push(...action.payload);
+      state.isDirty = true;
     },
     setZoomLevel: (state, action) => {
       state.zoomLevel = action.payload;
@@ -664,6 +670,7 @@ const toolSlice = createSlice({
         const shape = selectedLayer.shapes.find((shape) => shape.id === id);
         if (shape) {
           Object.assign(shape, updates);
+          state.isDirty = true;
           console.log("Updated Shape:", shape);
         } else {
           console.error("Shape not found in the current layer.");
@@ -952,6 +959,7 @@ const toolSlice = createSlice({
 
         state.history.push(JSON.parse(JSON.stringify(state)));
         state.future = [];
+        state.isDirty = true;
       }
     },
     moveLayerUp: (state) => {
@@ -5649,9 +5657,24 @@ const toolSlice = createSlice({
       state.page = { ...state.page, x, y, width, height };
       state.width = width;
       state.height = height;
-    }
+    },
+    loadDocument: (state, action) => {
+      const { layers, selectedTool, strokeColor, fillColor } = action.payload;
+      if (layers) state.layers = layers;
+      if (selectedTool) state.selectedTool = selectedTool;
+      if (strokeColor) state.strokeColor = strokeColor;
+      if (fillColor) state.fillColor = fillColor;
+      state.selectedLayerIndex = 0;
+      state.selectedShapeId = null;
+      state.selectedShapeIds = [];
+    },
+    markDirty: (state) => {
+      state.isDirty = true;
+    },
+    markSaved: (state) => {
+      state.isDirty = false;
+    },
   },
-
 });
 
 export const {
@@ -5906,6 +5929,9 @@ export const {
   setOpenDocuments,
   setCurrentDocumentIndex,
   setPageSizeAndPosition,
+  loadDocument,
+  markDirty,
+  markSaved,
 } = toolSlice.actions;
 
 export default toolSlice.reducer;

@@ -13,7 +13,7 @@ import * as React from "react";
 import Ruler from "../Ruler/Ruler";
 import html2canvas from "html2canvas";
 import { useSelector } from "react-redux";
-import { setLayersAndSelection, setSelectedTool, setStrokeColor, setFillColor } from "../../Redux/Slice/toolSlice";
+import { setLayersAndSelection, setSelectedTool, setStrokeColor, setFillColor, markSaved } from "../../Redux/Slice/toolSlice";
 const Main = () => {
 
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -54,10 +54,32 @@ const Main = () => {
   const [isFillStrokeDialogOpen, setIsFillStrokeDialogOpen] = useState(false);
   const [isAlignPanelOpen, setIsAlignPanelOpen] = useState(false);
   const wideScreen = useSelector(state => state.tool.wideScreen);
+  const [isDocPropsOpen, setIsDocPropsOpen] = useState(false);
   const handleOpenFillStrokeDialog = () => {
     console.log("Open Fill & Stroke dialog");
     setIsFillStrokeDialogOpen(true);
   };
+  const isDirty = useSelector(state => state.tool.isDirty);
+  useEffect(() => {
+    const handleBeforeUnload = (e) => {
+      if (isDirty) {
+        e.preventDefault();
+        e.returnValue = "You have unsaved changes. Do you want to save before closing?";
+        return "You have unsaved changes. Do you want to save before closing?";
+      }
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [isDirty]);
+  useEffect(() => {
+    const onQuit = (e) => {
+      if (e.key === "2dcad_quit") {
+        window.close();
+      }
+    };
+    window.addEventListener("storage", onQuit);
+    return () => window.removeEventListener("storage", onQuit);
+  }, []);
   const openDocuments = useSelector(state => state.tool.openDocuments);
   const currentDocumentIndex = useSelector(state => state.tool.currentDocumentIndex);
   useEffect(() => {
@@ -886,6 +908,7 @@ const Main = () => {
               onZoomNext={handleZoomNext}
               handleOpenFillStrokeDialog={handleOpenFillStrokeDialog}
               setIsAlignPanelOpen={setIsAlignPanelOpen}
+              setIsDocPropsOpen={setIsDocPropsOpen}
             />
           </div>
         </div>
@@ -1247,7 +1270,7 @@ const Main = () => {
           </div>
           {!wideScreen && (
             <div style={{ flexGrow: '1', position: 'fixed', top: '125px', bottom: '50px', right: '0px' }}>
-              <RightSidebar toggleSidebar={toggleSidebar} isSidebarOpen={isSidebarOpen} handleSave={handleSave} activeTab={activeTab} setActiveTab={(tab) => console.log("Active Tab:", tab)} handleDownloadPdf={handleDownloadPdf} selectedGroupId={selectedGroupId} setSelectedGroupId={setSelectedGroupId} onZoomIn={handleZoomIn} onZoomOut={handleZoomOut} handleOpenFillStrokeDialog={handleOpenFillStrokeDialog} isFillStrokeDialogOpen={isFillStrokeDialogOpen} handleCloseFillStrokeDialog={handleCloseFillStrokeDialog} isAlignPanelOpen={isAlignPanelOpen} setIsAlignPanelOpen={setIsAlignPanelOpen} />
+              <RightSidebar toggleSidebar={toggleSidebar} isSidebarOpen={isSidebarOpen} handleSave={handleSave} activeTab={activeTab} setActiveTab={(tab) => console.log("Active Tab:", tab)} handleDownloadPdf={handleDownloadPdf} selectedGroupId={selectedGroupId} setSelectedGroupId={setSelectedGroupId} onZoomIn={handleZoomIn} onZoomOut={handleZoomOut} handleOpenFillStrokeDialog={handleOpenFillStrokeDialog} isFillStrokeDialogOpen={isFillStrokeDialogOpen} handleCloseFillStrokeDialog={handleCloseFillStrokeDialog} isAlignPanelOpen={isAlignPanelOpen} setIsAlignPanelOpen={setIsAlignPanelOpen} isDocPropsOpen={isDocPropsOpen} setIsDocPropsOpen={setIsDocPropsOpen} />
             </div>
           )}
         </div>

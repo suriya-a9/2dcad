@@ -147,6 +147,7 @@ import {
   setCurrentDocumentIndex,
   updateSelection,
   loadDocument,
+  availableColorProfiles,
 } from "../../Redux/Slice/toolSlice";
 import {
   TbDeselect,
@@ -385,6 +386,22 @@ const Topbar = ({
     if (!selectedShapeId) {
       alert("Select a shape first.");
       return;
+    }
+    switch (effect) {
+      case "Union":
+        dispatch(handleUnion());
+        break;
+      case "Intersection":
+        dispatch(intersection());
+        break;
+      case "Difference":
+        dispatch(difference());
+        break;
+      case "Division":
+        dispatch(division());
+        break;
+      default:
+        break;
     }
     if (effect === "Taper stroke" && params) {
       dispatch(updateShapePosition({
@@ -2345,6 +2362,10 @@ ${shapesXml}
   };
   const [showImportWebImageModal, setShowImportWebImageModal] = useState(false);
   const [webImageUrl, setWebImageUrl] = useState("");
+  const [showDocumentResourcesModal, setShowDocumentResourcesModal] = useState(false);
+  const availableColorProfiles = useSelector(state => state.tool.availableColorProfiles);
+  const externalScripts = useSelector(state => state.tool.externalScripts);
+  const embeddedScripts = useSelector(state => state.tool.embeddedScripts);
   const EditOptions = [
     { id: 1, label: "Undo...", onClick: () => dispatch(undo()) },
     { id: 2, label: "Redo...", onClick: () => dispatch(redo()) },
@@ -3385,7 +3406,9 @@ ${shapesXml}
                           </a>
                         </li>
                         <li>
-                          <a className="dropdown-item">Document Resources</a>
+                          <a className="dropdown-item" onClick={() => setShowDocumentResourcesModal(true)}>
+                            Document Resources
+                          </a>
                         </li>
                         <hr style={{ margin: "0px" }} />
                         <li>
@@ -5081,6 +5104,90 @@ ${shapesXml}
                 style={{ border: "none", borderRadius: 4, padding: "6px 16px" }}
               >
                 OK
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {showDocumentResourcesModal && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            width: "100vw",
+            height: "100vh",
+            background: "rgba(0,0,0,0.3)",
+            zIndex: 10001,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center"
+          }}
+          onClick={() => setShowDocumentResourcesModal(false)}
+        >
+          <div
+            style={{
+              background: "#fff",
+              padding: 24,
+              borderRadius: 8,
+              minWidth: 400,
+              maxWidth: 700,
+              maxHeight: "80vh",
+              overflowY: "auto",
+              boxShadow: "0 8px 32px rgba(0,0,0,0.18)"
+            }}
+            onClick={e => e.stopPropagation()}
+          >
+            <h4>Document Resources</h4>
+            <div>
+              <b>Images:</b>
+              <ul>
+                {layers.flatMap(layer =>
+                  layer.shapes.filter(s => s.type === "Image")
+                ).map(img => (
+                  <li key={img.id}>
+                    <span>{img.name || img.id}</span>
+                    <br />
+                    <img src={img.url} alt={img.name} style={{ maxWidth: 120, maxHeight: 80, margin: "4px 0" }} />
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div>
+              <b>Fonts:</b>
+              <ul>
+                {[...new Set(layers.flatMap(layer =>
+                  layer.shapes.filter(s => s.type === "Text").map(s => s.fontFamily || "Arial")
+                ))].map(font => (
+                  <li key={font}>{font}</li>
+                ))}
+              </ul>
+            </div>
+            <div>
+              <b>Color Profiles:</b>
+              <ul>
+                {availableColorProfiles?.map(profile => (
+                  <li key={profile.id}>{profile.name}</li>
+                ))}
+              </ul>
+            </div>
+            <div>
+              <b>Scripts:</b>
+              <ul>
+                {externalScripts?.map((script, idx) => (
+                  <li key={idx}>{script}</li>
+                ))}
+                {embeddedScripts?.map((script, idx) => (
+                  <li key={idx}>{script}</li>
+                ))}
+              </ul>
+            </div>
+            <div style={{ marginTop: 24, textAlign: "right" }}>
+              <button
+                onClick={() => setShowDocumentResourcesModal(false)}
+                style={{ border: "none", borderRadius: 4, padding: "6px 16px" }}
+              >
+                Close
               </button>
             </div>
           </div>

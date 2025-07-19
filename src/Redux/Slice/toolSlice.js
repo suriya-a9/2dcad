@@ -5932,6 +5932,7 @@ export const {
   loadDocument,
   markDirty,
   markSaved,
+  availableColorProfiles,
 } = toolSlice.actions;
 
 export default toolSlice.reducer;

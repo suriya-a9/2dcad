@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { useDispatch } from "react-redux";
 import { simplify } from "../../Redux/Slice/toolSlice";
+import BooleanOpsDialog from "./BooleanOpsDialog";
 import { shapeToPoints } from "../Panel/Panel";
 
 const INKSCAPE_LPE_CATEGORIES = [
@@ -50,6 +51,7 @@ export default function PathEffectsDialog({ isOpen, onClose, onApply, selectedSh
     const [envelopeLeft, setEnvelopeLeft] = useState(selectedShape?.envelopeLeft || [0, 0, 0, 1]);
     const [envelopeRight, setEnvelopeRight] = useState(selectedShape?.envelopeRight || [1, 0, 1, 1]);
     const [showLatticeDialog, setShowLatticeDialog] = useState(false);
+    const [showBooleanDialog, setShowBooleanDialog] = useState(false);
     const dispatch = useDispatch();
     const getDefaultLatticePoints = (shape, rows, cols) => {
         if (!shape || !Array.isArray(shape.points)) return Array(rows * cols).fill([0, 0]);
@@ -197,9 +199,18 @@ export default function PathEffectsDialog({ isOpen, onClose, onApply, selectedSh
                 }
             }
             onClose && onClose();
+        } else if (effect === "Boolean operation") {
+            setShowBooleanDialog(true);
+            return;
         } else {
             onApply && onApply(effect);
         }
+    };
+
+    const handleBooleanApply = (op) => {
+        if (onApply) onApply(op);
+        setShowBooleanDialog(false);
+        onClose && onClose();
     };
 
     const handleApplyRadius = () => {
@@ -611,7 +622,12 @@ export default function PathEffectsDialog({ isOpen, onClose, onApply, selectedSh
                     </div>
                 </div>
             )}
-            {/* {showLatticeDialog && (
+            <BooleanOpsDialog
+                isOpen={showBooleanDialog}
+                onClose={() => setShowBooleanDialog(false)}
+                onApply={handleBooleanApply}
+            />
+            {showLatticeDialog && (
                 <div style={{
                     position: "fixed", top: 0, left: 0, width: "100vw", height: "100vh",
                     background: "rgba(0,0,0,0.2)", zIndex: 10000, display: "flex", alignItems: "center", justifyContent: "center"
@@ -692,7 +708,7 @@ export default function PathEffectsDialog({ isOpen, onClose, onApply, selectedSh
                         <button onClick={() => setShowLatticeDialog(false)}>Cancel</button>
                     </div>
                 </div>
-            )} */}
+            )}
         </div>
     );
 }

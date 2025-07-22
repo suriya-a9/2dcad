@@ -694,6 +694,8 @@ const Panel = React.forwardRef(({
   const [messages, setMessages] = useState([]);
   const [showMessagesModal, setShowMessagesModal] = useState(false);
   const showPageGrid = useSelector(state => state.tool.showPageGrid);
+  console.log("showPageGrid:", showPageGrid);
+  window.showPageGrid = showPageGrid;
   const splitContainerRef = useRef();
   function addGuidesAtLine(x1, y1, x2, y2) {
     setGuides(prev => [

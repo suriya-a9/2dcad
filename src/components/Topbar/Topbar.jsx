@@ -2,7 +2,7 @@ import "./Topbar.css";
 import { useEffect } from "react";
 import { useSelector, useDispatch } from "react-redux";
 import INKSCAPE_SYMBOL_SETS from './inkscape-symbol-sets.json';
-import { setFontSize, setFontFamily, setAlignment, setFontStyle, clearPoints, handleUnion, difference, intersection, exclusion, division, cutPath, combine, breakApart, splitPath, relinkClone, selectOriginal, fracture, flatten, inset, outset, fillBetweenPaths, simplify, reverse, setDynamicOffsetMode, setDynamicOffsetShapeId, setDynamicOffsetAmount, createLinkedOffset, applyBloomFilter, convertToText, removeManualKerns, textToGlyphs, unlinkclonerecursively, lockRotation, OutlineOverlay, Normal, Outline, toggleGrayScale, setIconVisibility } from "../../Redux/Slice/toolSlice";
+import { setFontSize, setFontFamily, setAlignment, setFontStyle, clearPoints, handleUnion, difference, intersection, exclusion, division, cutPath, combine, breakApart, splitPath, relinkClone, selectOriginal, fracture, flatten, inset, outset, fillBetweenPaths, simplify, reverse, setDynamicOffsetMode, setDynamicOffsetShapeId, setDynamicOffsetAmount, createLinkedOffset, applyBloomFilter, convertToText, removeManualKerns, textToGlyphs, unlinkclonerecursively, lockRotation, OutlineOverlay, Normal, Outline, toggleGrayScale, setIconVisibility, togglePageGrid } from "../../Redux/Slice/toolSlice";
 import { setBezierOption } from "../../Redux/Slice/toolSlice";
 import { BsVectorPen } from "react-icons/bs";
 import { TbBrandSnapseed } from "react-icons/tb";
@@ -2424,6 +2424,7 @@ ${shapesXml}
   const embeddedScripts = useSelector(state => state.tool.embeddedScripts);
   const showPageGrid = useSelector(state => state.tool.showPageGrid);
   const handlePageGridToggle = () => {
+    console.log("Page Grid toggled");
     dispatch(togglePageGrid());
   };
   const EditOptions = [

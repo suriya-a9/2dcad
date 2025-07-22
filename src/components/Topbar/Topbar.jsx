@@ -2,7 +2,7 @@ import "./Topbar.css";
 import { useEffect } from "react";
 import { useSelector, useDispatch } from "react-redux";
 import INKSCAPE_SYMBOL_SETS from './inkscape-symbol-sets.json';
-import { setFontSize, setFontFamily, setAlignment, setFontStyle, clearPoints, handleUnion, difference, intersection, exclusion, division, cutPath, combine, breakApart, splitPath, relinkClone, selectOriginal, fracture, flatten, inset, outset, fillBetweenPaths, simplify, reverse, setDynamicOffsetMode, setDynamicOffsetShapeId, setDynamicOffsetAmount, createLinkedOffset, applyBloomFilter, convertToText, removeManualKerns, textToGlyphs, } from "../../Redux/Slice/toolSlice";
+import { setFontSize, setFontFamily, setAlignment, setFontStyle, clearPoints, handleUnion, difference, intersection, exclusion, division, cutPath, combine, breakApart, splitPath, relinkClone, selectOriginal, fracture, flatten, inset, outset, fillBetweenPaths, simplify, reverse, setDynamicOffsetMode, setDynamicOffsetShapeId, setDynamicOffsetAmount, createLinkedOffset, applyBloomFilter, convertToText, removeManualKerns, textToGlyphs, unlinkclonerecursively, lockRotation, OutlineOverlay, Normal, Outline, toggleGrayScale, setIconVisibility } from "../../Redux/Slice/toolSlice";
 import { setBezierOption } from "../../Redux/Slice/toolSlice";
 import { BsVectorPen } from "react-icons/bs";
 import { TbBrandSnapseed } from "react-icons/tb";
@@ -324,6 +324,7 @@ const Topbar = ({
   const [selectedSwatch, setSelectedSwatch] = useState(null);
   const [showColorPicker, setShowColorPicker] = useState(false);
   const [colorPickerValue, setColorPickerValue] = useState("#000000");
+  // const showToolbox = useSelector((state) => state.tool.visibleIcons.CommandsBar);
   const [showPaletteGrid, setShowPaletteGrid] = useState(false);
   const [paletteColors, setPaletteColors] = useState([]);
   const [showCommandPalette, setShowCommandPalette] = useState(false);
@@ -341,6 +342,12 @@ const Topbar = ({
   const selectedLayerIndex = useSelector(
     (state) => state.tool.selectedLayerIndex
   );
+  const handleToolControlsBarChange = (e) => {
+    console.log("handleToolControlsBarChange");
+
+    const { name, checked } = e.target;
+    dispatch(setIconVisibility({ key: name, value: checked }));
+  };
   const [messages, setMessages] = useState([
     { type: "info", text: "Welcome to 2DCAD!" },
     { type: "warning", text: "Remember to save your work frequently." },
@@ -359,7 +366,6 @@ const Topbar = ({
       setNewLayerName(layers[selectedLayerIndex].name);
     }
   };
-
   function addRecentFile(fileName, fileContent) {
     let recent = JSON.parse(localStorage.getItem("recentFiles") || "[]");
     recent = recent.filter(f => f.name !== fileName);
@@ -1089,12 +1095,23 @@ const Topbar = ({
       dispatch(updateShapePosition({ id: selectedShapeId, rotation: 0 }));
     }
   };
+  const handleLockRotation = () => {
+    if (selectedShapeId) {
+      dispatch(lockRotation({ id: selectedShapeId, rotation: 0 }));
+    } else {
+      console.error("No shape selected for locking rotation.");
+    }
+  };
   const handleResetFlip = () => {
     if (selectedShapeId) {
       dispatch(
         updateShapePosition({ id: selectedShapeId, scaleX: 1, scaleY: 1 })
       );
     }
+  };
+
+  const handleGrayscaleToggle = (e) => {
+    dispatch(toggleGrayScale());
   };
   const handleDuplicateLayer = () => {
     dispatch(duplicateLayer());
@@ -1105,6 +1122,45 @@ const Topbar = ({
       dispatch(duplicateShape());
     }
   };
+
+  const handleClone = () => {
+    if (selectedShapeIds && selectedShapeIds.length > 0) {
+      selectedShapeIds.forEach(id => {
+        dispatch({ type: "tool/cloneShape", payload: { id } });
+      });
+    }
+  };
+
+
+  const handleUnlinkClone = () => {
+    if (selectedShapeIds && selectedShapeIds.length > 0) {
+      selectedShapeIds.forEach(id => {
+        dispatch({ type: "tool/unlinkClone", payload: { id } });
+      });
+    }
+  };
+
+  const handleRelinkCopy = () => {
+    if (selectedShapeId) {
+      dispatch(relinkClone());
+    }
+  }
+
+  const handleUnlinkcloneRecursively = () => {
+    if (selectedShapeId) {
+      console.log("handleUnlinkcloneRecursively")
+      dispatch(unlinkclonerecursively());
+    }
+  }
+
+  const handleselectorginal = () => {
+    console.log("enter handleselectorginal ")
+    if (selectedShapeId) {
+      console.log("handleselectorginal")
+      dispatch(selectOriginal());
+    }
+
+  }
 
   const handleToggleLayerVisibility = () => {
     dispatch(toggleLayerVisibility());
@@ -2366,6 +2422,10 @@ ${shapesXml}
   const availableColorProfiles = useSelector(state => state.tool.availableColorProfiles);
   const externalScripts = useSelector(state => state.tool.externalScripts);
   const embeddedScripts = useSelector(state => state.tool.embeddedScripts);
+  const showPageGrid = useSelector(state => state.tool.showPageGrid);
+  const handlePageGridToggle = () => {
+    dispatch(togglePageGrid());
+  };
   const EditOptions = [
     { id: 1, label: "Undo...", onClick: () => dispatch(undo()) },
     { id: 2, label: "Redo...", onClick: () => dispatch(redo()) },
@@ -2401,12 +2461,12 @@ ${shapesXml}
       id: 10,
       label: "Clone",
       subMenu: [
-        { id: 101, label: "Create Clone", onClick: handleDuplicateShape },
+        { id: 101, label: "Create Clone", onClick: handleClone },
         { id: 102, label: "Create Tiled Clones" },
-        { id: 103, label: "Unlink Clone" },
-        { id: 104, label: "Unlink Clones Recursively" },
-        { id: 105, label: "Relink to Copied", onClick: () => dispatch(relinkClone()) },
-        { id: 106, label: "Select Original", onClick: () => dispatch(selectOriginal()) },
+        { id: 103, label: "Unlink Clone", onClick: handleUnlinkClone },
+        { id: 104, label: "Unlink Clones Recursively", onClick: handleUnlinkcloneRecursively },
+        { id: 105, label: "Relink to Copied", onClick: handleRelinkCopy },
+        { id: 106, label: "Select Original", onClick: handleselectorginal },
         { id: 107, label: "Clone Original" },
         { id: 108, label: "Clone original path LPE", onClick: handleCloneOriginalPathLPE },
       ],
@@ -2440,18 +2500,18 @@ ${shapesXml}
       label: "Zoom",
       icon: <MdOutlineArrowRight style={{ fontSize: "25px" }} />,
       subItems: [
-        { label: "Zoom In", onClick: handleZoomIn },
-        { label: "Zoom Out", onClick: handleZoomOut },
-        { label: "Zoom to 1:1" },
-        { label: "Zoom to 1:2" },
-        { label: "Zoom to 2:1" },
-        { label: "Zoom Selection" },
-        { label: "Zoom Drawing" },
-        { label: "Zoom Page" },
-        { label: "Zoom Page Width" },
-        { label: "Center Page" },
-        { label: "Zoom Previous" },
-        { label: "Zoom Next" },
+        { label: "Zoom In", onClick: onZoomIn },
+        { label: "Zoom Out", onClick: onZoomOut },
+        { label: "Zoom to 1:1", onClick: () => onSetZoom(1.1) },
+        { label: "Zoom to 1:2", onClick: () => onSetZoom(1.2) },
+        { label: "Zoom to 2:1", onClick: () => onSetZoom(2.1) },
+        { label: "Zoom Selection", onClick: onZoomSelected },
+        { label: "Zoom Drawing", onClick: onZoomDrawing },
+        { label: "Zoom Page", onclick: onZoomPage },
+        { label: "Zoom Page Width", onclick: onZoomPageWidth },
+        { label: "Center Page", onclick: onZoomCenterPage },
+        { label: "Zoom Previous", onClick: onZoomPrevious },
+        { label: "Zoom Next", onclick: onZoomNext },
       ],
     },
     {
@@ -2465,7 +2525,7 @@ ${shapesXml}
           onClick: handleRotateCounterClockwise,
         },
         { label: "Reset Rotation", onClick: handleResetRotation },
-        { label: "Lock Rotation" },
+        { label: "Lock Rotation", onClick: handleLockRotation },
         { label: "Flip Vertically", onClick: handleFlipVertical },
         { label: "Flip Horizontally", onClick: handleFlipHorizontal },
         { label: "Reset Flipping", onClick: handleResetFlip },
@@ -2482,6 +2542,7 @@ ${shapesXml}
           name: "DisplayMode",
           value: "Normal",
           label: "Normal",
+          onClick: () => dispatch(Normal())
         },
         {
           type: "radio",
@@ -2489,6 +2550,9 @@ ${shapesXml}
           name: "DisplayMode",
           value: "Outline",
           label: "Outline",
+          onClick: () => dispatch(Outline())
+
+
         },
         {
           type: "radio",
@@ -2496,6 +2560,7 @@ ${shapesXml}
           name: "DisplayMode",
           value: "OutlineOverlay",
           label: "Outline Overlay",
+          onClick: () => dispatch(OutlineOverlay())
         },
         {
           type: "radio",
@@ -2503,6 +2568,7 @@ ${shapesXml}
           name: "DisplayMode",
           value: "EnhanceThinLines",
           label: "Enhance Thin Lines",
+          onClick: () => dispatch(Normal())
         },
         {
           type: "radio",
@@ -2510,6 +2576,7 @@ ${shapesXml}
           name: "DisplayMode",
           value: "NoFilters",
           label: "No Filters",
+          onClick: () => dispatch(Normal())
         },
         { type: "separator" },
         { label: "Cycle" },
@@ -2551,10 +2618,12 @@ ${shapesXml}
     {
       id: 6,
       type: "checkbox",
-      id: "GrayScale",
+      inputId: "GrayScale",
       name: "GrayScale",
       value: "GrayScale",
       label: "Gray Scale",
+      onChange: handleGrayscaleToggle
+
     },
     {
       id: 7,
@@ -2571,6 +2640,8 @@ ${shapesXml}
       name: "PageGrid",
       value: "PageGrid",
       label: "Page Grid",
+      checked: showPageGrid,
+      onChange: handlePageGridToggle,
     },
     {
       id: 9,
@@ -2595,20 +2666,6 @@ ${shapesXml}
           name: "CommandsBar",
           value: "CommandsBar",
           label: "Commands Bar",
-        },
-        {
-          type: "checkbox",
-          id: "SnapControlsBar",
-          name: "SnapControlsBar",
-          value: "SnapControlsBar",
-          label: "Snap Controls Bar",
-        },
-        {
-          type: "checkbox",
-          id: "ToolControlsBar",
-          name: "ToolControlsBar",
-          value: "ToolControlsBar",
-          label: "Tool Controls Bar",
         },
         {
           type: "checkbox",
@@ -3587,6 +3644,7 @@ ${shapesXml}
                                             id={subItem.id}
                                             name={subItem.name}
                                             value={subItem.value}
+                                            onChange={handleToolControlsBarChange}
                                           />
                                           <label htmlFor={subItem.id}>
                                             {subItem.label}
@@ -3989,6 +4047,7 @@ ${shapesXml}
                 onStyleChange={(style) =>
                   dispatch(updateShapePosition({ id: selectedShapeId, ...style }))
                 }
+                shapes={shapes}
               />
             ) : selectedTool === "Spray" ? (
               <SprayTopbar />
@@ -8289,14 +8348,50 @@ function SpiralTopbar() {
   );
 }
 
-function TextEditorTopbar({ onStyleChange, selectedShapeId }) {
+function TextEditorTopbar({ onStyleChange, selectedShapeId, shapes }) {
   const dispatch = useDispatch();
   const selectedFontSize = useSelector((state) => state.tool.selectedFontSize);
   const selectedFontFamily = useSelector((state) => state.tool.selectedFontFamily);
   const selectedAlignment = useSelector((state) => state.tool.selectedAlignment);
   const selectedFontStyle = useSelector((state) => state.tool.selectedFontStyle);
   const blockProgression = useSelector(state => state.tool.blockProgression || "normal");
+  const [wordSuggestions, setWordSuggestions] = useState({});
 
+  const [showModal, setShowModal] = useState(false);
+  const [modalData, setModalData] = useState([]);
+
+  const openModal = () => {
+    console.log("text shapess", shapes);
+    const selectedShape = shapes.find((shape) => shape.id === selectedShapeId);
+    if (!selectedShape) {
+      console.warn("Selected shape not found.");
+      return;
+    }
+    const shapeClone = JSON.parse(JSON.stringify([selectedShape]));
+    setModalData(shapeClone);
+    setShowModal(true);
+    fetchSuggestions(selectedShape);
+  };
+  const closeModal = () => {
+    setShowModal(false);
+    setModalData([]);
+    setWordSuggestions({});
+  };
+  const replaceWord = (shapeIndex, wordIndex, replacement) => {
+    setModalData((prev) => {
+      const updated = [...prev];
+      const words = updated[shapeIndex].text.split(" ");
+      words[wordIndex] = replacement;
+      updated[shapeIndex].text = words.join(" ");
+
+      dispatch(updateShapePosition({
+        id: updated[shapeIndex].id,
+        text: updated[shapeIndex].text,
+      }));
+
+      return updated;
+    });
+  };
   const handleFontSizeChange = (e) => {
     const newSize = parseInt(e.target.value, 10);
     dispatch(setFontSize(newSize));
@@ -8393,6 +8488,41 @@ function TextEditorTopbar({ onStyleChange, selectedShapeId }) {
   const handleLetterSpacingChange = (e) => {
     const newSpacing = parseFloat(e.target.value);
     onStyleChange({ letterSpacing: newSpacing, id: selectedShapeId });
+  };
+  const modalStyle = {
+    position: 'fixed',
+    top: "26%",
+    right: "3%",
+    height: '400px',
+    width: '400px',
+    backgroundColor: 'black',
+    padding: '20px',
+    boxShadow: '0 0 10px rgba(0,0,0,0.5)',
+    zIndex: 1000,
+    transition: 'transform 0.3s ease-in-out',
+    transform: showModal ? 'translateX(0)' : 'translateX(100%)',
+    color: 'white',
+  };
+  const fetchSuggestions = async (shape) => {
+    const words = new Set();
+
+    shape.text?.split(" ").forEach((word) => {
+      const cleaned = word.trim().toLowerCase();
+      if (cleaned.length > 1) words.add(cleaned);
+    });
+
+    const results = {};
+    for (let word of words) {
+      try {
+        const res = await fetch(`https://api.datamuse.com/sug?s=${word}`);
+        const data = await res.json();
+        results[word] = data.map((item) => item.word);
+      } catch {
+        results[word] = [];
+      }
+    }
+
+    setWordSuggestions(results);
   };
   return (
     <div className="text-editor-topbar" style={{
@@ -8493,6 +8623,61 @@ function TextEditorTopbar({ onStyleChange, selectedShapeId }) {
         style={{ width: "150px", margin: "0 10px" }}
       />
       <span>{selectedLetterSpacing}px</span>
+      <button
+        style={{ height: "30px", width: "250px !important", marginBottom: 8 }}
+        onClick={() => openModal()}
+      >
+        Check Spell
+      </button>
+      {showModal && (
+        <div style={modalStyle}>
+          <h2>Spell Checker</h2>
+          {modalData.map((shape, shapeIndex) => (
+            <div
+              key={shape.id || shapeIndex}
+              style={{
+                marginBottom: "1rem",
+                borderBottom: "1px solid gray",
+                paddingBottom: "0.5rem",
+              }}
+            >
+              <p><strong>ID:</strong> {shape.id}</p>
+              <p><strong>Text:</strong> {shape.text}</p>
+
+              {shape.text?.split(" ").map((word, wordIndex) => {
+                const cleaned = word.trim().toLowerCase();
+                const suggestions = wordSuggestions[cleaned] || [];
+
+                return (
+                  <div key={wordIndex} style={{ marginBottom: "0.5rem" }}>
+                    <strong>{word}</strong>
+                    <div style={{ fontSize: "0.9rem", color: "#ccc" }}>
+                      {suggestions.slice(0, 5).map((s, idx) => (
+                        <span
+                          key={idx}
+                          style={{
+                            cursor: "pointer",
+                            marginRight: "8px",
+                            color: "#00f",
+                            textDecoration: "underline",
+                          }}
+                          onClick={() => replaceWord(shapeIndex, wordIndex, s)}
+                        >
+                          {s}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ))}
+
+          <button onClick={closeModal} style={{ marginTop: "1rem" }}>
+            Close
+          </button>
+        </div>
+      )}
     </div>
   );
 }

@@ -815,7 +815,8 @@ const RightSidebar = ({
     if (!shapeId) return;
     dispatch(moveShapeIntoGroup({ shapeId, groupId }));
   };
-
+  const showToolbox = useSelector((state) => state.tool.visibleIcons.CommandsBar);
+  if (!showToolbox) return null;
   return (
     <div className="right-sidebar">
       <div className="d-flex flex-column align-items-end mb-3" style={{ position: "relative" }}>

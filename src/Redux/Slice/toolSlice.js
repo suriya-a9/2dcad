@@ -162,6 +162,17 @@ const toolSlice = createSlice({
     openDocuments: [],
     currentDocumentIndex: 0,
     isDirty: false,
+    displayMode: "Normal",
+    grayScale: false,
+    visibleIcons: {
+      CommandsBar: true,
+      Toolbox: true,
+      Rulers: true,
+      Scrollbars: true,
+      Palette: true,
+      Statusbar: true,
+    },
+    showPageGrid: false,
   },
 
   reducers: {
@@ -669,6 +680,9 @@ const toolSlice = createSlice({
       if (selectedLayer) {
         const shape = selectedLayer.shapes.find((shape) => shape.id === id);
         if (shape) {
+          if ('rotation' in updates && shape.rotationLocked) {
+            delete updates.rotation;
+          }
           Object.assign(shape, updates);
           state.isDirty = true;
           console.log("Updated Shape:", shape);
@@ -5001,6 +5015,65 @@ const toolSlice = createSlice({
       state.history.push({ layers: JSON.parse(JSON.stringify(state.layers)) });
       state.future = [];
     },
+    unlinkclonerecursively: (state) => {
+      console.log("enter toolslice unlinkclonerecursively");
+
+      const selectedShapeIds = state.selectedShapeIds || [];
+      if (!selectedShapeIds.length) {
+        console.error("unlinkclonerecursively: No shapes selected.");
+        return;
+      }
+
+      const shapeMap = {};
+      state.layers.forEach(layer => {
+        layer.shapes.forEach(shape => {
+          shapeMap[shape.id] = shape;
+        });
+      });
+
+      const resolveOriginal = (shape) => {
+        let current = shape;
+        const seen = new Set();
+        while (current?.isClone && current.cloneOf && !seen.has(current.cloneOf)) {
+          seen.add(current.cloneOf);
+          const next = shapeMap[current.cloneOf];
+          if (!next) break;
+          current = next;
+        }
+        return current;
+      };
+
+      const unlinkClone = (cloneShape) => {
+        const original = resolveOriginal(cloneShape);
+        if (!original) {
+          return cloneShape;
+        }
+
+        return {
+          ...original,
+          id: cloneShape.id,
+          x: cloneShape.x,
+          y: cloneShape.y,
+          transform: cloneShape.transform,
+          name: `${original.name || original.type || "Shape"} (unlinked)`,
+          isClone: false,
+          cloneOf: null,
+          updatedAt: Date.now(),
+        };
+      };
+
+      state.layers = state.layers.map(layer => ({
+        ...layer,
+        shapes: layer.shapes.map(shape =>
+          selectedShapeIds.includes(shape.id) && shape.isClone
+            ? unlinkClone(shape)
+            : shape
+        ),
+      }));
+
+      state.history.push({ layers: JSON.parse(JSON.stringify(state.layers)) });
+      state.future = [];
+    },
     makeSelectedNodesSymmetric: (state) => {
       if (state.selectedNodePoints.length === 0) return;
       const layer = state.layers[state.selectedLayerIndex];
@@ -5674,6 +5747,58 @@ const toolSlice = createSlice({
     markSaved: (state) => {
       state.isDirty = false;
     },
+    lockRotation: (state, action) => {
+      const { id, rotation } = action.payload;
+      const selectedLayer = state.layers[state.selectedLayerIndex];
+
+      if (selectedLayer) {
+        const shape = selectedLayer.shapes.find((shape) => shape.id === id);
+        if (shape) {
+          shape.rotation = rotation;
+          shape.rotationLocked = true;
+          console.log("Rotation locked for shape:", shape);
+        } else {
+          console.error("Shape not found for rotation lock.");
+        }
+      } else {
+        console.error("No selected layer found.");
+      }
+    },
+    Outline: (state) => {
+      console.log("click the Outline function and its came to toolslice");
+      state.displayMode = "Outline";
+    },
+    Normal: (state) => {
+      state.displayMode = "Normal";
+    },
+
+    OutlineOverlay: (state) => {
+      console.log("click the OutlineOverlay function and its came to toolslice");
+      state.displayMode = "OutlineOverlay";
+    },
+    toggleGrayScale(state) {
+      state.grayScale = !state.grayScale;
+      console.log("grey");
+    },
+    setGrayScale: (state, action) => {
+      state.grayScale = action.payload;
+    },
+    toggleIconVisibility: (state, action) => {
+      const key = action.payload;
+      state.visibleIcons[key] = !state.visibleIcons[key];
+    },
+    setIconVisibility: (state, action) => {
+      console.log("setIconVisibility");
+
+      const { key, value } = action.payload;
+      state.visibleIcons[key] = value;
+    },
+    setShowPageGrid(state, action) {
+      state.showPageGrid = action.payload;
+    },
+    togglePageGrid(state) {
+      state.showPageGrid = !state.showPageGrid;
+    },
   },
 });
 
@@ -5933,6 +6058,17 @@ export const {
   markDirty,
   markSaved,
   availableColorProfiles,
+  unlinkclonerecursively,
+  lockRotation,
+  Outline,
+  Normal,
+  OutlineOverlay,
+  toggleGrayScale,
+  setGrayScale,
+  toggleIconVisibility,
+  setIconVisibility,
+  setShowPageGrid,
+  togglePageGrid,
 } = toolSlice.actions;
 
 export default toolSlice.reducer;

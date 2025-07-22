@@ -693,6 +693,7 @@ const Panel = React.forwardRef(({
   const [xrayHoveredId, setXrayHoveredId] = useState(null);
   const [messages, setMessages] = useState([]);
   const [showMessagesModal, setShowMessagesModal] = useState(false);
+  const showPageGrid = useSelector(state => state.tool.showPageGrid);
   const splitContainerRef = useRef();
   function addGuidesAtLine(x1, y1, x2, y2) {
     setGuides(prev => [
@@ -1221,6 +1222,16 @@ const Panel = React.forwardRef(({
               y: shape.y + radius * Math.sin(angle),
             });
           }
+        } else if (shape.type === "Bezier") {
+          if (Array.isArray(shape.points)) {
+            nodes = shape.points.map(p =>
+              Array.isArray(p)
+                ? { x: p[0], y: p[1] }
+                : { x: p.x, y: p.y }
+            );
+          } else {
+            nodes = [];
+          }
         } else if (shape.type === "Pencil" || shape.type === "Calligraphy") {
           if (Array.isArray(shape.points)) {
             nodes = shape.points.map((point) => ({
@@ -1725,6 +1736,16 @@ const Panel = React.forwardRef(({
             }));
           } else {
             console.error("Pencil/Calligraphy points are not an array:", shape.points);
+          }
+        } else if (shape.type === "Bezier") {
+          if (Array.isArray(shape.points)) {
+            nodes = shape.points.map(p =>
+              Array.isArray(p)
+                ? { x: p[0], y: p[1] }
+                : { x: p.x, y: p.y }
+            );
+          } else {
+            nodes = [];
           }
         }
 
@@ -2918,6 +2939,15 @@ const Panel = React.forwardRef(({
         }
       });
       return nodePoints;
+    } else if (shape.type === "Bezier") {
+      if (Array.isArray(shape.points)) {
+        return shape.points.map(p =>
+          Array.isArray(p)
+            ? { x: p[0], y: p[1] }
+            : { x: p.x, y: p.y }
+        );
+      }
+      return [];
     }
     return [];
   };
@@ -3028,6 +3058,12 @@ const Panel = React.forwardRef(({
         } else {
           newShapeData = { ...selectedShape, innerRadius: radius };
         }
+      } else if (selectedShape && selectedShape.type === "Bezier") {
+        dispatch(updateShapePosition({
+          id: selectedShape.id,
+          points: updatedPoints,
+        }));
+        dispatch(setControlPoints(updatedPoints));
       } else if (selectedShape && selectedShape.type === "Pencil") {
         const newPoints = updatedPoints.map((point) => ({ x: point.x, y: point.y }));
         dispatch(
@@ -4105,6 +4141,15 @@ const Panel = React.forwardRef(({
         { x: shape.x, y: shape.y },
         { x: shape.x + shape.radius, y: shape.y },
       ];
+    } else if (shape.type === "Bezier") {
+      if (Array.isArray(shape.points)) {
+        return shape.points.map(p =>
+          Array.isArray(p)
+            ? { x: p[0], y: p[1] }
+            : { x: p.x, y: p.y }
+        );
+      }
+      return [];
     }
     return [];
   };
@@ -5609,6 +5654,19 @@ const Panel = React.forwardRef(({
     x = Math.max(0, Math.min(1, x));
     setXraySplit(x);
   };
+  function toGray(hex) {
+    if (!hex || typeof hex !== "string") return "#888";
+    hex = hex.replace(/^#/, "");
+    if (hex.length === 3) hex = hex.split("").map(x => x + x).join("");
+    if (hex.length !== 6) return "#888";
+    const num = parseInt(hex, 16);
+    const r = (num >> 16) & 255;
+    const g = (num >> 8) & 255;
+    const b = num & 255;
+    const gray = Math.round(0.299 * r + 0.587 * g + 0.114 * b);
+    return `#${gray.toString(16).padStart(2, "0").repeat(3)}`;
+  }
+  const grayScale = useSelector(state => state.tool.grayScale);
   return (
     <>
       {/* {selectedTool === "Dropper" && (
@@ -7181,11 +7239,15 @@ const Panel = React.forwardRef(({
                               width={shape.width}
                               height={shape.height}
                               fill={
-                                typeof shape.fill === "string"
-                                  ? shape.fill
-                                  : (shape.fill && shape.fill.type === "pattern"
-                                    ? (patternImages[shape.id + ":fill"] ? undefined : "#ccc")
-                                    : "transparent")
+                                grayScale
+                                  ? (typeof shape.fill === "string" ? toGray(shape.fill) : "#888")
+                                  : (
+                                    typeof shape.fill === "string"
+                                      ? shape.fill
+                                      : (shape.fill && shape.fill.type === "pattern"
+                                        ? (patternImages[shape.id + ":fill"] ? undefined : "#ccc")
+                                        : "transparent")
+                                  )
                               }
                               fillPatternImage={
                                 shape.fill && shape.fill.type === "pattern"
@@ -7221,11 +7283,15 @@ const Panel = React.forwardRef(({
                                 ? shape.fill.colors.flatMap(stop => [stop.pos, stop.color])
                                 : undefined}
                               stroke={
-                                shape.stroke?.type === "linear-gradient"
-                                  ? undefined
-                                  : shape.fill?.type === "mesh-gradient"
-                                    ? calculateMeshGradientStroke(shape.fill.nodes)
-                                    : shape.stroke || "black"
+                                grayScale
+                                  ? (typeof shape.stroke === "string" ? toGray(shape.stroke) : "#444")
+                                  : (
+                                    shape.stroke?.type === "linear-gradient"
+                                      ? undefined
+                                      : shape.fill?.type === "mesh-gradient"
+                                        ? calculateMeshGradientStroke(shape.fill.nodes)
+                                        : shape.stroke || "black"
+                                  )
                               }
                               strokeLinearGradientStartPoint={
                                 shape.gradientTarget === "stroke" && shape.stroke?.type === "linear-gradient"
@@ -9460,6 +9526,8 @@ const Panel = React.forwardRef(({
                   })}
 
                   {selectedTool === "Node" &&
+                    selectedShape &&
+                    selectedShape.type === "Bezier" &&
                     controlPoints.length > 0 &&
                     controlPoints.map((point, index) => (
                       <React.Fragment key={index}>
@@ -10230,6 +10298,28 @@ const Panel = React.forwardRef(({
                         align="center"
                       />
                     </>
+                  )}
+                  {showPageGrid && (
+                    <Layer listening={false}>
+                      {Array.from({ length: Math.floor(width / 20) + 1 }).map((_, i) => (
+                        <Line
+                          key={`vgrid-${i}`}
+                          points={[i * 20, 0, i * 20, height]}
+                          stroke="#e0e0e0"
+                          strokeWidth={1}
+                          listening={false}
+                        />
+                      ))}
+                      {Array.from({ length: Math.floor(height / 20) + 1 }).map((_, i) => (
+                        <Line
+                          key={`hgrid-${i}`}
+                          points={[0, i * 20, width, i * 20]}
+                          stroke="#e0e0e0"
+                          strokeWidth={1}
+                          listening={false}
+                        />
+                      ))}
+                    </Layer>
                   )}
                   {hoveredShape && selectedTool === "Measurement" && (
                     <Group>

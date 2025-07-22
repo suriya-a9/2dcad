@@ -30,7 +30,8 @@ const LeftSidebar = () => {
     console.log("Selected Tool:", tool);
     dispatch(setSelectedTool(tool));
   };
-
+  const showToolbox = useSelector((state) => state.tool.visibleIcons.Toolbox);
+  if (!showToolbox) return null;
   return (
     <div className={`left-sidebar cursor-${selectedTool?.toLowerCase()}`}>
       <div className="d-flex mb-3" style={{ flexDirection: 'row !important' }}>

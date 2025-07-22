@@ -3,6 +3,7 @@ import { useState } from "react";
 // import { CirclePicker } from "react-color";
 import { Tooltip } from "react-tooltip";
 import "react-tooltip/dist/react-tooltip.css";
+import { useSelector } from 'react-redux';
 import { setStrokeColor, setFillColor } from '../../Redux/Slice/toolSlice';
 
 import { useDispatch } from 'react-redux';
@@ -12,6 +13,8 @@ const ColorPalette = () => {
   const handleColorChange = (newColor) => {
     dispatch(setStrokeColor(newColor));
   };
+  const showToolbox = useSelector((state) => state.tool.visibleIcons.Palette);
+  if (!showToolbox) return null;
 
   const dispatch = useDispatch();
   const colors = [

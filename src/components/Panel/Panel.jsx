@@ -6927,7 +6927,6 @@ const Panel = React.forwardRef(({
                             strokeWidth={shape.strokeWidth || 2}
                             opacity={0.5}
                           />
-                          {/* Orange handle for offset amount */}
                           <Circle
                             x={handlePoint.x - (shape.x || 0)}
                             y={handlePoint.y - (shape.y || 0)}
@@ -6945,14 +6944,25 @@ const Panel = React.forwardRef(({
                               }));
                             }}
                           />
-                          {isSelected && !shape.locked && shapeRefs.current[shape.id] && selectedTool !== "Node" && (
+                          {isSelected && !shape.locked && shapeRefs.current[shape.id] && (selectedTool === "Select" || selectedTool === "Bezier") && (
                             <Transformer
                               ref={transformerRef}
                               nodes={selectedShapeIds.map(id => shapeRefs.current[id]).filter(Boolean)}
+                              boundBoxFunc={(oldBox, newBox) => {
+                                if (newBox.width < 5 || newBox.height < 5) {
+                                  return oldBox;
+                                }
+                                return newBox;
+                              }}
                               enabledAnchors={[
-                                "top-left", "top-center", "top-right",
-                                "middle-left", "middle-right",
-                                "bottom-left", "bottom-center", "bottom-right",
+                                "top-left",
+                                "top-center",
+                                "top-right",
+                                "middle-left",
+                                "middle-right",
+                                "bottom-left",
+                                "bottom-center",
+                                "bottom-right",
                               ]}
                               skewEnabled={true}
                             />
@@ -7469,6 +7479,7 @@ const Panel = React.forwardRef(({
                             ref={(node) => {
                               if (node) shapeRefs.current[shape.id] = node;
                               else delete shapeRefs.current[shape.id];
+                              console.log("Bezier ref for", shape.id, node);
                             }}
                             id={shape.id}
                             data={getBezierPathFromPoints(shape.points, shape.closed)}

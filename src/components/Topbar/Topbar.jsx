@@ -334,6 +334,7 @@ const Topbar = ({
   const [replaceText, setReplaceText] = useState("");
   const [findResults, setFindResults] = useState([]);
   const copiedStyleRef = useRef(null);
+  const colorManagementEnabled = useSelector(state => state.tool.colorManagementEnabled);
   const navigate = useNavigate();
   let selectedShapeId = useSelector((state) => state.tool.selectedShapeId);
   const shapes = useSelector(
@@ -342,6 +343,9 @@ const Topbar = ({
   const selectedLayerIndex = useSelector(
     (state) => state.tool.selectedLayerIndex
   );
+  const handleColorManagementToggle = () => {
+    dispatch(toggleColorManagement());
+  };
   const handleToolControlsBarChange = (e) => {
     console.log("handleToolControlsBarChange");
 
@@ -2633,6 +2637,8 @@ ${shapesXml}
       name: "ColorManagement",
       value: "ColorManagement",
       label: "Color Management",
+      checked: colorManagementEnabled,
+      onChange: handleColorManagementToggle,
     },
     {
       id: 8,

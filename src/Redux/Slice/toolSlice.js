@@ -173,6 +173,7 @@ const toolSlice = createSlice({
       Statusbar: true,
     },
     showPageGrid: false,
+    colorManagementEnabled: false,
   },
 
   reducers: {
@@ -5799,6 +5800,12 @@ const toolSlice = createSlice({
     togglePageGrid(state) {
       state.showPageGrid = !state.showPageGrid;
     },
+    toggleColorManagement(state) {
+      state.colorManagementEnabled = !state.colorManagementEnabled;
+    },
+    setColorManagement(state, action) {
+      state.colorManagementEnabled = action.payload;
+    },
   },
 });
 
@@ -6069,6 +6076,8 @@ export const {
   setIconVisibility,
   setShowPageGrid,
   togglePageGrid,
+  toggleColorManagement,
+  setColorManagement,
 } = toolSlice.actions;
 
 export default toolSlice.reducer;

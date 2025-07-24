@@ -6755,6 +6755,103 @@ const Panel = React.forwardRef(({
                         );
                       }
                     }
+                    if (shape.powerClip && shape.powerClip.clipPathId) {
+                      const clipShape = shapes.find(s => s.id === shape.powerClip.clipPathId);
+                      if (!clipShape) return null;
+                      return (
+                        <Group key={shape.id} clipFunc={ctx => {
+                          if (clipShape.type === "Polygon" && Array.isArray(clipShape.points)) {
+                            ctx.beginPath();
+                            clipShape.points.forEach((p, i) => {
+                              if (i === 0) ctx.moveTo(p.x, p.y);
+                              else ctx.lineTo(p.x, p.y);
+                            });
+                            ctx.closePath();
+                          } else if (clipShape.type === "Rectangle") {
+                            ctx.beginPath();
+                            ctx.rect(clipShape.x, clipShape.y, clipShape.width, clipShape.height);
+                            ctx.closePath();
+                          } else if (clipShape.type === "Circle") {
+                            ctx.beginPath();
+                            ctx.arc(clipShape.x, clipShape.y, clipShape.radius, 0, Math.PI * 2);
+                            ctx.closePath();
+                          } else if (clipShape.type === "Star") {
+                            ctx.beginPath();
+                            const { x, y, innerRadius, outerRadius, corners } = clipShape;
+                            for (let i = 0; i < corners * 2; i++) {
+                              const angle = (Math.PI / corners) * i;
+                              const r = i % 2 === 0 ? outerRadius : innerRadius;
+                              const px = x + Math.cos(angle) * r;
+                              const py = y + Math.sin(angle) * r;
+                              if (i === 0) ctx.moveTo(px, py);
+                              else ctx.lineTo(px, py);
+                            }
+                            ctx.closePath();
+                          }
+                        }}>
+                          {renderShape(shape)}
+                        </Group>
+                      );
+                    }
+                    if (shape.powerMask && shape.powerMask.maskShapeId) {
+                      const maskShape = shapes.find(s => s.id === shape.powerMask.maskShapeId);
+                      if (!maskShape) return null;
+                      return (
+                        <Group key={shape.id} maskFunc={ctx => {
+                          if (maskShape.type === "Polygon" && Array.isArray(maskShape.points)) {
+                            ctx.beginPath();
+                            maskShape.points.forEach((p, i) => {
+                              if (i === 0) ctx.moveTo(p.x, p.y);
+                              else ctx.lineTo(p.x, p.y);
+                            });
+                            ctx.closePath();
+                          } else if (maskShape.type === "Rectangle") {
+                            ctx.beginPath();
+                            ctx.rect(maskShape.x, maskShape.y, maskShape.width, maskShape.height);
+                            ctx.closePath();
+                          } else if (maskShape.type === "Circle") {
+                            ctx.beginPath();
+                            ctx.arc(maskShape.x, maskShape.y, maskShape.radius, 0, Math.PI * 2);
+                            ctx.closePath();
+                          } else if (maskShape.type === "Star") {
+                            ctx.beginPath();
+                            const { x, y, innerRadius, outerRadius, corners } = maskShape;
+                            for (let i = 0; i < corners * 2; i++) {
+                              const angle = (Math.PI / corners) * i;
+                              const r = i % 2 === 0 ? outerRadius : innerRadius;
+                              const px = x + Math.cos(angle) * r;
+                              const py = y + Math.sin(angle) * r;
+                              if (i === 0) ctx.moveTo(px, py);
+                              else ctx.lineTo(px, py);
+                            }
+                            ctx.closePath();
+                          }
+                        }}>
+                          {renderShape(shape)}
+                        </Group>
+                      );
+                    }
+                    if (shape.rotateCopies && shape.lpeEffect === "Rotate copies") {
+                      const { numCopies, angleStep } = shape.rotateCopies;
+                      const center = getShapeCenter(shape);
+                      return (
+                        <Group key={shape.id + "-rotate-copies"}>
+                          {Array.from({ length: numCopies }).map((_, i) => {
+                            const angle = i * angleStep;
+                            return (
+                              <Group
+                                key={shape.id + "-copy-" + i}
+                                rotation={angle}
+                                x={center.x}
+                                y={center.y}
+                              >
+                                {renderShape({ ...shape, x: shape.x - center.x, y: shape.y - center.y, rotateCopies: undefined })}
+                              </Group>
+                            );
+                          })}
+                        </Group>
+                      );
+                    }
                     if (shape.type === "polyline") {
                       return (
                         <Line
@@ -10514,8 +10611,8 @@ const Panel = React.forwardRef(({
               </Stage>
             )}
           </div>
-        </div >
-      </div >
+        </div>
+      </div>
       {
         colorPicker.visible && (
           <input

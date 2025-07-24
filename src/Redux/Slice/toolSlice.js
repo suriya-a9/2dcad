@@ -5806,6 +5806,122 @@ const toolSlice = createSlice({
     setColorManagement(state, action) {
       state.colorManagementEnabled = action.payload;
     },
+    applyHatchesRough: (state, action) => {
+      const { id } = action.payload;
+      const selectedLayer = state.layers[state.selectedLayerIndex];
+      const shape = selectedLayer.shapes.find(s => s.id === id);
+      if (!shape || !Array.isArray(shape.points)) return;
+
+      const minX = Math.min(...shape.points.map(p => p.x));
+      const maxX = Math.max(...shape.points.map(p => p.x));
+      const minY = Math.min(...shape.points.map(p => p.y));
+      const maxY = Math.max(...shape.points.map(p => p.y));
+
+      const hatchSpacing = 12;
+      const hatchAngle = Math.PI / 6;
+      const hatchCount = Math.floor((maxY - minY) / hatchSpacing);
+
+      for (let i = 0; i < hatchCount; i++) {
+        const y = minY + i * hatchSpacing;
+        const x1 = minX - 20;
+        const x2 = maxX + 20;
+        const roughY = y + (Math.random() - 0.5) * 6;
+        selectedLayer.shapes.push({
+          id: `hatch-${Date.now()}-${Math.random()}`,
+          type: "Line",
+          points: [
+            x1, roughY,
+            x2, roughY + Math.tan(hatchAngle) * (x2 - x1)
+          ],
+          stroke: "#222",
+          strokeWidth: 1,
+          name: "Hatch (rough)",
+        });
+      }
+    },
+    applyMirrorSymmetry: (state, action) => {
+      const { id, axis = "vertical" } = action.payload;
+      const selectedLayer = state.layers[state.selectedLayerIndex];
+      const shape = selectedLayer.shapes.find(s => s.id === id);
+      if (!shape || !Array.isArray(shape.points)) return;
+
+      let mirroredPoints;
+      if (axis === "vertical") {
+        const minX = Math.min(...shape.points.map(p => p.x));
+        const maxX = Math.max(...shape.points.map(p => p.x));
+        const centerX = (minX + maxX) / 2;
+        mirroredPoints = shape.points.map(p => ({
+          x: 2 * centerX - p.x,
+          y: p.y
+        }));
+      } else {
+        const minY = Math.min(...shape.points.map(p => p.y));
+        const maxY = Math.max(...shape.points.map(p => p.y));
+        const centerY = (minY + maxY) / 2;
+        mirroredPoints = shape.points.map(p => ({
+          x: p.x,
+          y: 2 * centerY - p.y
+        }));
+      }
+
+      const mirroredShape = {
+        ...shape,
+        id: `mirror-${Date.now()}-${Math.random()}`,
+        points: mirroredPoints,
+        name: (shape.name || shape.type || "Shape") + " (mirror)",
+        lpeEffect: "Mirror symmetry",
+      };
+
+      const groupShape = {
+        id: `mirror-group-${Date.now()}-${Math.random()}`,
+        type: "Group",
+        shapes: [shape, mirroredShape],
+        name: "Mirror symmetry group",
+      };
+
+      selectedLayer.shapes.push(mirroredShape);
+      selectedLayer.shapes.push(groupShape);
+      state.selectedShapeIds = [groupShape.id];
+    },
+    applyPowerClip: (state, action) => {
+      const { contentId, clipPathId } = action.payload;
+      const selectedLayer = state.layers[state.selectedLayerIndex];
+      const contentShape = selectedLayer.shapes.find(s => s.id === contentId);
+      const clipShape = selectedLayer.shapes.find(s => s.id === clipPathId);
+
+      if (!contentShape || !clipShape) return;
+
+      contentShape.powerClip = {
+        clipPathId: clipPathId,
+        lpeEffect: "Power clip"
+      };
+
+      state.selectedShapeIds = [contentShape.id];
+    },
+    applyPowerMask: (state, action) => {
+      const { contentId, maskShapeId } = action.payload;
+      const selectedLayer = state.layers[state.selectedLayerIndex];
+      const contentShape = selectedLayer.shapes.find(s => s.id === contentId);
+      const maskShape = selectedLayer.shapes.find(s => s.id === maskShapeId);
+
+      if (!contentShape || !maskShape) return;
+
+      contentShape.powerMask = {
+        maskShapeId,
+        lpeEffect: "Power mask"
+      };
+
+      state.selectedShapeIds = [contentShape.id];
+    },
+    applyRotateCopies: (state, action) => {
+      const { id, numCopies = 12, angleStep = 30 } = action.payload;
+      const selectedLayer = state.layers[state.selectedLayerIndex];
+      const shape = selectedLayer.shapes.find(s => s.id === id);
+      if (!shape) return;
+      shape.rotateCopies = { numCopies, angleStep };
+      shape.lpeEffect = "Rotate copies";
+      state.selectedShapeIds = [shape.id];
+    },
   },
 });
 
@@ -6078,6 +6194,11 @@ export const {
   togglePageGrid,
   toggleColorManagement,
   setColorManagement,
+  applyHatchesRough,
+  applyMirrorSymmetry,
+  applyPowerClip,
+  applyPowerMask,
+  applyRotateCopies,
 } = toolSlice.actions;
 
 export default toolSlice.reducer;

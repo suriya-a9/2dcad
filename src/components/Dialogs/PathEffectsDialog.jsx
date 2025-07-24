@@ -1,6 +1,6 @@
 import React, { useState } from "react";
-import { useDispatch } from "react-redux";
-import { simplify } from "../../Redux/Slice/toolSlice";
+import { useDispatch, useSelector } from "react-redux";
+import { simplify, cloneShape, fillBetweenPaths, applyHatchesRough, applyMirrorSymmetry, applyPowerClip, applyPowerMask, applyRotateCopies } from "../../Redux/Slice/toolSlice";
 import BooleanOpsDialog from "./BooleanOpsDialog";
 import { shapeToPoints } from "../Panel/Panel";
 
@@ -52,6 +52,7 @@ export default function PathEffectsDialog({ isOpen, onClose, onApply, selectedSh
     const [envelopeRight, setEnvelopeRight] = useState(selectedShape?.envelopeRight || [1, 0, 1, 1]);
     const [showLatticeDialog, setShowLatticeDialog] = useState(false);
     const [showBooleanDialog, setShowBooleanDialog] = useState(false);
+    const selectedShapeIds = useSelector(state => state.tool.selectedShapeIds);
     const dispatch = useDispatch();
     const getDefaultLatticePoints = (shape, rows, cols) => {
         if (!shape || !Array.isArray(shape.points)) return Array(rows * cols).fill([0, 0]);
@@ -201,6 +202,74 @@ export default function PathEffectsDialog({ isOpen, onClose, onApply, selectedSh
             onClose && onClose();
         } else if (effect === "Boolean operation") {
             setShowBooleanDialog(true);
+            return;
+        } else if (effect === "Clone original") {
+            if (selectedShape) {
+                dispatch(cloneShape({ id: selectedShape.id }));
+                onApply && onApply("Clone original");
+            }
+            onClose && onClose();
+            return;
+        } else if (effect === "Fill between many") {
+            if (selectedShape) {
+                dispatch(fillBetweenPaths());
+                onApply && onApply("Fill between many");
+            }
+            onClose && onClose();
+            return;
+        } else if (effect === "Hatches (rough)") {
+            if (selectedShape) {
+                dispatch(applyHatchesRough({ id: selectedShape.id }));
+                onApply && onApply("Hatches (rough)");
+            }
+            onClose && onClose();
+            return;
+        } else if (effect === "Mirror symmetry") {
+            if (selectedShape) {
+                dispatch(applyMirrorSymmetry({ id: selectedShape.id, axis: "vertical" }));
+                onApply && onApply("Mirror symmetry");
+            }
+            onClose && onClose();
+            return;
+        } else if (effect === "Power clip") {
+            if (selectedShape && selectedShapeIds.length === 2) {
+                dispatch(applyPowerClip({
+                    contentId: selectedShapeIds[0],
+                    clipPathId: selectedShapeIds[1]
+                }));
+                onApply && onApply("Power clip");
+            } else {
+                alert("Select two shapes: first the content, then the clip path.");
+            }
+            onClose && onClose();
+            return;
+        } else if (effect === "Power mask") {
+            if (selectedShape && selectedShapeIds.length === 2) {
+                dispatch(applyPowerMask({
+                    contentId: selectedShapeIds[0],
+                    maskShapeId: selectedShapeIds[1]
+                }));
+                onApply && onApply("Power mask");
+            } else {
+                alert("Select two shapes: first the content, then the mask shape.");
+            }
+            onClose && onClose();
+            return;
+        } else if (effect === "Rotate copies") {
+            if (selectedShape) {
+                const numCopies = 12;
+                const angleStep = 360 / numCopies;
+                dispatch({
+                    type: "tool/applyRotateCopies",
+                    payload: {
+                        id: selectedShape.id,
+                        numCopies,
+                        angleStep
+                    }
+                });
+                onApply && onApply("Rotate copies");
+            }
+            onClose && onClose();
             return;
         } else {
             onApply && onApply(effect);

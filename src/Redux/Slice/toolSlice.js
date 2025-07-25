@@ -5922,6 +5922,178 @@ const toolSlice = createSlice({
       shape.lpeEffect = "Rotate copies";
       state.selectedShapeIds = [shape.id];
     },
+    applySketchEffect: (state, action) => {
+      const { id, amplitude = 4, frequency = 2, passes = 3 } = action.payload;
+      const selectedLayer = state.layers[state.selectedLayerIndex];
+      const shape = selectedLayer.shapes.find(s => s.id === id);
+      if (!shape) return;
+      shape.sketchEffect = { amplitude, frequency, passes };
+      shape.lpeEffect = "Sketch";
+      state.selectedShapeIds = [shape.id];
+    },
+    sliceShapes: (state) => {
+      const selectedLayer = state.layers[state.selectedLayerIndex];
+      const selectedShapeIds = state.selectedShapeIds;
+
+      if (selectedShapeIds.length !== 1) {
+        console.error("Select a single shape to slice.");
+        return;
+      }
+
+      const shape = selectedLayer.shapes.find(s => s.id === selectedShapeIds[0]);
+      if (!shape) return;
+
+      function shapeToPolygon(shape) {
+        if (shape.type === "Polygon" && Array.isArray(shape.points)) return shape.points.map(p => ({ x: p.x, y: p.y }));
+        if (shape.type === "Rectangle") {
+          return [
+            { x: shape.x, y: shape.y },
+            { x: shape.x + shape.width, y: shape.y },
+            { x: shape.x + shape.width, y: shape.y + shape.height },
+            { x: shape.x, y: shape.y + shape.height }
+          ];
+        }
+        if (shape.type === "Circle") {
+          const num = 60;
+          return Array.from({ length: num }).map((_, i) => {
+            const angle = (i / num) * Math.PI * 2;
+            return {
+              x: shape.x + Math.cos(angle) * shape.radius,
+              y: shape.y + Math.sin(angle) * shape.radius
+            };
+          });
+        }
+        if (shape.type === "Star" && Array.isArray(shape.points)) return shape.points.map(p => ({ x: p.x, y: p.y }));
+        return [];
+      }
+
+      const poly = shapeToPolygon(shape);
+      if (poly.length < 3) return;
+
+      const minX = Math.min(...poly.map(p => p.x));
+      const maxX = Math.max(...poly.map(p => p.x));
+      const centerX = (minX + maxX) / 2;
+
+      const left = poly.filter(p => p.x <= centerX);
+      const right = poly.filter(p => p.x >= centerX);
+
+      if (left.length > 2) left.push(left[0]);
+      if (right.length > 2) right.push(right[0]);
+
+      selectedLayer.shapes = selectedLayer.shapes.filter(s => s.id !== shape.id);
+
+      const leftId = `slice-left-${Date.now()}`;
+      const rightId = `slice-right-${Date.now()}`;
+      selectedLayer.shapes.push({
+        id: leftId,
+        type: "Polygon",
+        points: left,
+        fill: shape.fill,
+        stroke: shape.stroke,
+        strokeWidth: shape.strokeWidth,
+        closed: true,
+        name: "Slice Left"
+      });
+      selectedLayer.shapes.push({
+        id: rightId,
+        type: "Polygon",
+        points: right,
+        fill: shape.fill,
+        stroke: shape.stroke,
+        strokeWidth: shape.strokeWidth,
+        closed: true,
+        name: "Slice Right"
+      });
+
+      state.selectedShapeIds = [leftId, rightId];
+    },
+    tilingShapes: (state, action) => {
+      const selectedLayer = state.layers[state.selectedLayerIndex];
+      const selectedShapeIds = state.selectedShapeIds;
+      if (selectedShapeIds.length !== 1) {
+        console.error("Select a single shape to tile.");
+        return;
+      }
+      const shape = selectedLayer.shapes.find(s => s.id === selectedShapeIds[0]);
+      if (!shape) return;
+
+      const rows = 4;
+      const cols = 6;
+      const xStep = shape.width || 40;
+      const yStep = shape.height || 40;
+
+      const tiles = [];
+      for (let row = 0; row < rows; row++) {
+        for (let col = 0; col < cols; col++) {
+          tiles.push({
+            ...JSON.parse(JSON.stringify(shape)),
+            id: `tile-${Date.now()}-${row}-${col}`,
+            x: (shape.x || 0) + col * xStep,
+            y: (shape.y || 0) + row * yStep,
+            name: `Tile (${row + 1},${col + 1})`,
+          });
+        }
+      }
+
+      selectedLayer.shapes = selectedLayer.shapes.filter(s => s.id !== shape.id);
+
+      selectedLayer.shapes.push(...tiles);
+      state.selectedShapeIds = tiles.map(t => t.id);
+    },
+    vonKochEffect: (state) => {
+      const selectedLayer = state.layers[state.selectedLayerIndex];
+      const selectedShapeIds = state.selectedShapeIds;
+      if (selectedShapeIds.length !== 1) return;
+      const shape = selectedLayer.shapes.find(s => s.id === selectedShapeIds[0]);
+      if (!shape || !Array.isArray(shape.points)) return;
+
+      function kochSegment(a, b, depth) {
+        if (depth === 0) return [a, b];
+        const dx = b.x - a.x, dy = b.y - a.y;
+        const p1 = { x: a.x + dx / 3, y: a.y + dy / 3 };
+        const p2 = { x: a.x + 2 * dx / 3, y: a.y + 2 * dy / 3 };
+        const angle = Math.atan2(dy, dx) - Math.PI / 3;
+        const len = Math.sqrt(dx * dx + dy * dy) / 3;
+        const px = p1.x + Math.cos(angle) * len;
+        const py = p1.y + Math.sin(angle) * len;
+        const p3 = { x: px, y: py };
+        return [
+          ...kochSegment(a, p1, depth - 1).slice(0, -1),
+          ...kochSegment(p1, p3, depth - 1).slice(0, -1),
+          ...kochSegment(p3, p2, depth - 1).slice(0, -1),
+          ...kochSegment(p2, b, depth - 1)
+        ];
+      }
+
+      const depth = 3;
+      const pts = shape.points;
+
+      let newPoints = [];
+      if (shape.type === "Rectangle" || (pts.length === 4 && shape.closed)) {
+        newPoints.push(pts[0]); 
+        newPoints.push(pts[1]); 
+        newPoints.push(pts[2]); 
+
+        const kochBottom = kochSegment(pts[2], pts[3], depth).slice(1, -1); 
+        newPoints.push(...kochBottom);
+
+        newPoints.push(pts[3]); 
+        newPoints.push(pts[0]); 
+      } else {
+        for (let i = 0; i < pts.length - 1; i++) {
+          newPoints.push(...kochSegment(pts[i], pts[i + 1], depth).slice(0, -1));
+        }
+        if (shape.closed) {
+          newPoints.push(...kochSegment(pts[pts.length - 1], pts[0], depth));
+        } else {
+          newPoints.push(pts[pts.length - 1]);
+        }
+      }
+
+      shape.points = newPoints;
+      shape.lpeEffect = "VonKoch";
+      state.selectedShapeIds = [shape.id];
+    },
   },
 });
 
@@ -6199,6 +6371,10 @@ export const {
   applyPowerClip,
   applyPowerMask,
   applyRotateCopies,
+  applySketchEffect,
+  sliceShapes,
+  tilingShapes,
+  vonKochEffect,
 } = toolSlice.actions;
 
 export default toolSlice.reducer;

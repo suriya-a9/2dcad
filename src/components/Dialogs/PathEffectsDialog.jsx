@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
-import { simplify, cloneShape, fillBetweenPaths, applyHatchesRough, applyMirrorSymmetry, applyPowerClip, applyPowerMask, applyRotateCopies } from "../../Redux/Slice/toolSlice";
+import { simplify, cloneShape, fillBetweenPaths, applyHatchesRough, applyMirrorSymmetry, applyPowerClip, applyPowerMask, applyRotateCopies, sliceShapes } from "../../Redux/Slice/toolSlice";
 import BooleanOpsDialog from "./BooleanOpsDialog";
 import { shapeToPoints } from "../Panel/Panel";
 
@@ -269,6 +269,36 @@ export default function PathEffectsDialog({ isOpen, onClose, onApply, selectedSh
                 });
                 onApply && onApply("Rotate copies");
             }
+            onClose && onClose();
+            return;
+        } else if (effect === "Sketch") {
+            if (selectedShape) {
+                dispatch({
+                    type: "tool/applySketchEffect",
+                    payload: {
+                        id: selectedShape.id,
+                        amplitude: 4,
+                        frequency: 2,
+                        passes: 3
+                    }
+                });
+                onApply && onApply("Sketch");
+            }
+            onClose && onClose();
+            return;
+        } else if (effect === "Slice") {
+            dispatch(sliceShapes());
+            onApply && onApply("Slice");
+            onClose && onClose();
+            return;
+        } else if (effect === "Tiling") {
+            dispatch({ type: "tool/tilingShapes" });
+            onApply && onApply("Tiling");
+            onClose && onClose();
+            return;
+        } else if (effect === "VonKoch") {
+            dispatch({ type: "tool/vonKochEffect" });
+            onApply && onApply("VonKoch");
             onClose && onClose();
             return;
         } else {

@@ -6852,6 +6852,42 @@ const Panel = React.forwardRef(({
                         </Group>
                       );
                     }
+                    if (shape.sketchEffect && shape.lpeEffect === "Sketch") {
+                      const { amplitude, frequency, passes } = shape.sketchEffect;
+                      const basePoints = shapeToPoints(shape);
+
+                      function getJitteredPoints(basePoints, amplitude, frequency, pass) {
+                        return basePoints.map((p, i) => ({
+                          x: p.x + Math.sin(i * frequency + pass) * amplitude,
+                          y: p.y + Math.cos(i * frequency + pass) * amplitude
+                        }));
+                      }
+
+                      const fillPoints = basePoints.flatMap(p => [p.x, p.y]);
+                      return (
+                        <Group key={shape.id + "-sketch"}>
+                          <Line
+                            points={fillPoints}
+                            fill={shape.fill || "black"}
+                            stroke="transparent"
+                            closed={shape.closed || false}
+                            opacity={0.3}
+                          />
+                          {Array.from({ length: passes }).map((_, pass) => (
+                            <Line
+                              key={shape.id + "-sketch-" + pass}
+                              points={getJitteredPoints(basePoints, amplitude, frequency, pass).flatMap(p => [p.x, p.y])}
+                              stroke={shape.stroke || "black"}
+                              strokeWidth={shape.strokeWidth || 2}
+                              fill="transparent"
+                              opacity={0.7}
+                              tension={0.8}
+                              closed={shape.closed || false}
+                            />
+                          ))}
+                        </Group>
+                      );
+                    }
                     if (shape.type === "polyline") {
                       return (
                         <Line

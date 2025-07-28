@@ -7465,7 +7465,7 @@ const Panel = React.forwardRef(({
                                 : undefined}
                               strokeWidth={shape.strokeWidth || 1}
                               cornerRadius={tempCornerRadius !== null ? tempCornerRadius : shape.cornerRadius}
-                              dash={getDashArray(shape.strokeStyle)}
+                              dash={shape.strokeStyle || []}
                               rotation={shape.rotation || 0}
                               scaleX={shape.scaleX || 1}
                               scaleY={shape.scaleY || 1}

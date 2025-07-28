@@ -301,6 +301,26 @@ export default function PathEffectsDialog({ isOpen, onClose, onApply, selectedSh
             onApply && onApply("VonKoch");
             onClose && onClose();
             return;
+        } else if (effect === "Attach path") {
+            dispatch({ type: "tool/attachPath" });
+            onApply && onApply("Attach path");
+            onClose && onClose();
+            return;
+        } else if (effect === "Bounding Box") {
+            dispatch({ type: "tool/boundingBox" });
+            onApply && onApply("Bounding Box");
+            onClose && onClose();
+            return;
+        } else if (effect === "Construct grid") {
+            dispatch({ type: "tool/constructGrid", payload: { rows: 5, cols: 5 } });
+            onApply && onApply("Construct grid");
+            onClose && onClose();
+            return;
+        } else if (effect === "Dashed Stroke") {
+            dispatch({ type: "tool/setDashedStroke" });
+            onApply && onApply("Dashed Stroke");
+            onClose && onClose();
+            return;
         } else {
             onApply && onApply(effect);
         }

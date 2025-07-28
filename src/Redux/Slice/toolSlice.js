@@ -6070,15 +6070,15 @@ const toolSlice = createSlice({
 
       let newPoints = [];
       if (shape.type === "Rectangle" || (pts.length === 4 && shape.closed)) {
-        newPoints.push(pts[0]); 
-        newPoints.push(pts[1]); 
-        newPoints.push(pts[2]); 
+        newPoints.push(pts[0]);
+        newPoints.push(pts[1]);
+        newPoints.push(pts[2]);
 
-        const kochBottom = kochSegment(pts[2], pts[3], depth).slice(1, -1); 
+        const kochBottom = kochSegment(pts[2], pts[3], depth).slice(1, -1);
         newPoints.push(...kochBottom);
 
-        newPoints.push(pts[3]); 
-        newPoints.push(pts[0]); 
+        newPoints.push(pts[3]);
+        newPoints.push(pts[0]);
       } else {
         for (let i = 0; i < pts.length - 1; i++) {
           newPoints.push(...kochSegment(pts[i], pts[i + 1], depth).slice(0, -1));
@@ -6093,6 +6093,177 @@ const toolSlice = createSlice({
       shape.points = newPoints;
       shape.lpeEffect = "VonKoch";
       state.selectedShapeIds = [shape.id];
+    },
+    attachPath: (state) => {
+      const selectedLayer = state.layers[state.selectedLayerIndex];
+      const selectedShapeIds = state.selectedShapeIds;
+      if (selectedShapeIds.length !== 2) {
+        alert("Select two paths: first the path to attach, then the skeleton path.");
+        return;
+      }
+      const attached = selectedLayer.shapes.find(s => s.id === selectedShapeIds[0]);
+      const skeleton = selectedLayer.shapes.find(s => s.id === selectedShapeIds[1]);
+      if (!attached || !skeleton || !Array.isArray(attached.points) || !Array.isArray(skeleton.points)) return;
+
+      const aStart = attached.points[0];
+      const aEnd = attached.points[attached.points.length - 1];
+      const sStart = skeleton.points[0];
+      const sEnd = skeleton.points[skeleton.points.length - 1];
+
+      const ax = aEnd.x - aStart.x;
+      const ay = aEnd.y - aStart.y;
+      const sx = sEnd.x - sStart.x;
+      const sy = sEnd.y - sStart.y;
+
+      const newPoints = attached.points.map((pt, i) => {
+        const t = (ax !== 0 || ay !== 0)
+          ? ((pt.x - aStart.x) * ax + (pt.y - aStart.y) * ay) / (ax * ax + ay * ay)
+          : 0;
+        return {
+          x: sStart.x + t * sx,
+          y: sStart.y + t * sy
+        };
+      });
+
+      attached.points = newPoints;
+      attached.lpeEffect = "Attach path";
+      state.selectedShapeIds = [attached.id];
+    },
+    boundingBox: (state) => {
+      const selectedLayer = state.layers[state.selectedLayerIndex];
+      const selectedShapeIds = state.selectedShapeIds;
+      if (selectedShapeIds.length !== 1) return;
+      const shape = selectedLayer.shapes.find(s => s.id === selectedShapeIds[0]);
+      if (!shape) return;
+
+      let points = [];
+      if (Array.isArray(shape.points)) {
+        points = shape.points.map(p => Array.isArray(p) ? { x: p[0], y: p[1] } : p);
+      } else if (shape.type === "Rectangle") {
+        points = [
+          { x: shape.x, y: shape.y },
+          { x: shape.x + shape.width, y: shape.y },
+          { x: shape.x + shape.width, y: shape.y + shape.height },
+          { x: shape.x, y: shape.y + shape.height }
+        ];
+      } else if (shape.type === "Circle") {
+        points = [
+          { x: shape.x - shape.radius, y: shape.y - shape.radius },
+          { x: shape.x + shape.radius, y: shape.y - shape.radius },
+          { x: shape.x + shape.radius, y: shape.y + shape.radius },
+          { x: shape.x - shape.radius, y: shape.y + shape.radius }
+        ];
+      } else {
+        return;
+      }
+
+      const minX = Math.min(...points.map(p => p.x));
+      const maxX = Math.max(...points.map(p => p.x));
+      const minY = Math.min(...points.map(p => p.y));
+      const maxY = Math.max(...points.map(p => p.y));
+
+      let fill = shape.fill;
+      if (typeof fill !== "string") fill = "#000";
+      let stroke = shape.stroke;
+      if (typeof stroke !== "string") stroke = "#000";
+
+      shape.type = "Rectangle";
+      shape.x = minX;
+      shape.y = minY;
+      shape.width = maxX - minX;
+      shape.height = maxY - minY;
+      shape.points = undefined;
+      shape.lpeEffect = "Bounding Box";
+      shape.fill = fill;
+      shape.stroke = stroke;
+      shape.strokeWidth = shape.strokeWidth || 1;
+    },
+    constructGrid: (state, action) => {
+      const selectedLayer = state.layers[state.selectedLayerIndex];
+      const selectedShapeIds = state.selectedShapeIds;
+      if (selectedShapeIds.length !== 1) return;
+      const shape = selectedLayer.shapes.find(s => s.id === selectedShapeIds[0]);
+      if (!shape) return;
+
+      let minX, maxX, minY, maxY;
+
+      if (shape.type === "Star" && !Array.isArray(shape.points)) {
+        const { x, y, innerRadius, outerRadius, corners } = shape;
+        const spikes = corners || 5;
+        const numPoints = spikes * 2;
+        shape.points = Array.from({ length: numPoints }, (_, i) => {
+          const angle = (Math.PI * i) / spikes - Math.PI / 2;
+          const r = i % 2 === 0 ? outerRadius : innerRadius;
+          return {
+            x: x + r * Math.cos(angle),
+            y: y + r * Math.sin(angle),
+          };
+        });
+      }
+      if (shape.type === "Polygon" && !Array.isArray(shape.points)) {
+        return;
+      }
+
+      if (shape.type === "Rectangle") {
+        minX = shape.x;
+        maxX = shape.x + shape.width;
+        minY = shape.y;
+        maxY = shape.y + shape.height;
+      } else if (shape.type === "Circle") {
+        minX = shape.x - shape.radius;
+        maxX = shape.x + shape.radius;
+        minY = shape.y - shape.radius;
+        maxY = shape.y + shape.radius;
+      } else if (Array.isArray(shape.points)) {
+        minX = Math.min(...shape.points.map(p => p.x));
+        maxX = Math.max(...shape.points.map(p => p.x));
+        minY = Math.min(...shape.points.map(p => p.y));
+        maxY = Math.max(...shape.points.map(p => p.y));
+      } else {
+        return;
+      }
+
+      const rows = action?.payload?.rows || 5;
+      const cols = action?.payload?.cols || 5;
+
+      const cellWidth = (maxX - minX) / cols;
+      const cellHeight = (maxY - minY) / rows;
+
+      selectedLayer.shapes = selectedLayer.shapes.filter(s => s.id !== shape.id);
+
+      for (let row = 0; row < rows; row++) {
+        for (let col = 0; col < cols; col++) {
+          selectedLayer.shapes.push({
+            id: `grid-cell-${Date.now()}-${row}-${col}-${Math.random()}`,
+            type: "Rectangle",
+            x: minX + col * cellWidth,
+            y: minY + row * cellHeight,
+            width: cellWidth,
+            height: cellHeight,
+            fill: "transparent",
+            stroke: "#000",
+            strokeWidth: 1,
+            name: "Grid Cell"
+          });
+        }
+      }
+      state.selectedShapeIds = selectedLayer.shapes
+        .slice(-rows * cols)
+        .map(s => s.id);
+    },
+    setDashedStroke: (state, action) => {
+      const selectedLayer = state.layers[state.selectedLayerIndex];
+      const selectedShapeIds = state.selectedShapeIds;
+      if (selectedShapeIds.length === 0) return;
+      for (const id of selectedShapeIds) {
+        const shape = selectedLayer.shapes.find(s => s.id === id);
+        if (!shape) continue;
+        if (Array.isArray(shape.strokeStyle) && shape.strokeStyle.length > 0) {
+          shape.strokeStyle = [];
+        } else {
+          shape.strokeStyle = [8, 4]; 
+        }
+      }
     },
   },
 });
@@ -6375,6 +6546,10 @@ export const {
   sliceShapes,
   tilingShapes,
   vonKochEffect,
+  attachPath,
+  boundingBox,
+  constructGrid,
+  setDashedStroke,
 } = toolSlice.actions;
 
 export default toolSlice.reducer;

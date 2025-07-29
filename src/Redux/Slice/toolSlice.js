@@ -6261,9 +6261,299 @@ const toolSlice = createSlice({
         if (Array.isArray(shape.strokeStyle) && shape.strokeStyle.length > 0) {
           shape.strokeStyle = [];
         } else {
-          shape.strokeStyle = [8, 4]; 
+          shape.strokeStyle = [8, 4];
         }
       }
+    },
+    ellipseFromPoints: (state) => {
+      const selectedLayer = state.layers[state.selectedLayerIndex];
+      const selectedShapeIds = state.selectedShapeIds;
+      if (selectedShapeIds.length !== 1) return;
+      const shape = selectedLayer.shapes.find(s => s.id === selectedShapeIds[0]);
+      if (!shape || !Array.isArray(shape.points) || shape.points.length < 5) return;
+
+      const pts = shape.points;
+      const n = pts.length;
+      const mean = pts.reduce((acc, p) => ({ x: acc.x + p.x, y: acc.y + p.y }), { x: 0, y: 0 });
+      mean.x /= n;
+      mean.y /= n;
+
+      let Sxx = 0, Syy = 0, Sxy = 0;
+      pts.forEach(p => {
+        Sxx += (p.x - mean.x) * (p.x - mean.x);
+        Syy += (p.y - mean.y) * (p.y - mean.y);
+        Sxy += (p.x - mean.x) * (p.y - mean.y);
+      });
+      Sxx /= n;
+      Syy /= n;
+      Sxy /= n;
+
+      const common = Math.sqrt((Sxx - Syy) * (Sxx - Syy) + 4 * Sxy * Sxy);
+      const l1 = (Sxx + Syy + common) / 2;
+      const l2 = (Sxx + Syy - common) / 2;
+
+      const a = Math.sqrt(l1) * 2;
+      const b = Math.sqrt(l2) * 2;
+      const angle = 0.5 * Math.atan2(2 * Sxy, Sxx - Syy);
+
+      shape.type = "Ellipse";
+      shape.x = mean.x;
+      shape.y = mean.y;
+      shape.radiusX = a / 2;
+      shape.radiusY = b / 2;
+      shape.rotation = angle * 180 / Math.PI;
+      shape.points = undefined;
+      shape.lpeEffect = "Ellipse from points";
+      shape.fill = shape.fill || "transparent";
+      shape.stroke = shape.stroke || "#000";
+      shape.strokeWidth = shape.strokeWidth || 1;
+    },
+    gears: (state, action) => {
+      const selectedLayer = state.layers[state.selectedLayerIndex];
+      const selectedShapeIds = state.selectedShapeIds;
+      if (selectedShapeIds.length !== 1) return;
+      const shape = selectedLayer.shapes.find(s => s.id === selectedShapeIds[0]);
+      if (!shape) return;
+
+      const numTeeth = action?.payload?.numTeeth || 16;
+      const rootRadius = action?.payload?.rootRadius || 60;
+      const tipRadius = action?.payload?.tipRadius || 80;
+      const holeRadius = action?.payload?.holeRadius || 20;
+      const centerX = shape.x || 100;
+      const centerY = shape.y || 100;
+
+      const points = [];
+      for (let i = 0; i < numTeeth; i++) {
+        const angle = (2 * Math.PI * i) / numTeeth;
+        const flankAngle = angle + Math.PI / (2 * numTeeth);
+        const nextAngle = angle + Math.PI / numTeeth;
+
+        points.push({
+          x: centerX + tipRadius * Math.cos(angle),
+          y: centerY + tipRadius * Math.sin(angle),
+        });
+        points.push({
+          x: centerX + rootRadius * Math.cos(flankAngle),
+          y: centerY + rootRadius * Math.sin(flankAngle),
+        });
+        points.push({
+          x: centerX + rootRadius * Math.cos(nextAngle),
+          y: centerY + rootRadius * Math.sin(nextAngle),
+        });
+        points.push({
+          x: centerX + tipRadius * Math.cos(nextAngle),
+          y: centerY + tipRadius * Math.sin(nextAngle),
+        });
+      }
+
+      shape.type = "Polygon";
+      shape.points = points;
+      shape.closed = true;
+      shape.lpeEffect = "Gears";
+      shape.fill = shape.fill || "yellow";
+      shape.stroke = shape.stroke || "#000";
+      shape.strokeWidth = shape.strokeWidth || 2;
+      shape.name = "Gear";
+
+      selectedLayer.shapes.push({
+        id: `gear-hole-${Date.now()}`,
+        type: "Circle",
+        x: centerX,
+        y: centerY,
+        radius: holeRadius,
+        fill: "#fff",
+        stroke: "#000",
+        strokeWidth: 2,
+        name: "Gear Hole"
+      });
+    },
+    interpolatePoints: (state, action) => {
+      const selectedLayer = state.layers[state.selectedLayerIndex];
+      const selectedShapeIds = state.selectedShapeIds;
+      if (selectedShapeIds.length !== 2) return;
+      const shapeA = selectedLayer.shapes.find(s => s.id === selectedShapeIds[0]);
+      const shapeB = selectedLayer.shapes.find(s => s.id === selectedShapeIds[1]);
+      if (!shapeA || !shapeB || !Array.isArray(shapeA.points) || !Array.isArray(shapeB.points)) return;
+
+      const numSteps = action?.payload?.numSteps || 5;
+      const pointsA = shapeA.points;
+      const pointsB = shapeB.points;
+
+      const n = Math.max(pointsA.length, pointsB.length);
+      function getPoint(arr, i) {
+        return arr[i % arr.length];
+      }
+
+      for (let step = 1; step < numSteps; step++) {
+        const t = step / numSteps;
+        const interpPoints = [];
+        for (let i = 0; i < n; i++) {
+          const a = getPoint(pointsA, i);
+          const b = getPoint(pointsB, i);
+          interpPoints.push({
+            x: a.x * (1 - t) + b.x * t,
+            y: a.y * (1 - t) + b.y * t,
+          });
+        }
+        selectedLayer.shapes.push({
+          id: `interpolate-${Date.now()}-${step}`,
+          type: "Polygon",
+          points: interpPoints,
+          closed: true,
+          fill: shapeA.fill || "gray",
+          stroke: shapeA.stroke || "#000",
+          strokeWidth: shapeA.strokeWidth || 1,
+          lpeEffect: "Interpolate points",
+          name: `Interpolate ${step}`,
+        });
+      }
+    },
+    joinType: (state, action) => {
+      const selectedLayer = state.layers[state.selectedLayerIndex];
+      const selectedShapeIds = state.selectedShapeIds;
+      if (selectedShapeIds.length !== 2) return;
+      const shapeA = selectedLayer.shapes.find(s => s.id === selectedShapeIds[0]);
+      const shapeB = selectedLayer.shapes.find(s => s.id === selectedShapeIds[1]);
+      if (!shapeA || !shapeB || !Array.isArray(shapeA.points) || !Array.isArray(shapeB.points)) return;
+
+      const aStart = shapeA.points[0];
+      const aEnd = shapeA.points[shapeA.points.length - 1];
+      const bStart = shapeB.points[0];
+      const bEnd = shapeB.points[shapeB.points.length - 1];
+
+      const pairs = [
+        { a: aEnd, b: bStart, order: [shapeA.points, shapeB.points] },
+        { a: aEnd, b: bEnd, order: [shapeA.points, [...shapeB.points].reverse()] },
+        { a: aStart, b: bStart, order: [[...shapeA.points].reverse(), shapeB.points] },
+        { a: aStart, b: bEnd, order: [[...shapeA.points].reverse(), [...shapeB.points].reverse()] },
+      ];
+      let minDist = Infinity, bestOrder = null;
+      for (const pair of pairs) {
+        const dx = pair.a.x - pair.b.x;
+        const dy = pair.a.y - pair.b.y;
+        const dist = dx * dx + dy * dy;
+        if (dist < minDist) {
+          minDist = dist;
+          bestOrder = pair.order;
+        }
+      }
+
+      const joinedPoints = [...bestOrder[0], ...bestOrder[1]];
+      selectedLayer.shapes = selectedLayer.shapes.filter(s => s.id !== shapeB.id);
+
+      shapeA.points = joinedPoints;
+      shapeA.closed = false;
+      shapeA.lpeEffect = "Join type";
+      shapeA.name = "Joined Path";
+      shapeA.fill = "transparent";
+      shapeA.stroke = shapeA.stroke || "#000";
+      shapeA.strokeWidth = shapeA.strokeWidth || 2;
+
+      state.selectedShapeIds = [shapeA.id];
+      state.selectedShapeId = shapeA.id;
+    },
+    measureSegments: (state, action) => {
+      const selectedLayer = state.layers[state.selectedLayerIndex];
+      const selectedShapeIds = state.selectedShapeIds;
+      if (selectedShapeIds.length !== 1) return;
+      const shape = selectedLayer.shapes.find(s => s.id === selectedShapeIds[0]);
+      if (!shape) return;
+
+      if (!Array.isArray(shape.points) || shape.points.length < 2) {
+        if (shape.type === "Rectangle") {
+          const { x, y, width, height } = shape;
+          shape.type = "Polygon";
+          shape.points = [
+            { x: x, y: y },
+            { x: x + width, y: y },
+            { x: x + width, y: y + height },
+            { x: x, y: y + height }
+          ];
+        } else if (shape.type === "Circle") {
+          const { x, y, radius } = shape;
+          const numPoints = 36;
+          shape.type = "Polygon";
+          shape.points = Array.from({ length: numPoints }, (_, i) => {
+            const angle = (2 * Math.PI * i) / numPoints;
+            return {
+              x: x + radius * Math.cos(angle),
+              y: y + radius * Math.sin(angle)
+            };
+          });
+        } else if (shape.type === "Star") {
+          const { x, y, innerRadius, outerRadius, corners } = shape;
+          const spikes = corners || 5;
+          const numPoints = spikes * 2;
+          shape.type = "Polygon";
+          shape.points = Array.from({ length: numPoints }, (_, i) => {
+            const angle = (Math.PI * i) / spikes - Math.PI / 2;
+            const r = i % 2 === 0 ? outerRadius : innerRadius;
+            return {
+              x: x + r * Math.cos(angle),
+              y: y + r * Math.sin(angle),
+            };
+          });
+        } else if ((shape.type === "Pencil" || shape.type === "Calligraphy") && Array.isArray(shape.points)) {
+          if (Array.isArray(shape.points[0])) {
+            shape.points = shape.points.map(pt =>
+              Array.isArray(pt) ? { x: pt[0], y: pt[1] } : pt
+            );
+          }
+        }
+      }
+
+      if (!Array.isArray(shape.points) || shape.points.length < 2) return;
+
+      const segments = [];
+      for (let i = 0; i < shape.points.length - 1; i++) {
+        const p1 = shape.points[i];
+        const p2 = shape.points[i + 1];
+        const length = Math.sqrt((p2.x - p1.x) ** 2 + (p2.y - p1.y) ** 2);
+        segments.push({
+          from: { x: p1.x, y: p1.y },
+          to: { x: p2.x, y: p2.y },
+          length: length,
+          mid: { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 }
+        });
+      }
+      if (shape.closed) {
+        const p1 = shape.points[shape.points.length - 1];
+        const p2 = shape.points[0];
+        const length = Math.sqrt((p2.x - p1.x) ** 2 + (p2.y - p1.y) ** 2);
+        segments.push({
+          from: { x: p1.x, y: p1.y },
+          to: { x: p2.x, y: p2.y },
+          length: length,
+          mid: { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 }
+        });
+      }
+
+      state.measurementDraft = {
+        shapeId: shape.id,
+        segments,
+        lpeEffect: "Measure Segments"
+      };
+    },
+    ruler: (state, action) => {
+      if (!state.rulerPoints) state.rulerPoints = [];
+      state.rulerPoints.push(action.payload);
+      if (state.rulerPoints.length > 2) state.rulerPoints = [action.payload];
+      if (state.rulerPoints.length === 2) {
+        const [p1, p2] = state.rulerPoints;
+        const length = Math.sqrt((p2.x - p1.x) ** 2 + (p2.y - p1.y) ** 2);
+        state.measurementDraft = {
+          x1: p1.x,
+          y1: p1.y,
+          x2: p2.x,
+          y2: p2.y,
+          length,
+          lpeEffect: "Ruler"
+        };
+        state.rulerPoints = [];
+      }
+    },
+    setShowHandles: (state, action) => {
+      state.showHandlesShapeId = action.payload.shapeId;
     },
   },
 });
@@ -6550,6 +6840,13 @@ export const {
   boundingBox,
   constructGrid,
   setDashedStroke,
+  ellipseFromPoints,
+  gears,
+  interpolatePoints,
+  joinType,
+  measureSegments,
+  ruler,
+  setShowHandles,
 } = toolSlice.actions;
 
 export default toolSlice.reducer;

@@ -321,6 +321,36 @@ export default function PathEffectsDialog({ isOpen, onClose, onApply, selectedSh
             onApply && onApply("Dashed Stroke");
             onClose && onClose();
             return;
+        } else if (effect === "Ellipse from points") {
+            dispatch({ type: "tool/ellipseFromPoints" });
+            onApply && onApply("Ellipse from points");
+            onClose && onClose();
+            return;
+        } else if (effect === "Gears") {
+            dispatch({ type: "tool/gears", payload: { numTeeth: 12, innerRadius: 40, outerRadius: 60 } });
+            onApply && onApply("Gears");
+            onClose && onClose();
+            return;
+        } else if (effect === "Interpolate points") {
+            dispatch({ type: "tool/interpolatePoints", payload: { numSteps: 5 } });
+            onApply && onApply("Interpolate points");
+            onClose && onClose();
+            return;
+        } else if (effect === "Join type") {
+            dispatch({ type: "tool/joinType" });
+            onApply && onApply("Join type");
+            onClose && onClose();
+            return;
+        } else if (effect === "Measure Segments") {
+            dispatch({ type: "tool/measureSegments" });
+            onApply && onApply("Measure Segments");
+            onClose && onClose();
+            return;
+        } else if (effect === "Show handles") {
+            dispatch({ type: "tool/setShowHandles", payload: { shapeId: selectedShape?.id } });
+            onApply && onApply("Show handles");
+            onClose && onClose();
+            return;
         } else {
             onApply && onApply(effect);
         }

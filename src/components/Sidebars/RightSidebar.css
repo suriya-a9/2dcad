@@ -33,7 +33,7 @@
   bottom: 20%;
   right: 102%;
   border-radius: 9px;
-
+  z-index: 999;
 }
 
 .right-sidebar {

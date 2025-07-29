@@ -574,6 +574,23 @@ export function renderShape(shape, extraProps = {}) {
       />
     );
   }
+  if (shape.type === "Ellipse") {
+    return (
+      <Ellipse
+        key={shape.id}
+        x={shape.x}
+        y={shape.y}
+        radiusX={shape.radiusX}
+        radiusY={shape.radiusY}
+        fill={shape.fill || "transparent"}
+        stroke={shape.stroke || "#000"}
+        strokeWidth={shape.strokeWidth || 1}
+        rotation={shape.rotation || 0}
+        listening={false}
+        {...extraProps}
+      />
+    );
+  }
   return null;
 }
 const Panel = React.forwardRef(({
@@ -694,6 +711,7 @@ const Panel = React.forwardRef(({
   const [messages, setMessages] = useState([]);
   const [showMessagesModal, setShowMessagesModal] = useState(false);
   const showPageGrid = useSelector(state => state.tool.showPageGrid);
+  const showHandlesShapeId = useSelector(state => state.tool.showHandlesShapeId);
   console.log("showPageGrid:", showPageGrid);
   window.showPageGrid = showPageGrid;
   const splitContainerRef = useRef();
@@ -3778,6 +3796,7 @@ const Panel = React.forwardRef(({
     }
   };
   const getDashArray = (strokeStyle) => {
+    if (Array.isArray(strokeStyle)) return strokeStyle;
     switch (strokeStyle) {
       case "dotted":
         return [2, 4];
@@ -7465,7 +7484,7 @@ const Panel = React.forwardRef(({
                                 : undefined}
                               strokeWidth={shape.strokeWidth || 1}
                               cornerRadius={tempCornerRadius !== null ? tempCornerRadius : shape.cornerRadius}
-                              dash={shape.strokeStyle || []}
+                              dash={getDashArray(shape.strokeStyle)}
                               rotation={shape.rotation || 0}
                               scaleX={shape.scaleX || 1}
                               scaleY={shape.scaleY || 1}
@@ -10426,25 +10445,81 @@ const Panel = React.forwardRef(({
                       {markDimension && renderDimensionMarkers(line, 16, measurementOffset)}
                     </React.Fragment>
                   ))}
-                  {measurementDraft && (
-                    <>
-                      {renderAngleArc(measurementDraft.x1, measurementDraft.y1, measurementDraft.x2, measurementDraft.y2)}
+                  {measurementDraft && measurementDraft.segments && measurementDraft.segments.map((seg, idx) => (
+                    <React.Fragment key={`measure-seg-${idx}`}>
                       <Line
-                        points={[measurementDraft.x1, measurementDraft.y1, measurementDraft.x2, measurementDraft.y2]}
+                        points={[seg.from.x, seg.from.y, seg.to.x, seg.to.y]}
                         stroke="orange"
                         strokeWidth={2}
                         dash={[4, 4]}
+                        listening={false}
                       />
                       <KonvaText
-                        x={(measurementDraft.x1 + measurementDraft.x2) / 2}
-                        y={(measurementDraft.y1 + measurementDraft.y2) / 2 - measurementFontSize}
-                        text={formatMeasurement(measurementDraft, measurementScale, measurementPrecision, measurementUnit, true)}
+                        x={seg.mid.x}
+                        y={seg.mid.y - measurementFontSize}
+                        text={seg.length.toFixed(2)}
                         fontSize={measurementFontSize}
                         fill="orange"
                         align="center"
                       />
-                    </>
-                  )}
+                    </React.Fragment>
+                  ))}
+                  {showHandlesShapeId && (() => {
+                    const shape = shapes.find(s => s.id === showHandlesShapeId);
+                    if (!shape || !shape.points) return null;
+                    return (
+                      <Group>
+                        {shape.points.map((pt, idx) => (
+                          <Circle
+                            key={`handle-${idx}`}
+                            x={pt.x}
+                            y={pt.y}
+                            radius={7}
+                            fill="#fff"
+                            stroke="#007bff"
+                            strokeWidth={2}
+                            opacity={0.9}
+                          />
+                        ))}
+                        {shape.type === "Bezier" && shape.points.map((pt, idx) => (
+                          <>
+                            {pt.controlPoint1 && (
+                              <Line
+                                points={[pt.x, pt.y, pt.controlPoint1.x, pt.controlPoint1.y]}
+                                stroke="#007bff"
+                                dash={[4, 4]}
+                              />
+                            )}
+                            {pt.controlPoint1 && (
+                              <Circle
+                                x={pt.controlPoint1.x}
+                                y={pt.controlPoint1.y}
+                                radius={5}
+                                fill="#007bff"
+                                opacity={0.7}
+                              />
+                            )}
+                            {pt.controlPoint2 && (
+                              <Line
+                                points={[pt.x, pt.y, pt.controlPoint2.x, pt.controlPoint2.y]}
+                                stroke="#007bff"
+                                dash={[4, 4]}
+                              />
+                            )}
+                            {pt.controlPoint2 && (
+                              <Circle
+                                x={pt.controlPoint2.x}
+                                y={pt.controlPoint2.y}
+                                radius={5}
+                                fill="#007bff"
+                                opacity={0.7}
+                              />
+                            )}
+                          </>
+                        ))}
+                      </Group>
+                    );
+                  })()}
                   {showPageGrid && (
                     <Layer listening={false}>
                       {Array.from({ length: Math.floor(width / 20) + 1 }).map((_, i) => (

@@ -914,7 +914,7 @@ const Main = () => {
         </div>
         <div style={{ display: 'flex', alignItems: 'stretch' }}>
           {!wideScreen && (
-            <div style={{ flexGrow: '1', position: 'fixed', top: '125px' }}>
+            <div style={{ flexGrow: '1', position: 'fixed', top: '108px' }}>
               <LeftSidebar />
             </div>
           )}
@@ -1269,12 +1269,12 @@ const Main = () => {
             </div>
           </div>
           {!wideScreen && (
-            <div style={{ flexGrow: '1', position: 'fixed', top: '125px', bottom: '50px', right: '0px' }}>
+            <div style={{ flexGrow: '1', position: 'fixed', top: '108px', bottom: '50px', right: '0px' }}>
               <RightSidebar toggleSidebar={toggleSidebar} isSidebarOpen={isSidebarOpen} handleSave={handleSave} activeTab={activeTab} setActiveTab={(tab) => console.log("Active Tab:", tab)} handleDownloadPdf={handleDownloadPdf} selectedGroupId={selectedGroupId} setSelectedGroupId={setSelectedGroupId} onZoomIn={handleZoomIn} onZoomOut={handleZoomOut} handleOpenFillStrokeDialog={handleOpenFillStrokeDialog} isFillStrokeDialogOpen={isFillStrokeDialogOpen} handleCloseFillStrokeDialog={handleCloseFillStrokeDialog} isAlignPanelOpen={isAlignPanelOpen} setIsAlignPanelOpen={setIsAlignPanelOpen} isDocPropsOpen={isDocPropsOpen} setIsDocPropsOpen={setIsDocPropsOpen} />
             </div>
           )}
         </div>
-        {/* <div style={{ display: 'flex', alignItems: 'stretch' }}>
+        <div style={{ display: 'flex', alignItems: 'stretch' }}>
           <div style={{ flexGrow: '1', position: 'fixed', bottom: '0px', overflowY: 'scroll', scrollbarWidth: 'thin' }}>
             <ColorPalette />
             <div
@@ -1323,7 +1323,7 @@ const Main = () => {
               />
             </div>
           </div>
-        </div> */}
+        </div>
       </div>
     </>
   )

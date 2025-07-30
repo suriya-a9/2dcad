@@ -33,3 +33,19 @@
 #tool-left {
   z-index: 9999;
 }
+
+.sidebar-arrow {
+  background: rgba(255, 255, 255, 0.8);
+  font-size: 18px;
+  height: 24px;
+  line-height: 24px;
+  user-select: none;
+}
+
+.up-arrow {
+  border-bottom: 1px solid #ccc;
+}
+
+.down-arrow {
+  border-top: 1px solid #ccc;
+}

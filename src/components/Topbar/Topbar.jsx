@@ -3300,7 +3300,7 @@ ${shapesXml}
       {svgFontEditorModal}
       {unicodePanelModal}
       <div>
-        <nav className="navbar navbar-expand-lg">
+        <nav className="navbar navbar-expand-lg" style={{ padding: '0', fontSize: '15px' }}>
           <div className="container-fluid">
             <div className="row">
               <div className="col-12">
@@ -7465,7 +7465,7 @@ function MeasurementTopbar() {
   };
 
   return (
-    <div className="d-flex flex-row mb-3 top-icons" style={{ alignItems: "center", color: "white", overflow: 'scroll' }}>
+    <div className="d-flex flex-row top-icons" style={{ alignItems: "center", color: "white", overflow: 'scroll' }}>
       <div className="p-2 value" style={{ display: "flex", alignItems: "center" }}>
         <label>Font:&nbsp;</label>
         <input
@@ -7927,7 +7927,7 @@ function NodeTopbar() {
   }, [selectedTool]);
 
   return (
-    <div className="d-flex flex-row mb-3 top-icons" style={{ alignItems: "center", color: "white" }}>
+    <div className="d-flex flex-row top-icons" style={{ alignItems: "center", color: "white", marginBottom: '20px' }}>
       <div className="p-2 top-icon" onClick={handleInsertNode}>
         <FaPlus size={20} title="Insert Node" />
       </div>

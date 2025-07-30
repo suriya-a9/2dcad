@@ -1,10 +1,10 @@
+import React from "react";
 import { VscNewFile } from "react-icons/vsc";
 import FillStrokeDialog from "../Dialogs/FillStrokeDialog";
 import DocumentPropertiesDialog from "../Dialogs/DocumentPropertiesDialog";
+import { FaChevronDown, FaChevronUp } from "react-icons/fa";
 import "./RightSidebar.css";
 import {
-  FaChevronDown,
-  FaChevronUp,
   FaRegCopy,
   FaRegFolderOpen,
   FaProjectDiagram
@@ -126,6 +126,30 @@ const RightSidebar = ({
   const [paramAngleEnd, setParamAngleEnd] = useState(360);
   const [rotateObjects, setRotateObjects] = useState(false);
   const [selectedRightIcon, setSelectedRightIcon] = useState(null);
+  const rightIconsRef = useRef(null);
+  const [rightScrollTop, setRightScrollTop] = useState(0);
+  const [showRightUp, setShowRightUp] = useState(false);
+  const [showRightDown, setShowRightDown] = useState(false);
+
+  const handleRightScroll = () => {
+    if (rightIconsRef.current) {
+      setRightScrollTop(rightIconsRef.current.scrollTop);
+    }
+  };
+
+  React.useEffect(() => {
+    const el = rightIconsRef.current;
+    if (el) {
+      setShowRightUp(el.scrollTop > 0);
+      setShowRightDown(el.scrollTop + el.clientHeight < el.scrollHeight);
+    }
+  }, [rightScrollTop]);
+
+  const scrollRightIconsBy = (amount) => {
+    if (rightIconsRef.current) {
+      rightIconsRef.current.scrollBy({ top: amount, behavior: "smooth" });
+    }
+  };
   // const [isDocPropsOpen, setIsDocPropsOpen] = useState(false);
   console.log("isAlignPanelOpen in RightSidebar:", isAlignPanelOpen);
   const alignOptions = [
@@ -820,121 +844,178 @@ const RightSidebar = ({
   return (
     <div className="right-sidebar">
       <div className="d-flex flex-column align-items-end mb-3" style={{ position: "relative" }}>
-        <div className="right-icons">
-          <div className="p-2 right-icon" onClick={() => {
-            setSelectedRightIcon("layers")
-            toggleSidebar();
-          }}
-            style={{
-              background: selectedRightIcon === "layers" ? "#444" : undefined,
-              borderRadius: 4,
-            }}>
-            <LuLayers
-              data-tooltip-content="Layer & Objects"
-              data-tooltip-id="tool-right"
-              style={{ cursor: "pointer" }}
-            />
-          </div>
+        <div style={{ position: "relative", width: "35px", zIndex: '99' }}>
+          {showRightUp && (
+            <div
+              className="sidebar-arrow up-arrow"
+              style={{ position: "absolute", top: 0, left: 0, right: 0, zIndex: 2, textAlign: "center", cursor: "pointer" }}
+              onClick={() => scrollRightIconsBy(-60)}
+            >
+              <FaChevronUp />
+            </div>
+          )}
           <div
-            className="p-2 right-icon"
-            onClick={() => dispatch(createNewPage())}
+            className="right-icons"
+            ref={rightIconsRef}
+            style={{
+              maxHeight: "475px",
+              overflowY: "auto",
+              paddingTop: showRightUp ? "24px" : "0",
+              paddingBottom: showRightDown ? "24px" : "0"
+            }}
+            onScroll={handleRightScroll}
           >
-            <VscNewFile
-              data-tooltip-content="New File"
-              data-tooltip-id="tool-right"
-            />
-          </div>
-          <div className="p-2 right-icon" onClick={handleUploadClick}>
-            <FaRegFolderOpen
-              data-tooltip-content="Open File"
-              data-tooltip-id="tool-right"
-            />
-          </div>
-          <input
-            type="file"
-            accept="image/*"
-            ref={fileInputRef}
-            style={{ display: "none" }}
-            onChange={haleUploadFile}
-            multiple
-          />
-          <div className="p-2 right-icon">
-            <BiSave
-              data-tooltip-content="Save File"
-              data-tooltip-id="tool-right"
-              onClick={handleSave}
-            />
-          </div>
-          <div className="p-2 right-icon">
-            <TiPrinter
-              data-tooltip-content="Print"
-              data-tooltip-id="tool-right"
-              onClick={handleDownloadPdf}
-            />
-          </div>
-          <div className="p-2 right-icon" onClick={handleImportClick}>
-            <TbFileImport
-              data-tooltip-content="Import Image"
-              data-tooltip-id="tool-right"
-            />
-          </div>
-          <input
-            type="file"
-            accept="image/*"
-            ref={fileInputRef}
-            style={{ display: "none" }}
-            onChange={handleFileChange}
-            multiple
-          />
-          <div className="p-2 right-icon">
-            <TbFileExport
-              data-tooltip-content="Export"
-              data-tooltip-id="tool-right"
-              onClick={handleSave}
-            />
-          </div>
-          <div className="p-2 right-icon" onClick={() => dispatch(undo())}>
-            <LuUndo2 data-tooltip-content="Undo" data-tooltip-id="tool-right" />
-          </div>
-          <div className="p-2 right-icon" onClick={() => dispatch(redo())}>
-            <LuRedo2 data-tooltip-content="Redo" data-tooltip-id="tool-right" />
-          </div>
-          <div className="p-2 right-icon" onClick={() => dispatch(copy())}>
-            <FaRegCopy
-              data-tooltip-content="Copy"
-              data-tooltip-id="tool-right"
-            />
-          </div>
-          <div className="p-2 right-icon" onClick={() => dispatch(cut())}>
-            <TbCut data-tooltip-content="Cut" data-tooltip-id="tool-right" />
-          </div>
-          <div className="p-2 right-icon" onClick={() => dispatch(paste())}>
-            <FaRegPaste
-              data-tooltip-content="Paste"
-              data-tooltip-id="tool-right"
-            />
-          </div>
-          <div className="p-2 right-icon" onClick={onZoomIn}>
-            <LuZoomIn
-              data-tooltip-content="Zoom In"
-              data-tooltip-id="tool-right"
-            />
-          </div>
-          <div className="p-2 right-icon" onClick={onZoomOut}>
-            <LuZoomOut
-              data-tooltip-content="Zoom Out"
-              data-tooltip-id="tool-right"
-            />
-          </div>
-          <div className="p-2 right-icon" onClick={() => setShowPropertiesIcons(!showPropertiesIcons)}>
-            <IoMdArrowDropdown
-              data-tooltip-content="More Options"
-              data-tooltip-id="tool-right"
-              style={{ border: "1px solid white", borderRadius: "3px" }}
-            />
-          </div>
+            {/* ...existing right-icon buttons... */}
+            {/* <div className="p-2 right-icon" onClick={() => {
+              setSelectedRightIcon("layers")
+              toggleSidebar();
+            }}
+              style={{
+                background: selectedRightIcon === "layers" ? "#444" : undefined,
+                borderRadius: 4,
+              }}>
+              <LuLayers
+                data-tooltip-content="Layer & Objects"
+                data-tooltip-id="tool-right"
+                style={{ cursor: "pointer" }}
+              />
+            </div>
+            <div
+              className="p-2 right-icon"
+              onClick={() => dispatch(createNewPage())}
+            >
+              <VscNewFile
+                data-tooltip-content="New File"
+                data-tooltip-id="tool-right"
+              />
+            </div> */}
+            <div className="right-icons">
+              <div className="p-2 right-icon" onClick={() => {
+                setSelectedRightIcon("layers")
+                toggleSidebar();
+              }}
+                style={{
+                  background: selectedRightIcon === "layers" ? "#444" : undefined,
+                  borderRadius: 4,
+                }}>
+                <LuLayers
+                  data-tooltip-content="Layer & Objects"
+                  data-tooltip-id="tool-right"
+                  style={{ cursor: "pointer" }}
+                />
+              </div>
+              <div
+                className="p-2 right-icon"
+                onClick={() => dispatch(createNewPage())}
+              >
+                <VscNewFile
+                  data-tooltip-content="New File"
+                  data-tooltip-id="tool-right"
+                />
+              </div>
+              <div className="p-2 right-icon" onClick={handleUploadClick}>
+                <FaRegFolderOpen
+                  data-tooltip-content="Open File"
+                  data-tooltip-id="tool-right"
+                />
+              </div>
+              <input
+                type="file"
+                accept="image/*"
+                ref={fileInputRef}
+                style={{ display: "none" }}
+                onChange={haleUploadFile}
+                multiple
+              />
+              <div className="p-2 right-icon">
+                <BiSave
+                  data-tooltip-content="Save File"
+                  data-tooltip-id="tool-right"
+                  onClick={handleSave}
+                />
+              </div>
+              <div className="p-2 right-icon">
+                <TiPrinter
+                  data-tooltip-content="Print"
+                  data-tooltip-id="tool-right"
+                  onClick={handleDownloadPdf}
+                />
+              </div>
+              <div className="p-2 right-icon" onClick={handleImportClick}>
+                <TbFileImport
+                  data-tooltip-content="Import Image"
+                  data-tooltip-id="tool-right"
+                />
+              </div>
+              <input
+                type="file"
+                accept="image/*"
+                ref={fileInputRef}
+                style={{ display: "none" }}
+                onChange={handleFileChange}
+                multiple
+              />
+              <div className="p-2 right-icon">
+                <TbFileExport
+                  data-tooltip-content="Export"
+                  data-tooltip-id="tool-right"
+                  onClick={handleSave}
+                />
+              </div>
+              <div className="p-2 right-icon" onClick={() => dispatch(undo())}>
+                <LuUndo2 data-tooltip-content="Undo" data-tooltip-id="tool-right" />
+              </div>
+              <div className="p-2 right-icon" onClick={() => dispatch(redo())}>
+                <LuRedo2 data-tooltip-content="Redo" data-tooltip-id="tool-right" />
+              </div>
+              <div className="p-2 right-icon" onClick={() => dispatch(copy())}>
+                <FaRegCopy
+                  data-tooltip-content="Copy"
+                  data-tooltip-id="tool-right"
+                />
+              </div>
+              <div className="p-2 right-icon" onClick={() => dispatch(cut())}>
+                <TbCut data-tooltip-content="Cut" data-tooltip-id="tool-right" />
+              </div>
+              <div className="p-2 right-icon" onClick={() => dispatch(paste())}>
+                <FaRegPaste
+                  data-tooltip-content="Paste"
+                  data-tooltip-id="tool-right"
+                />
+              </div>
+              <div className="p-2 right-icon" onClick={onZoomIn}>
+                <LuZoomIn
+                  data-tooltip-content="Zoom In"
+                  data-tooltip-id="tool-right"
+                />
+              </div>
+              <div className="p-2 right-icon" onClick={onZoomOut}>
+                <LuZoomOut
+                  data-tooltip-content="Zoom Out"
+                  data-tooltip-id="tool-right"
+                />
+              </div>
+              <div className="p-2 right-icon" onClick={() => setShowPropertiesIcons(!showPropertiesIcons)}>
+                <IoMdArrowDropdown
+                  data-tooltip-content="More Options"
+                  data-tooltip-id="tool-right"
+                  style={{ border: "1px solid white", borderRadius: "3px" }}
+                />
+              </div>
 
-          <Tooltip id="tool-right" place="left" />
+              <Tooltip id="tool-right" place="left" />
+            </div>
+            <Tooltip id="tool-right" place="left" />
+          </div>
+          {showRightDown && (
+            <div
+              className="sidebar-arrow down-arrow"
+              style={{ position: "absolute", bottom: 0, left: 0, right: 0, zIndex: 2, textAlign: "center", cursor: "pointer" }}
+              onClick={() => scrollRightIconsBy(60)}
+            >
+              <FaChevronDown />
+            </div>
+          )}
         </div>
 
         {showPropertiesIcons && (

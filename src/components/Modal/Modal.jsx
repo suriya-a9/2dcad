@@ -522,6 +522,7 @@ const Modal = () => {
                     borderTop: isDarkMode
                       ? "1px solid black"
                       : "1px solid #D1C7C7",
+                    height: '300px'
                   }}
                 >
                   <div>
@@ -651,15 +652,14 @@ const Modal = () => {
                     borderTop: isDarkMode
                       ? "1px solid black"
                       : "1px solid #D1C7C7",
+                    height: '300px'
                   }}
                   className=" ps-4 pt-3"
                 >
                   <p>
-                    Lorem ipsum dolor, sit amet consectetur adipisicing elit.
-                    Soluta officia excepturi necessitatibus totam laudantium eos
-                    et, dolores enim quam quasi cumque incidunt, unde ratione
-                    sit, nihil cupiditate facilis accusantium repellendus?
+                    <strong>The Inkscape project is supported by users like you.</strong> Through our collective time, money and skill, we have made this software for everyone in the world to enjoy free from restrictions and free from costs.
                   </p>
+                  <p><strong>If you would like to get involved and make the next version of Inkscape even better, please consider joining the Inkscape project today.</strong></p>
                 </div>
               )}
               {activeTab === "Time to Draw" && (
@@ -672,6 +672,7 @@ const Modal = () => {
                     border: isDarkMode
                       ? "1px solid black"
                       : "1px solid #D1C7C7",
+                    height: '300px'
                   }}
                 >
                   <div

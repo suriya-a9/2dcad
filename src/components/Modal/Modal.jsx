@@ -46,6 +46,9 @@ import Customs from "../../assets/Custom.png";
 import { setPageSize, addImage, toggleShowInitialScreen } from "../../Redux/Slice/toolSlice";
 import { useDispatch, useSelector } from "react-redux";
 import { useNavigate } from "react-router-dom";
+import quickSetupImg from "../../../public/assets/tab1.webp";
+import supportedByYouImg from "../../../public/assets/tab2.webp";
+import timeToDrawImg from "../../../public/assets/tab3.webp";
 
 const Modal = () => {
   const [activeTab, setActiveTab] = useState("Time to Draw");
@@ -65,7 +68,11 @@ const Modal = () => {
   const [isDarkMode, setIsDarkMode] = useState(true);
   const dispatch = useDispatch();
   const navigate = useNavigate();
-
+  const tabImages = {
+    "Quick Setup": quickSetupImg,
+    "Supported by You": supportedByYouImg,
+    "Time to Draw": timeToDrawImg
+  }
   const pageSizes = [
     {
       name: "A4 (Portrait)",
@@ -475,14 +482,24 @@ const Modal = () => {
     });
   };
 
+  const paperPlaneLink = () => {
+    window.open("https://www.w3docs.com/snippets/css/how-to-make-a-div-a-clickable-link.html", "noopener, noreferrer")
+  }
+  const ecoLabLink = () => {
+    window.open("https://www.w3docs.com/snippets/css/how-to-make-a-div-a-clickable-link.html", "noopener, noreferrer")
+  }
   return (
     <>
       <div>
         <div className="d-flex flex-column align-items-center justify-content-center vh-100" style={{ backgroundColor: 'black' }}>
           <div className="col-lg-5">
             <div className="d-flex flex-column justify-content-center  border border-1 border-dark   rounded-bottom-end shadow bg-white">
-              <div>
-                <h1 style={{ backgroundColor: 'black', textAlign: 'center', color: 'white', fontWeight: 'bold', padding: '20px 0px' }}>2D CAD</h1>
+              <div style={{ textAlign: 'center', backgroundColor: 'black', }}>
+                <img
+                  src={tabImages[activeTab]}
+                  alt={activeTab}
+                  style={{ height: "120px", objectFit: "cover", width: '100%', objectPosition: 'center' }}
+                />
               </div>
               <div
                 style={{ backgroundColor: isDarkMode ? "#4B4B4B" : "#E5DDDD" }}
@@ -522,7 +539,7 @@ const Modal = () => {
                     borderTop: isDarkMode
                       ? "1px solid black"
                       : "1px solid #D1C7C7",
-                    height: '300px'
+                    height: '400px'
                   }}
                 >
                   <div>
@@ -644,23 +661,29 @@ const Modal = () => {
                 </div>
               )}
               {activeTab === "Supported by You" && (
-                <div
-                  style={{
-                    fontSize: "13px",
-                    backgroundColor: isDarkMode ? "#4B4B4B" : "white",
-                    color: isDarkMode ? "white" : "black",
-                    borderTop: isDarkMode
-                      ? "1px solid black"
-                      : "1px solid #D1C7C7",
-                    height: '300px'
-                  }}
-                  className=" ps-4 pt-3"
-                >
-                  <p>
-                    <strong>The Inkscape project is supported by users like you.</strong> Through our collective time, money and skill, we have made this software for everyone in the world to enjoy free from restrictions and free from costs.
-                  </p>
-                  <p><strong>If you would like to get involved and make the next version of Inkscape even better, please consider joining the Inkscape project today.</strong></p>
-                </div>
+                <>
+                  <div
+                    style={{
+                      fontSize: "13px",
+                      backgroundColor: isDarkMode ? "#4B4B4B" : "white",
+                      color: isDarkMode ? "white" : "black",
+                      borderTop: isDarkMode
+                        ? "1px solid black"
+                        : "1px solid #D1C7C7",
+                      height: '400px'
+                    }}
+                    className=" ps-4 pt-3"
+                  >
+                    <p>
+                      <strong>The Inkscape project is supported by users like you.</strong> Through our collective time, money and skill, we have made this software for everyone in the world to enjoy free from restrictions and free from costs.
+                    </p>
+                    <p><strong>If you would like to get involved and make the next version of Inkscape even better, please consider joining the Inkscape project today.</strong></p>
+                    <div className="d-flex">
+                      <div className="col" onClick={paperPlaneLink} style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', cursor: 'pointer' }}><img src="assets/paper_plane_icon-removebg-preview.png" alt="img" style={{ width: '150px' }} /><p style={{ textAlign: 'center', color: '#0d6efd', fontSize: '15px' }}><br />Learn how to<br />Contibute Time</p></div>
+                      <div className="col" onClick={ecoLabLink} style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', cursor: 'pointer' }}><img src="assets/eco_lab_icon-removebg-preview.png" alt="img" style={{ width: '130px' }} /><p style={{ textAlign: 'center', color: '#0d6efd', fontSize: '15px' }}><br />Learn how to<br />Fund Time</p></div>
+                    </div>
+                  </div>
+                </>
               )}
               {activeTab === "Time to Draw" && (
                 <div
@@ -672,7 +695,7 @@ const Modal = () => {
                     border: isDarkMode
                       ? "1px solid black"
                       : "1px solid #D1C7C7",
-                    height: '300px'
+                    height: '400px'
                   }}
                 >
                   <div

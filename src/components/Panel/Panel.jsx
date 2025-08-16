@@ -9691,142 +9691,140 @@ const Panel = React.forwardRef(({
                   })}
 
                   {selectedTool === "Node" &&
-                    selectedShape &&
-                    selectedShape.type === "Bezier" &&
-                    controlPoints.length > 0 &&
-                    controlPoints.map((point, index) => (
-                      <React.Fragment key={index}>
-                        <Circle
-                          key={index}
-                          x={point.x}
-                          y={point.y}
-                          radius={5}
-                          fill={
-                            selectedShape &&
-                              selectedNodePoints.some(
-                                (node) => node.shapeId === selectedShape.id && node.index === index
-                              )
-                              ? "green"
-                              : "red"
-                          }
-                          draggable
-                          onClick={(e) => {
-                            e.cancelBubble = true;
-                            if (selectedShape) {
-                              dispatch(
-                                selectNodePoint({
-                                  shapeId: selectedShape.id,
-                                  index,
-                                  x: point.x,
-                                  y: point.y,
-                                })
-                              );
-                            }
-                          }}
-                          onDragMove={(e) => {
-                            if (isStrokeToPathMode) {
-                              dispatch(updateStrokeControlPoint({
+                  controlPoints.length > 0 &&
+                  controlPoints.map((point, index) => (
+                    <React.Fragment key={index}>
+                      <Circle
+                        key={index}
+                        x={point.x}
+                        y={point.y}
+                        radius={5}
+                        fill={
+                          selectedShape &&
+                            selectedNodePoints.some(
+                              (node) => node.shapeId === selectedShape.id && node.index === index
+                            )
+                            ? "green"
+                            : "red"
+                        }
+                        draggable
+                        onClick={(e) => {
+                          e.cancelBubble = true;
+                          if (selectedShape) {
+                            dispatch(
+                              selectNodePoint({
+                                shapeId: selectedShape.id,
                                 index,
-                                newPosition: { x: e.target.x(), y: e.target.y() },
-                              }));
-                            } else {
-                              handleNodeDrag(e, index);
-                            }
-                          }}
+                                x: point.x,
+                                y: point.y,
+                              })
+                            );
+                          }
+                        }}
+                        onDragMove={(e) => {
+                          if (isStrokeToPathMode) {
+                            dispatch(updateStrokeControlPoint({
+                              index,
+                              newPosition: { x: e.target.x(), y: e.target.y() },
+                            }));
+                          } else {
+                            handleNodeDrag(e, index);
+                          }
+                        }}
 
+                      />
+                      {point.cornerLPE && (
+                        <Circle
+                          x={point.x + (point.cornerLPE.radius || 10)}
+                          y={point.y}
+                          radius={4}
+                          fill="orange"
+                          draggable
+                          onDragMove={e => {
+                            const dx = e.target.x() - point.x;
+                            const dy = e.target.y() - point.y;
+                            const radius = Math.sqrt(dx * dx + dy * dy);
+                            dispatch({
+                              type: "tool/updateCornerLPE",
+                              payload: {
+                                shapeId: selectedShape.id,
+                                pointIdx: index,
+                                radius
+                              }
+                            });
+                          }}
                         />
-                        {point.cornerLPE && (
+                      )}
+                      {point.controlPoint1 && (
+                        <>
+                          <Line
+                            points={[point.x, point.y, point.controlPoint1.x, point.controlPoint1.y]}
+                            stroke="blue"
+                            dash={[4, 4]}
+                          />
                           <Circle
-                            x={point.x + (point.cornerLPE.radius || 10)}
-                            y={point.y}
+                            x={point.controlPoint1.x}
+                            y={point.controlPoint1.y}
                             radius={4}
-                            fill="orange"
+                            fill="blue"
                             draggable
                             onDragMove={e => {
-                              const dx = e.target.x() - point.x;
-                              const dy = e.target.y() - point.y;
-                              const radius = Math.sqrt(dx * dx + dy * dy);
+                              const pos = { x: e.target.x(), y: e.target.y() };
                               dispatch({
-                                type: "tool/updateCornerLPE",
-                                payload: {
-                                  shapeId: selectedShape.id,
-                                  pointIdx: index,
-                                  radius
-                                }
+                                type: "tool/updateControlPoint",
+                                payload: { shapeId: selectedShape.id, index, handle: "controlPoint1", point: pos }
                               });
+
+                              if (point.symmetric) {
+                                const mirrored = {
+                                  x: point.x - (pos.x - point.x),
+                                  y: point.y - (pos.y - point.y)
+                                };
+                                dispatch({
+                                  type: "tool/updateControlPoint",
+                                  payload: { shapeId: selectedShape.id, index, handle: "controlPoint2", point: mirrored }
+                                });
+                              }
                             }}
                           />
-                        )}
-                        {point.controlPoint1 && (
-                          <>
-                            <Line
-                              points={[point.x, point.y, point.controlPoint1.x, point.controlPoint1.y]}
-                              stroke="blue"
-                              dash={[4, 4]}
-                            />
-                            <Circle
-                              x={point.controlPoint1.x}
-                              y={point.controlPoint1.y}
-                              radius={4}
-                              fill="blue"
-                              draggable
-                              onDragMove={e => {
-                                const pos = { x: e.target.x(), y: e.target.y() };
+                        </>
+                      )}
+                      {point.controlPoint2 && (
+                        <>
+                          <Line
+                            points={[point.x, point.y, point.controlPoint2.x, point.controlPoint2.y]}
+                            stroke="blue"
+                            dash={[4, 4]}
+                          />
+                          <Circle
+                            x={point.controlPoint2.x}
+                            y={point.controlPoint2.y}
+                            radius={4}
+                            fill="blue"
+                            draggable
+                            onDragMove={e => {
+                              const pos = { x: e.target.x(), y: e.target.y() };
+                              dispatch({
+                                type: "tool/updateControlPoint",
+                                payload: { shapeId: selectedShape.id, index, handle: "controlPoint2", point: pos }
+                              });
+
+                              if (point.symmetric) {
+                                const mirrored = {
+                                  x: point.x - (pos.x - point.x),
+                                  y: point.y - (pos.y - point.y)
+                                };
                                 dispatch({
                                   type: "tool/updateControlPoint",
-                                  payload: { shapeId: selectedShape.id, index, handle: "controlPoint1", point: pos }
+                                  payload: { shapeId: selectedShape.id, index, handle: "controlPoint1", point: mirrored }
                                 });
-
-                                if (point.symmetric) {
-                                  const mirrored = {
-                                    x: point.x - (pos.x - point.x),
-                                    y: point.y - (pos.y - point.y)
-                                  };
-                                  dispatch({
-                                    type: "tool/updateControlPoint",
-                                    payload: { shapeId: selectedShape.id, index, handle: "controlPoint2", point: mirrored }
-                                  });
-                                }
-                              }}
-                            />
-                          </>
-                        )}
-                        {point.controlPoint2 && (
-                          <>
-                            <Line
-                              points={[point.x, point.y, point.controlPoint2.x, point.controlPoint2.y]}
-                              stroke="blue"
-                              dash={[4, 4]}
-                            />
-                            <Circle
-                              x={point.controlPoint2.x}
-                              y={point.controlPoint2.y}
-                              radius={4}
-                              fill="blue"
-                              draggable
-                              onDragMove={e => {
-                                const pos = { x: e.target.x(), y: e.target.y() };
-                                dispatch({
-                                  type: "tool/updateControlPoint",
-                                  payload: { shapeId: selectedShape.id, index, handle: "controlPoint2", point: pos }
-                                });
-
-                                if (point.symmetric) {
-                                  const mirrored = {
-                                    x: point.x - (pos.x - point.x),
-                                    y: point.y - (pos.y - point.y)
-                                  };
-                                  dispatch({
-                                    type: "tool/updateControlPoint",
-                                    payload: { shapeId: selectedShape.id, index, handle: "controlPoint1", point: mirrored }
-                                  });
-                                }
-                              }}
-                            />
-                          </>
-                        )}
-                      </React.Fragment>
-                    ))}
+                              }
+                            }}
+                          />
+                        </>
+                      )}
+                    </React.Fragment>
+                  ))}
 
                   {eraserLines.map((line, i) => (
                     <Line

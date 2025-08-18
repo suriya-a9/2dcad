@@ -714,6 +714,7 @@ const Panel = React.forwardRef(({
   const showHandlesShapeId = useSelector(state => state.tool.showHandlesShapeId);
   const [dragSelectRect, setDragSelectRect] = useState(null);
   const [dragStartPos, setDragStartPos] = useState(null);
+  const shapeBuilderTemplate = useSelector(state => state.tool.shapeBuilderTemplate);
   console.log("showPageGrid:", showPageGrid);
   window.showPageGrid = showPageGrid;
   const splitContainerRef = useRef();
@@ -788,7 +789,6 @@ const Panel = React.forwardRef(({
       }
     }
   }
-
 
   if (showHiddenIntersections) {
     for (let i = 0; i < shapesWithPoints.length; i++) {
@@ -1165,14 +1165,14 @@ const Panel = React.forwardRef(({
       return;
     }
     const clickedOnEmpty = e.target === e.target.getStage();
-    if (selectedTool === "Select" && pointerPosition) {
-      setDragStartPos(pointerPosition);
-      setDragSelectRect({ x: pointerPosition.x, y: pointerPosition.y, width: 0, height: 0 });
-    }
-    if (selectedTool === "Select" && clickedOnEmpty) {
-      dispatch(clearSelection());
-      return;
-    }
+    // if (selectedTool === "Select" && pointerPosition) {
+    //   setDragStartPos(pointerPosition);
+    //   setDragSelectRect({ x: pointerPosition.x, y: pointerPosition.y, width: 0, height: 0 });
+    // }
+    // if (selectedTool === "Select" && clickedOnEmpty) {
+    //   dispatch(clearSelection());
+    //   return;
+    // }
     const clickedShape = e.target;
     console.log("Clicked Shape:", clickedShape);
     console.log("Clicked Shape ID:", clickedShape.attrs.id);
@@ -2496,14 +2496,14 @@ const Panel = React.forwardRef(({
     if (selectedTool === "Spray" && isMouseDown) {
       handleSprayTool(e);
     }
-    if (selectedTool === "Select" && dragStartPos && pointerPosition) {
-      setDragSelectRect({
-        x: Math.min(dragStartPos.x, pointerPosition.x),
-        y: Math.min(dragStartPos.y, pointerPosition.y),
-        width: Math.abs(pointerPosition.x - dragStartPos.x),
-        height: Math.abs(pointerPosition.y - dragStartPos.y),
-      });
-    }
+    // if (selectedTool === "Select" && dragStartPos && pointerPosition) {
+    //   setDragSelectRect({
+    //     x: Math.min(dragStartPos.x, pointerPosition.x),
+    //     y: Math.min(dragStartPos.y, pointerPosition.y),
+    //     width: Math.abs(pointerPosition.x - dragStartPos.x),
+    //     height: Math.abs(pointerPosition.y - dragStartPos.y),
+    //   });
+    // }
     if (selectedTool === "Gradient" && gradientDrag && selectedShapeId) {
       const pos = e.target.getStage().getPointerPosition();
       const shape = shapes.find(s => s.id === selectedShapeId);
@@ -3209,16 +3209,16 @@ const Panel = React.forwardRef(({
         setEraserLines([]);
       }
     }
-    if (selectedTool === "Select" && dragSelectRect) {
-      if (dragSelectRect.width > 2 && dragSelectRect.height > 2) {
-        const selectedIds = shapes
-          .filter(shape => isShapeInRect(shape, dragSelectRect))
-          .map(shape => shape.id);
-        dispatch(selecteAllShapes(selectedIds));
-      }
-      setDragSelectRect(null);
-      setDragStartPos(null);
-    }
+    // if (selectedTool === "Select" && dragSelectRect) {
+    //   if (dragSelectRect.width > 2 && dragSelectRect.height > 2) {
+    //     const selectedIds = shapes
+    //       .filter(shape => isShapeInRect(shape, dragSelectRect))
+    //       .map(shape => shape.id);
+    //     dispatch(selecteAllShapes(selectedIds));
+    //   }
+    //   setDragSelectRect(null);
+    //   setDragStartPos(null);
+    // }
     if (isDrawingRef.current && selectedTool === "Eraser" && eraserMode === "clip") {
       isDrawingRef.current = false;
       if (eraserLines.length > 0) {
@@ -5760,6 +5760,305 @@ const Panel = React.forwardRef(({
     return `#${gray.toString(16).padStart(2, "0").repeat(3)}`;
   }
   const grayScale = useSelector(state => state.tool.grayScale);
+  const shapeBuilderTemplates = {
+    "Trellis": {
+      type: "Polygon",
+      x: 200,
+      y: 200,
+      points: [
+        { x: 0, y: 0 },
+        { x: 100, y: 0 },
+        { x: 100, y: 100 },
+        { x: 0, y: 100 }
+      ],
+      fill: "#e0e0e0",
+      stroke: "#222",
+      strokeWidth: 2
+    },
+    "Diamond": {
+      type: "Polygon",
+      x: 300,
+      y: 200,
+      points: [
+        { x: 50, y: 0 },
+        { x: 100, y: 50 },
+        { x: 50, y: 100 },
+        { x: 0, y: 50 }
+      ],
+      fill: "#f0f0f0",
+      stroke: "#222",
+      strokeWidth: 2
+    },
+    "Cross": {
+      type: "Polygon",
+      x: 250,
+      y: 250,
+      points: [
+        { x: 0, y: 40 }, { x: 40, y: 40 }, { x: 40, y: 0 },
+        { x: 80, y: 0 }, { x: 80, y: 40 }, { x: 120, y: 40 },
+        { x: 120, y: 80 }, { x: 80, y: 80 }, { x: 80, y: 120 },
+        { x: 40, y: 120 }, { x: 40, y: 80 }, { x: 0, y: 80 }
+      ],
+      fill: "#e0e0e0",
+      stroke: "#222",
+      strokeWidth: 2
+    },
+    "Very Cross": {
+      type: "Polygon",
+      x: 250,
+      y: 250,
+      points: [
+        { x: 0, y: 30 }, { x: 30, y: 30 }, { x: 30, y: 0 },
+        { x: 60, y: 0 }, { x: 60, y: 30 }, { x: 90, y: 30 },
+        { x: 90, y: 60 }, { x: 60, y: 60 }, { x: 60, y: 90 },
+        { x: 30, y: 90 }, { x: 30, y: 60 }, { x: 0, y: 60 }
+      ],
+      fill: "#f0f0f0",
+      stroke: "#222",
+      strokeWidth: 2
+    },
+    "Target": {
+      type: "Circle",
+      x: 300,
+      y: 300,
+      radius: 60,
+      fill: "#fff",
+      stroke: "#222",
+      strokeWidth: 6
+    },
+    "Hive": {
+      type: "Polygon",
+      x: 300,
+      y: 300,
+      points: Array.from({ length: 6 }).map((_, i) => {
+        const angle = (Math.PI / 3) * i;
+        return {
+          x: 60 * Math.cos(angle),
+          y: 60 * Math.sin(angle)
+        };
+      }),
+      fill: "#ffe066",
+      stroke: "#222",
+      strokeWidth: 2
+    },
+    "Explosion": {
+      type: "Star",
+      x: 300,
+      y: 300,
+      corners: 12,
+      innerRadius: 30,
+      outerRadius: 80,
+      fill: "#ff6666",
+      stroke: "#222",
+      strokeWidth: 2
+    },
+    "Droplet": {
+      type: "Polygon",
+      x: 300,
+      y: 300,
+      points: [
+        { x: 0, y: -60 }, { x: 40, y: 0 }, { x: 0, y: 80 }, { x: -40, y: 0 }
+      ],
+      fill: "#66ccff",
+      stroke: "#222",
+      strokeWidth: 2
+    },
+    "Double Vision": {
+      type: "Group",
+      shapes: [
+        {
+          id: `double-vision-1-${Date.now()}`,
+          type: "Circle",
+          x: 300,
+          y: 300,
+          radius: 60,
+          fill: "#66ccff",
+          stroke: "#222",
+          strokeWidth: 2
+        },
+        {
+          id: `double-vision-2-${Date.now()}`,
+          type: "Circle",
+          x: 340,
+          y: 300,
+          radius: 60,
+          fill: "#ffcc66",
+          stroke: "#222",
+          strokeWidth: 2
+        }
+      ]
+    },
+    "Celtic Flower": {
+      type: "Group",
+      shapes: Array.from({ length: 6 }).map((_, i) => ({
+        id: `celtic-flower-${i}-${Date.now()}`,
+        type: "Ellipse",
+        x: 300 + 60 * Math.cos((Math.PI * 2 * i) / 6),
+        y: 300 + 60 * Math.sin((Math.PI * 2 * i) / 6),
+        radiusX: 40,
+        radiusY: 80,
+        rotation: (360 / 6) * i,
+        fill: "#e0e0e0",
+        stroke: "#222",
+        strokeWidth: 2
+      }))
+    },
+    "Celtic Knot": {
+      type: "Path",
+      x: 300,
+      y: 300,
+      path: generateKnotPath(220, 220, 160, 160, 20, 10),
+      fill: "#fff",
+      stroke: "#222",
+      strokeWidth: 3
+    },
+    "Kitchen Tile": {
+      type: "Group",
+      shapes: [
+        {
+          id: `tile-rect-${Date.now()}`,
+          type: "Rectangle",
+          x: 250,
+          y: 250,
+          width: 100,
+          height: 100,
+          fill: "#f0f0f0",
+          stroke: "#222",
+          strokeWidth: 2
+        },
+        {
+          id: `tile-diag1-${Date.now()}`,
+          type: "Line",
+          points: [250, 250, 350, 350],
+          stroke: "#888",
+          strokeWidth: 2
+        },
+        {
+          id: `tile-diag2-${Date.now()}`,
+          type: "Line",
+          points: [350, 250, 250, 350],
+          stroke: "#888",
+          strokeWidth: 2
+        }
+      ]
+    },
+    "Rose": {
+      type: "Path",
+      x: 300,
+      y: 300,
+      path: generateSpiralPath(300, 300, 8, 10, 8),
+      fill: "#ff6699",
+      stroke: "#222",
+      strokeWidth: 2
+    },
+    "Lily": {
+      type: "Polygon",
+      x: 300,
+      y: 300,
+      points: Array.from({ length: 6 }).map((_, i) => ({
+        x: 80 * Math.cos((Math.PI * 2 * i) / 6),
+        y: 120 * Math.sin((Math.PI * 2 * i) / 6)
+      })),
+      fill: "#fffbe6",
+      stroke: "#222",
+      strokeWidth: 2
+    },
+    "Crown": {
+      type: "Polygon",
+      x: 300,
+      y: 300,
+      points: [
+        { x: -60, y: 40 }, { x: -40, y: -40 }, { x: -20, y: 40 },
+        { x: 0, y: -40 }, { x: 20, y: 40 }, { x: 40, y: -40 }, { x: 60, y: 40 }
+      ],
+      fill: "#ffe066",
+      stroke: "#222",
+      strokeWidth: 2
+    },
+    "Diamond Target": {
+      type: "Group",
+      shapes: [
+        {
+          id: `diamond-outer-${Date.now()}`,
+          type: "Polygon",
+          x: 300,
+          y: 300,
+          points: [
+            { x: 0, y: -80 }, { x: 80, y: 0 }, { x: 0, y: 80 }, { x: -80, y: 0 }
+          ],
+          fill: "#e0e0e0",
+          stroke: "#222",
+          strokeWidth: 2
+        },
+        {
+          id: `diamond-inner-${Date.now()}`,
+          type: "Polygon",
+          x: 300,
+          y: 300,
+          points: [
+            { x: 0, y: -40 }, { x: 40, y: 0 }, { x: 0, y: 40 }, { x: -40, y: 0 }
+          ],
+          fill: "#fff",
+          stroke: "#222",
+          strokeWidth: 2
+        }
+      ]
+    }, "TV Test Pattern": {
+      type: "Group",
+      shapes: [
+        {
+          id: `tvtest-rect-${Date.now()}`,
+          type: "Rectangle",
+          x: 220,
+          y: 220,
+          width: 160,
+          height: 120,
+          fill: "#fff",
+          stroke: "#222",
+          strokeWidth: 2
+        },
+        ...["#ff0000", "#00ff00", "#0000ff", "#ffff00", "#00ffff", "#ff00ff"].map((color, i) => ({
+          id: `tvtest-bar-${i}-${Date.now()}`,
+          type: "Rectangle",
+          x: 230 + i * 25,
+          y: 230,
+          width: 20,
+          height: 80,
+          fill: color,
+          stroke: "#222",
+          strokeWidth: 1
+        })),
+        {
+          id: `tvtest-circle-${Date.now()}`,
+          type: "Circle",
+          x: 300,
+          y: 280,
+          radius: 30,
+          fill: "#888",
+          stroke: "#222",
+          strokeWidth: 2
+        },
+        {
+          id: `tvtest-hbar-${Date.now()}`,
+          type: "Rectangle",
+          x: 230,
+          y: 320,
+          width: 120,
+          height: 10,
+          fill: "#222",
+          stroke: "#222",
+          strokeWidth: 1
+        }
+      ]
+    },
+  };
+  useEffect(() => {
+    if (shapeBuilderTemplate && shapeBuilderTemplates[shapeBuilderTemplate]) {
+      dispatch(addShape(shapeBuilderTemplates[shapeBuilderTemplate]));
+      dispatch({ type: "tool/setShapeBuilderTemplate", payload: null });
+    }
+  }, [shapeBuilderTemplate, dispatch]);
+
   return (
     <>
       {/* {selectedTool === "Dropper" && (

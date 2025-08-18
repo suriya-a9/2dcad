@@ -174,6 +174,7 @@ const toolSlice = createSlice({
     },
     showPageGrid: false,
     colorManagementEnabled: false,
+    shapeBuilderTemplate: null,
   },
 
   reducers: {
@@ -6555,6 +6556,9 @@ const toolSlice = createSlice({
     setShowHandles: (state, action) => {
       state.showHandlesShapeId = action.payload.shapeId;
     },
+    setShapeBuilderTemplate(state, action) {
+      state.shapeBuilderTemplate = action.payload;
+    },
   },
 });
 
@@ -6847,6 +6851,7 @@ export const {
   measureSegments,
   ruler,
   setShowHandles,
+  setShapeBuilderTemplate,
 } = toolSlice.actions;
 
 export default toolSlice.reducer;

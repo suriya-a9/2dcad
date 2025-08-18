@@ -398,7 +398,7 @@ const Modal = () => {
     { name: "Lily", icon: <img src={Lily} /> },
     { name: "Crown", icon: <img src={Crown} /> },
     { name: "Diamond Target", icon: <img src={DiamondTarget} /> },
-    { name: "TV Test Patter", icon: <img src={TVTestPattern} /> },
+    { name: "TV Test Pattern", icon: <img src={TVTestPattern} /> },
     { name: "Explosion", icon: <img src={Explosion} /> },
     { name: "Droplet", icon: <img src={Droplet} /> },
   ];
@@ -912,21 +912,16 @@ const Modal = () => {
                                 ? "bg-primary text-white"
                                 : ""
                                 }`}
-                              onClick={() => setSelectedSize(item.name)}
+                              onClick={() => {
+                                setSelectedSize(item.name);
+                                dispatch({ type: "tool/setShapeBuilderTemplate", payload: item.name });
+                                navigate("/2d-panel");
+                              }}
                             >
                               <div className="card-body p-2">
                                 <p className="card-title">{item.icon}</p>
-                                <p
-                                  className="card-title pt-3"
-                                  style={{ fontSize: "11px" }}
-                                >
+                                <p className="card-title pt-3" style={{ fontSize: "11px" }}>
                                   {item.name}
-                                </p>
-                                <p
-                                  className="card-text pt-2 "
-                                  style={{ fontSize: "11px" }}
-                                >
-                                  {item.size}
                                 </p>
                               </div>
                             </div>
@@ -979,20 +974,20 @@ const Modal = () => {
                                 ? "bg-primary text-white"
                                 : ""
                                 }`}
-                              onClick={() => setSelectedSize(item.name)}
+                              onClick={() => {
+                                setSelectedSize(item.name);
+                                if (item.size && typeof item.size === "object") {
+                                  dispatch(setPageSize(item.size));
+                                }
+                                navigate("/2d-panel");
+                              }}
                             >
                               <div className="card-body p-2">
                                 <p className="card-title">{item.icon}</p>
-                                <p
-                                  className="card-title pt-3"
-                                  style={{ fontSize: "11px" }}
-                                >
+                                <p className="card-title pt-3" style={{ fontSize: "11px" }}>
                                   {item.name}
                                 </p>
-                                <p
-                                  className="card-text pt-2 "
-                                  style={{ fontSize: "11px" }}
-                                >
+                                <p className="card-text pt-2 " style={{ fontSize: "11px" }}>
                                   {item.size}
                                 </p>
                               </div>

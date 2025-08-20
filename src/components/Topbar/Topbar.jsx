@@ -5466,7 +5466,13 @@ function DefaultTopbar() {
       );
     }
   };
-
+  function handleConvertTo3D() {
+    if (!selectedShapeId) return;
+    const shape = shapes.find(s => s.id === selectedShapeId);
+    if (!shape) return;
+    const shapeStr = encodeURIComponent(JSON.stringify(shape));
+    window.open(`http://localhost:5000/?shape=${shapeStr}`, "_blank");
+  }
   const handleShapeBuilderModeChange = (e) => {
     dispatch(setShapeBuilderMode(e.target.value));
   };
@@ -5488,6 +5494,22 @@ function DefaultTopbar() {
             data-tooltip-id="tool-top"
           />
         </div>
+        {/* <div className="p-2 value">
+          <button
+            style={{
+              background: "#007bff",
+              color: "white",
+              border: "none",
+              borderRadius: 4,
+              padding: "6px 16px",
+              cursor: "pointer"
+            }}
+            disabled={!selectedShapeId}
+            onClick={handleConvertTo3D}
+          >
+            Convert to 3D
+          </button>
+        </div> */}
         <div className="p-2 top-icon" onClick={() => dispatch(selectAllShapesInAllLayers())}>
           <FaLayerGroup
             data-tooltip-content="Select All in All Layers"

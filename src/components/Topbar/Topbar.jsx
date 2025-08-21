@@ -5494,7 +5494,7 @@ function DefaultTopbar() {
             data-tooltip-id="tool-top"
           />
         </div>
-        <div className="p-2 value">
+        {/* <div className="p-2 value">
           <button
             style={{
               background: "#007bff",
@@ -5509,7 +5509,7 @@ function DefaultTopbar() {
           >
             Convert to 3D
           </button>
-        </div>
+        </div> */}
         <div className="p-2 top-icon" onClick={() => dispatch(selectAllShapesInAllLayers())}>
           <FaLayerGroup
             data-tooltip-content="Select All in All Layers"

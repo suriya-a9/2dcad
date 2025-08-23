@@ -846,6 +846,29 @@ const toolSlice = createSlice({
     selectLayer: (state, action) => {
       state.selectedLayerIndex = action.payload;
     },
+    // selectShape: (state, action) => {
+    //   const shapeId = action.payload;
+
+    //   console.log("Shape ID to select:", shapeId);
+    //   console.log("Current selectedShapeId:", state.selectedShapeId);
+    //   console.log("Current selectedShapeIds:", state.selectedShapeIds);
+
+
+    //   const isAlreadySelected = state.selectedShapeIds.includes(shapeId);
+
+    //   if (isAlreadySelected) {
+
+    //     state.selectedShapeIds = state.selectedShapeIds.filter((id) => id !== shapeId);
+    //     state.selectedShapeId = null;
+    //   } else {
+
+    //     state.selectedShapeIds.push(shapeId);
+    //     state.selectedShapeId = shapeId;
+    //   }
+
+    //   console.log("Updated selectedShapeId:", state.selectedShapeId);
+    //   console.log("Updated selectedShapeIds:", state.selectedShapeIds);
+    // },
     selectShape: (state, action) => {
       const shapeId = action.payload;
 
@@ -853,16 +876,13 @@ const toolSlice = createSlice({
       console.log("Current selectedShapeId:", state.selectedShapeId);
       console.log("Current selectedShapeIds:", state.selectedShapeIds);
 
-
-      const isAlreadySelected = state.selectedShapeIds.includes(shapeId);
+      const isAlreadySelected = state.selectedShapeId === shapeId;
 
       if (isAlreadySelected) {
-
-        state.selectedShapeIds = state.selectedShapeIds.filter((id) => id !== shapeId);
+        state.selectedShapeIds = [];
         state.selectedShapeId = null;
       } else {
-
-        state.selectedShapeIds.push(shapeId);
+        state.selectedShapeIds = [shapeId];
         state.selectedShapeId = shapeId;
       }
 

@@ -7949,7 +7949,7 @@ const Panel = React.forwardRef(({
                                 const deltaY = y - centerY;
 
 
-                                const horizontalCornerRadius = Math.max(0, shape.cornerRadius + deltaX)
+                                const horizontalCornerRadius = Math.max(0, shape.cornerRadius + deltaX);
 
 
                                 const maxCornerRadius = Math.min(shape.width, shape.height) / 2;

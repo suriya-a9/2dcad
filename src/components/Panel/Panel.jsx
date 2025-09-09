@@ -463,7 +463,7 @@ function renderMarker(markerId, x, y, angle, color = "#222") {
   return null;
 }
 
-export function renderShape(shape, extraProps = {}) {
+export function renderShape(shape, { dispatch, selectedShapeId, shapeRefs, ...extraProps } = {}) {
   if (shape.type === "Rectangle") {
     return (
       <Rect
@@ -478,6 +478,110 @@ export function renderShape(shape, extraProps = {}) {
         listening={false}
         {...extraProps}
       />
+    );
+  }
+  if (shape.type === "3DBox") {
+    const { x, y, width, height, fill, stroke, strokeWidth, id } = shape;
+    const depth = Math.abs(Math.min(width, height) / 2);
+
+    const front = [
+      { x: 0, y: 0 },
+      { x: width, y: 0 },
+      { x: width, y: height },
+      { x: 0, y: height }
+    ];
+    const top = [
+      { x: 0, y: 0 },
+      { x: depth, y: -depth },
+      { x: width + depth, y: -depth },
+      { x: width, y: 0 }
+    ];
+    const side = [
+      { x: width, y: 0 },
+      { x: width + depth, y: -depth },
+      { x: width + depth, y: height - depth },
+      { x: width, y: height }
+    ];
+
+    const handleRadius = 8;
+    const handlePoints = [
+      ...front,
+      ...top,
+      ...side
+    ];
+
+    return (
+      <Group
+        key={id}
+        id={id}
+        x={x}
+        y={y}
+        draggable={shape.locked ? false : true}
+        ref={node => {
+          if (node) shapeRefs.current[id] = node;
+          else delete shapeRefs.current[id];
+        }}
+        onDragEnd={e => {
+          const { x, y } = e.target.position();
+          dispatch(updateShapePosition({ id, x, y }));
+        }}
+        onClick={e => {
+          e.cancelBubble = true;
+          if (!selectedShapeIds.includes(id)) {
+            dispatch(selectShape(id));
+          }
+        }}
+      >
+        <Line
+          points={front.flatMap(p => [p.x, p.y])}
+          closed
+          fill={fill || "#e0e0e0"}
+          stroke={stroke || "#222"}
+          strokeWidth={strokeWidth || 2}
+        />
+        <Line
+          points={top.flatMap(p => [p.x, p.y])}
+          closed
+          fill="#cccccc"
+          stroke={stroke || "#222"}
+          strokeWidth={strokeWidth || 2}
+        />
+        <Line
+          points={side.flatMap(p => [p.x, p.y])}
+          closed
+          fill="#b0b0b0"
+          stroke={stroke || "#222"}
+          strokeWidth={strokeWidth || 2}
+        />
+        {selectedShapeId === shape.id &&
+          handlePoints.map((pt, idx) => (
+            <Circle
+              key={idx}
+              x={pt.x}
+              y={pt.y}
+              radius={handleRadius}
+              fill="#007bff"
+              stroke="#fff"
+              strokeWidth={2}
+              draggable
+              onDragMove={e => {
+                if (idx === 0) {
+                  const newX = e.target.x();
+                  const newY = e.target.y();
+                  const newWidth = width + (x - newX);
+                  const newHeight = height + (y - newY);
+                  dispatch(updateShapePosition({ id, x: newX, y: newY, width: newWidth, height: newHeight }));
+                }
+              }}
+              onMouseEnter={e => {
+                e.target.getStage().container().style.cursor = "pointer";
+              }}
+              onMouseLeave={e => {
+                e.target.getStage().container().style.cursor = "default";
+              }}
+            />
+          ))}
+      </Group>
     );
   }
   if (shape.type === "Circle") {
@@ -601,6 +705,7 @@ const Panel = React.forwardRef(({
   setActiveTab,
   toggleSidebar
 }, ref) => {
+  const shapeRefs = useRef({});
   const [scale, setScale] = useState(1);
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const selectedNodePoints = useSelector((state) => state.tool.selectedNodePoints);
@@ -627,7 +732,9 @@ const Panel = React.forwardRef(({
   const penPoints = useSelector((state) => state.tool.penPoints);
   const [cursorPosition, setCursorPosition] = useState({ x: 0, y: 0 });
   const [isCustomCursorVisible, setIsCustomCursorVisible] = useState(false);
+  const [boxStart, setBoxStart] = useState(null);
   const selectedTool = useSelector((state) => state.tool.selectedTool);
+  console.log("Selected tool:", selectedTool);
   const gradientType = useSelector(state => state.tool.gradientType);
   const isSnappingEnabled = useSelector((state) => state.tool.isSnappingEnabled);
   const selectedShapeId = useSelector((state) => state.tool.selectedShapeId);
@@ -1081,6 +1188,12 @@ const Panel = React.forwardRef(({
 
     dispatch(addShapes(sprayShapes));
   };
+
+  function getPointerPosition(e) {
+    const stage = e.target.getStage();
+    const pointer = stage.getPointerPosition();
+    return pointer ? { x: pointer.x, y: pointer.y } : { x: 0, y: 0 };
+  }
   const getAdjustedPointerPosition = (stage, position, scale) => {
     const pointerPosition = stage.getPointerPosition();
     if (!pointerPosition) return null;
@@ -1204,7 +1317,12 @@ const Panel = React.forwardRef(({
       }
     }
     console.log("Clicked Shape:", clickedShape);
-
+    if (selectedTool === "3DBox") {
+      console.log("3DBox mouse down");
+      const pos = getPointerPosition(e);
+      setBoxStart(pos);
+      setNewShape(null);
+    }
     if (clickedOnEmpty) {
       if (selectedTool !== "Node") {
         dispatch(clearSelection());
@@ -2513,6 +2631,20 @@ const Panel = React.forwardRef(({
         end: { x: pos.x - shape.x, y: pos.y - shape.y }
       }));
     }
+    if (selectedTool === "3DBox" && boxStart) {
+      console.log("3DBox mouse move");
+      const pos = getPointerPosition(e);
+      setNewShape({
+        type: "3DBox",
+        x: boxStart.x,
+        y: boxStart.y,
+        width: pos.x - boxStart.x,
+        height: pos.y - boxStart.y,
+        fill: fillColor || "#e0e0e0",
+        stroke: strokeColor || "#222",
+        strokeWidth: 2,
+      });
+    }
     if (selectedTool === "Connector" && connectorDrag) {
       const pointer = getAdjustedPointerPosition(e.target.getStage(), position, scale);
       setConnectorDrag(drag => drag ? { ...drag, currentPos: { x: pointer.x, y: pointer.y } } : null);
@@ -3219,6 +3351,12 @@ const Panel = React.forwardRef(({
     //   setDragSelectRect(null);
     //   setDragStartPos(null);
     // }
+    if (selectedTool === "3DBox" && newShape) {
+      console.log("3DBox mouse up, adding shape:", newShape);
+      dispatch(addShape({ ...newShape, id: `box-${Date.now()}` }));
+      setBoxStart(null);
+      setNewShape(null);
+    }
     if (isDrawingRef.current && selectedTool === "Eraser" && eraserMode === "clip") {
       isDrawingRef.current = false;
       if (eraserLines.length > 0) {
@@ -4060,7 +4198,6 @@ const Panel = React.forwardRef(({
       window.removeEventListener("keydown", handleKeyDown);
     };
   }, [dispatch, selectedShapeId]);
-  const shapeRefs = useRef({});
   useLayoutEffect(() => {
     if (!transformerRef.current || !layerRef.current) return;
 
@@ -5775,6 +5912,56 @@ const Panel = React.forwardRef(({
       stroke: "#222",
       strokeWidth: 2
     },
+    "3D Box": {
+      type: "Group",
+      shapes: [
+        {
+          id: `box-front-${Date.now()}`,
+          type: "Polygon",
+          x: 300,
+          y: 300,
+          points: [
+            { x: 0, y: 0 },
+            { x: 80, y: 0 },
+            { x: 80, y: 80 },
+            { x: 0, y: 80 }
+          ],
+          fill: "#e0e0e0",
+          stroke: "#222",
+          strokeWidth: 2
+        },
+        {
+          id: `box-top-${Date.now()}`,
+          type: "Polygon",
+          x: 300,
+          y: 300,
+          points: [
+            { x: 0, y: 0 },
+            { x: 40, y: -40 },
+            { x: 120, y: -40 },
+            { x: 80, y: 0 }
+          ],
+          fill: "#cccccc",
+          stroke: "#222",
+          strokeWidth: 2
+        },
+        {
+          id: `box-side-${Date.now()}`,
+          type: "Polygon",
+          x: 300,
+          y: 300,
+          points: [
+            { x: 80, y: 0 },
+            { x: 120, y: -40 },
+            { x: 120, y: 40 },
+            { x: 80, y: 80 }
+          ],
+          fill: "#b0b0b0",
+          stroke: "#222",
+          strokeWidth: 2
+        }
+      ]
+    },
     "Diamond": {
       type: "Polygon",
       x: 300,
@@ -6105,7 +6292,7 @@ const Panel = React.forwardRef(({
                 }}>
                   <Stage width={width} height={height}>
                     <Layer>
-                      {shapes.map(shape => renderShape(shape))}
+                      {shapes.map(shape => renderShape(shape, { dispatch, selectedShapeId, selectedShapeIds, shapeRefs }))}
                     </Layer>
                   </Stage>
                 </div>
@@ -6338,7 +6525,7 @@ const Panel = React.forwardRef(({
                       />
                     );
                   })()}
-
+                  {shapes.map((shape) => renderShape(shape, { dispatch, selectedShapeId, selectedShapeIds, shapeRefs }))}
                   {shapes.map((shape) => {
 
                     if (shape.visible === false) return null;
@@ -7994,6 +8181,8 @@ const Panel = React.forwardRef(({
                         )} */}
                         </React.Fragment>
                       );
+                    } else if (shape.type === "3DBox") {
+                      return renderShape(shape, { dispatch, selectedShapeId, selectedShapeIds, shapeRefs });
                     } else if (shape.type === "Bezier") {
                       const isSelected = selectedShapeIds.includes(shape.id);
                       return (
@@ -10239,7 +10428,7 @@ const Panel = React.forwardRef(({
                     }}
                   />
                 )} */}
-
+                  {newShape && selectedTool === "3DBox" && renderShape(newShape, { dispatch, selectedShapeId, selectedShapeIds, shapeRefs })}
                   {newShape && newShape.type === "Rectangle" && (
                     <Rect
                       x={newShape.x}

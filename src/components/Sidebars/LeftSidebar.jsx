@@ -18,6 +18,7 @@ import { ImCopy } from "react-icons/im";
 import { CgPathDivide } from "react-icons/cg";
 import { LuCircuitBoard } from "react-icons/lu";
 import { FaChevronDown, FaChevronUp } from "react-icons/fa";
+import { GiCube } from "react-icons/gi";
 import React, { useRef, useState } from "react";
 import "./LeftSidebar.css";
 
@@ -49,6 +50,7 @@ const LeftSidebar = () => {
     { tool: "Circle", icon: <FaRegCircle data-tooltip-content="Circle" data-tooltip-id="tool-left" /> },
     { tool: "Star", icon: <FaRegStar data-tooltip-content="Star" data-tooltip-id="tool-left" /> },
     { tool: "Polygon", icon: <BiPolygon data-tooltip-content="Polygon" data-tooltip-id="tool-left" /> },
+    { tool: "3DBox", icon: <GiCube data-tooltip-content="3D Box" data-tooltip-id="tool-left" /> },
     { tool: "Spiral", icon: <TiSpiral data-tooltip-content="Spiral" data-tooltip-id="tool-left" /> },
     { tool: "Bezier", icon: <BsVectorPen data-tooltip-content="Bezier" data-tooltip-id="tool-left" /> },
     { tool: "Pencil", icon: <BsPencil data-tooltip-content="Pencil" data-tooltip-id="tool-left" /> },

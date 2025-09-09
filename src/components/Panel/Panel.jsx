@@ -5944,9 +5944,9 @@ const Panel = React.forwardRef(({
     },
     "Rose": {
       type: "Path",
-      x: 300,
-      y: 300,
-      path: generateSpiralPath(300, 300, 8, 10, 8),
+      x: 200,
+      y: 200,
+      path: generateSpiralPath(100, 100, 4, 2, 4),
       fill: "#ff6699",
       stroke: "#222",
       strokeWidth: 2

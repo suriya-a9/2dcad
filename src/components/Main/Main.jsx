@@ -24,6 +24,7 @@ const Main = () => {
   const guideliness = useSelector(state => state.tool.guidelines);
   const showGuides = useSelector(state => state.tool.showGuides);
   const guideColor = useSelector(state => state.tool.guideColor);
+  const [zindex,setZidex] = useState(false)
   const [draggingGuide, setDraggingGuide] = useState(null);
   const [shiftPressed, setShiftPressed] = useState(false);
   const [hasRotatedGuide, setHasRotatedGuide] = useState(false);
@@ -914,7 +915,9 @@ const Main = () => {
         </div>
         <div style={{ display: 'flex', alignItems: 'stretch' }}>
           {!wideScreen && (
-            <div style={{ flexGrow: '1', position: 'fixed', top: '108px', zIndex: 99999 }}>
+            <div 
+            style={{ flexGrow: '1', position: 'fixed', top: '108px',...(zindex ? { zIndex: 99999 } : {})}}
+             onClick={() => setZidex(prev => !prev)}>
               <LeftSidebar />
             </div>
           )}
@@ -938,7 +941,7 @@ const Main = () => {
                   : null
               }
               onDragGuide={(orientation, position) => handleDragGuide(orientation, position)}
-              style={{ zIndex: '20' }}
+              style={{ zIndex: '20' , zIndex: 99999 }}
             />
           )}
           {!wideScreen && (

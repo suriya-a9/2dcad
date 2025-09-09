@@ -914,6 +914,7 @@ const Modal = () => {
                                 }`}
                               onClick={() => {
                                 setSelectedSize(item.name);
+                                dispatch(setPageSize({ width: 1024, height: 768 , unit: "px" }))
                                 dispatch({ type: "tool/setShapeBuilderTemplate", payload: item.name });
                                 navigate("/2d-panel");
                               }}

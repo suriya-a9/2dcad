@@ -129,6 +129,7 @@ const RightSidebar = ({
   const rightIconsRef = useRef(null);
   const [rightScrollTop, setRightScrollTop] = useState(0);
   const [showRightUp, setShowRightUp] = useState(false);
+  const [relativeTo, setRelativeTo] = useState("page");
   const [showRightDown, setShowRightDown] = useState(false);
 
   const handleRightScroll = () => {
@@ -150,7 +151,6 @@ const RightSidebar = ({
       rightIconsRef.current.scrollBy({ top: amount, behavior: "smooth" });
     }
   };
-  // const [isDocPropsOpen, setIsDocPropsOpen] = useState(false);
   console.log("isAlignPanelOpen in RightSidebar:", isAlignPanelOpen);
   const alignOptions = [
     { key: "left", label: "Align Left", icon: <FaAlignLeft /> },
@@ -185,6 +185,15 @@ const RightSidebar = ({
     { key: "exchange-center", label: "Exchange Around Center", icon: <PiCircleDashed /> },
     { key: "random-exchange", label: "Random Exchange", icon: <TbArrowsShuffle /> },
     { key: "unclump", label: "Unclump", icon: <GiClamp /> },
+  ];
+  const RELATIVE_TO_OPTIONS = [
+    { value: "page", label: "Page" },
+    { value: "drawing", label: "Drawing" },
+    { value: "selection", label: "Selection" },
+    { value: "first", label: "First selected" },
+    { value: "last", label: "Last selected" },
+    { value: "biggest", label: "Biggest object" },
+    { value: "smallest", label: "Smallest object" },
   ];
   const handleAlign = (key) => {
     if (!selectedShapeIds || selectedShapeIds.length < 2) return;
@@ -1135,12 +1144,14 @@ const RightSidebar = ({
           background: "#222",
           color: "#fff",
           height: 250,
-          overflowX: "scroll",
+          overflowY: "auto", // 👈 vertical scrolling
+          overflowX: "hidden", // 👈 no need for horizontal scroll here
           borderRadius: 8,
           boxShadow: "0 2px 8px rgba(0,0,0,0.2)",
           zIndex: 2000,
           padding: 16,
-          minWidth: 240
+          minWidth: 400,
+          maxWidth: 600
         }}>
           <div style={{ display: "flex", borderBottom: "1px solid #444", marginBottom: 8 }}>
             <button style={{ flex: 1, background: alignTab === "align" ? "#444" : "none", color: "#fff" }} onClick={() => setAlignTab("align")}>Align</button>
@@ -1150,7 +1161,21 @@ const RightSidebar = ({
           <div>
             {alignTab === "align" && (
               <>
-                <div style={{ fontWeight: "bold", marginBottom: 4 }}>Align</div>
+                <div className="d-flex justify-content-between gpap-3" style={{ marginBottom: 8 }}>
+                  <div style={{ fontWeight: "bold", marginBottom: 4 }}>Align</div>
+                  <div>
+                    <div style={{ marginBottom: 8 }}>
+                      <label>Relative to:&nbsp;</label>
+                      <select value={relativeTo} onChange={e => setRelativeTo(e.target.value)}>
+                        {RELATIVE_TO_OPTIONS.map(opt => (
+                          <option key={opt.value} value={opt.value}>{opt.label}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+
+                </div>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 8, justifyContent: "center", marginBottom: 12 }}>
                   {alignOptions.map(opt => (
                     <button
@@ -1174,6 +1199,10 @@ const RightSidebar = ({
                       {opt.icon}
                     </button>
                   ))}
+                </div>
+                <div>
+
+
                 </div>
                 <div style={{ fontWeight: "bold", marginBottom: 4 }}>Distribute</div>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 8, justifyContent: "center" }}>
@@ -1200,6 +1229,7 @@ const RightSidebar = ({
                     </button>
                   ))}
                 </div>
+
                 <div style={{ fontWeight: "bold", marginBottom: 4, marginTop: 8 }}>Rearrange</div>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 8, justifyContent: "center" }}>
                   {rearrangeOptions.map(opt => (

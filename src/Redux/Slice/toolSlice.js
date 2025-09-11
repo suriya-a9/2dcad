@@ -16,6 +16,8 @@ const toolSlice = createSlice({
     strokeColor: "#000000",
     fillColor: "black",
     selectedLayerIndex: 0,
+    bezierShape: "plain",
+    bezierScale: 1,
     selectedShapeId: null,
     bezierOption: "Straight Segments",
     spiroPoints: [],
@@ -6579,6 +6581,9 @@ const toolSlice = createSlice({
     setShapeBuilderTemplate(state, action) {
       state.shapeBuilderTemplate = action.payload;
     },
+    setBezierShape(state, action) {
+      state.bezierShape = action.payload;
+    },
   },
 });
 
@@ -6872,6 +6877,7 @@ export const {
   ruler,
   setShowHandles,
   setShapeBuilderTemplate,
+  setBezierShape,
 } = toolSlice.actions;
 
 export default toolSlice.reducer;

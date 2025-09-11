@@ -120,8 +120,31 @@ function applyRoughenEffect(points, amplitude = 10, frequency = 3) {
   return roughened;
 }
 export function shapeToPoints(shape) {
-  if (shape.type === "Polygon" && Array.isArray(shape.points)) {
-    return shape.points.map(p => ({ x: p.x ?? p[0], y: p.y ?? p[1] }));
+  if (shape.type === "Polygon") {
+    // Only use static points if NOT a regular polygon (i.e., custom shape)
+    if (Array.isArray(shape.points) && shape.points.length > 2 && !shape.corners && !shape.spokeRatio) {
+      return shape.points.map(p => ({ x: p.x ?? p[0], y: p.y ?? p[1] }));
+    }
+    // Otherwise, generate regular/star-like polygon using corners and spokeRatio
+    const corners = shape.corners || 5;
+    const spokeRatio = shape.spokeRatio ?? 1;
+    const radius = shape.radius || 50;
+    const centerX = shape.x || 0;
+    const centerY = shape.y || 0;
+    const double = spokeRatio !== 1;
+    const numPoints = double ? corners * 2 : corners;
+    const points = [];
+    for (let i = 0; i < numPoints; i++) {
+      const angle = (2 * Math.PI * i) / numPoints - Math.PI / 2;
+      const r = double
+        ? (i % 2 === 0 ? radius : radius * spokeRatio)
+        : radius;
+      points.push({
+        x: centerX + r * Math.cos(angle),
+        y: centerY + r * Math.sin(angle),
+      });
+    }
+    return points;
   }
   if (shape.type === "Pencil" && Array.isArray(shape.points)) {
     return shape.points.map(p => ({ x: p.x ?? p[0], y: p.y ?? p[1] }));
@@ -462,8 +485,51 @@ function renderMarker(markerId, x, y, angle, color = "#222") {
   }
   return null;
 }
+function generatePolygonPath(points) {
+  if (!points || points.length === 0) return "";
 
-export function renderShape(shape, { dispatch, selectedShapeId, shapeRefs, ...extraProps } = {}) {
+  let path = "";
+  for (let i = 0; i < points.length; i++) {
+    const curr = points[i];
+    const prev = points[(i - 1 + points.length) % points.length];
+    const next = points[(i + 1) % points.length];
+
+    if (curr.cornerLPE && curr.cornerLPE.radius > 0) {
+
+      const v1 = { x: curr.x - prev.x, y: curr.y - prev.y };
+      const v2 = { x: next.x - curr.x, y: next.y - curr.y };
+      const len1 = Math.hypot(v1.x, v1.y);
+      const len2 = Math.hypot(v2.x, v2.y);
+
+
+      const p1 = {
+        x: curr.x - (v1.x / len1) * curr.cornerLPE.radius,
+        y: curr.y - (v1.y / len1) * curr.cornerLPE.radius,
+      };
+      const p2 = {
+        x: curr.x + (v2.x / len2) * curr.cornerLPE.radius,
+        y: curr.y + (v2.y / len2) * curr.cornerLPE.radius,
+      };
+
+      if (i === 0) {
+        path += `M ${p1.x} ${p1.y} `;
+      } else {
+        path += `L ${p1.x} ${p1.y} `;
+      }
+
+      path += `A ${curr.cornerLPE.radius} ${curr.cornerLPE.radius} 0 0 1 ${p2.x} ${p2.y} `;
+    } else {
+      if (i === 0) {
+        path += `M ${curr.x} ${curr.y} `;
+      } else {
+        path += `L ${curr.x} ${curr.y} `;
+      }
+    }
+  }
+  path += "Z";
+  return path;
+}
+export function renderShape(shape, { dispatch, selectedShapeId, selectedShapeIds, shapeRefs, ...extraProps } = {}) {
   if (shape.type === "Rectangle") {
     return (
       <Rect
@@ -510,6 +576,13 @@ export function renderShape(shape, { dispatch, selectedShapeId, shapeRefs, ...ex
       ...side
     ];
 
+    const midPoints = [
+      { x: width / 2, y: 0 },
+      { x: width, y: height / 2 },
+      { x: width / 2, y: height },
+      { x: 0, y: height / 2 }
+    ];
+
     return (
       <Group
         key={id}
@@ -553,34 +626,78 @@ export function renderShape(shape, { dispatch, selectedShapeId, shapeRefs, ...ex
           stroke={stroke || "#222"}
           strokeWidth={strokeWidth || 2}
         />
-        {selectedShapeId === shape.id &&
-          handlePoints.map((pt, idx) => (
-            <Circle
-              key={idx}
-              x={pt.x}
-              y={pt.y}
-              radius={handleRadius}
-              fill="#007bff"
-              stroke="#fff"
-              strokeWidth={2}
-              draggable
-              onDragMove={e => {
-                if (idx === 0) {
+        {selectedShapeId === shape.id && (
+          <>
+            {handlePoints.map((pt, idx) => (
+              <Circle
+                key={`handle-${idx}`}
+                x={pt.x}
+                y={pt.y}
+                radius={handleRadius}
+                fill="#007bff"
+                stroke="#fff"
+                strokeWidth={2}
+                draggable
+                onDragMove={e => {
                   const newX = e.target.x();
                   const newY = e.target.y();
-                  const newWidth = width + (x - newX);
-                  const newHeight = height + (y - newY);
-                  dispatch(updateShapePosition({ id, x: newX, y: newY, width: newWidth, height: newHeight }));
-                }
-              }}
-              onMouseEnter={e => {
-                e.target.getStage().container().style.cursor = "pointer";
-              }}
-              onMouseLeave={e => {
-                e.target.getStage().container().style.cursor = "default";
-              }}
-            />
-          ))}
+                  let updates = { id };
+
+                  if (idx === 0) {
+                    updates.x = x + (newX - pt.x);
+                    updates.y = y + (newY - pt.y);
+                    updates.width = width - (newX - pt.x);
+                    updates.height = height - (newY - pt.y);
+                  } else if (idx === 1) {
+                    updates.y = y + (newY - pt.y);
+                    updates.width = width + (newX - pt.x);
+                    updates.height = height - (newY - pt.y);
+                  } else if (idx === 2) {
+                    updates.width = width + (newX - pt.x);
+                    updates.height = height + (newY - pt.y);
+                  } else if (idx === 3) {
+                    updates.x = x + (newX - pt.x);
+                    updates.width = width - (newX - pt.x);
+                    updates.height = height + (newY - pt.y);
+                  }
+
+                  dispatch(updateShapePosition(updates));
+                }}
+                onMouseEnter={e => {
+                  e.target.getStage().container().style.cursor = "pointer";
+                }}
+                onMouseLeave={e => {
+                  e.target.getStage().container().style.cursor = "default";
+                }}
+              />
+            ))}
+            {midPoints.map((pt, idx) => (
+              <Circle
+                key={`mid-handle-${idx}`}
+                x={pt.x}
+                y={pt.y}
+                radius={handleRadius - 2}
+                fill="#00bfff"
+                stroke="#fff"
+                strokeWidth={2}
+                draggable
+                onDragMove={e => {
+                  if (idx === 0) {
+                    const newY = e.target.y();
+                    const newHeight = height + (y - newY);
+                    dispatch(updateShapePosition({ id, y: newY, height: newHeight }));
+                  }
+                }}
+                onMouseEnter={e => {
+                  e.target.getStage().container().style.cursor = "pointer";
+                }}
+                onMouseLeave={e => {
+                  e.target.getStage().container().style.cursor = "default";
+                }}
+              />
+            ))}
+          </>
+        )}
       </Group>
     );
   }
@@ -617,6 +734,7 @@ export function renderShape(shape, { dispatch, selectedShapeId, shapeRefs, ...ex
     );
   }
   if (shape.type === "Polygon") {
+    const points = shapeToPoints(shape);
     return (
       <Path
         key={shape.id}
@@ -665,15 +783,33 @@ export function renderShape(shape, { dispatch, selectedShapeId, shapeRefs, ...ex
     );
   }
   if (shape.type === "Bezier") {
+    const bezierShape = useSelector(state => state.tool.bezierShape) || "plain";
+    const bezierScale = useSelector(state => state.tool.bezierScale) || 1;
+    const pathData = getBezierPathFromPoints(shape.points, shape.closed);
+
+    let stroke = shape.stroke || "black";
+    let strokeWidth = (shape.strokeWidth || 2) * bezierScale;
+    let lineCap = "butt";
+    let lineJoin = "miter";
+
+    if (bezierShape === "triangle-in") {
+      strokeWidth = 10 * bezierScale;
+    } else if (bezierShape === "triangle-out") {
+      strokeWidth = 10 * bezierScale;
+    } else if (bezierShape === "ellipse") {
+      strokeWidth = 16 * bezierScale;
+      lineCap = "round";
+      lineJoin = "round";
+    }
+
     return (
       <Path
-        key={shape.id}
-        data={getBezierPathFromPoints(shape.points, shape.closed)}
-        stroke={shape.stroke || "black"}
-        strokeWidth={shape.strokeWidth || 2}
-        fill={shape.closed ? (shape.fill || "transparent") : "transparent"}
-        closed={shape.closed}
-        listening={false}
+        data={pathData}
+        stroke={stroke}
+        strokeWidth={strokeWidth}
+        lineCap={lineCap}
+        lineJoin={lineJoin}
+        fill="none"
         {...extraProps}
       />
     );

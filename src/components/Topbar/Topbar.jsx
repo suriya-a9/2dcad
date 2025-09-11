@@ -148,6 +148,7 @@ import {
   updateSelection,
   loadDocument,
   availableColorProfiles,
+  setBezierShape,
 } from "../../Redux/Slice/toolSlice";
 import {
   TbDeselect,
@@ -6065,7 +6066,8 @@ function BezierTopbar() {
   const dispatch = useDispatch();
   const bezierOption = useSelector((state) => state.tool.bezierOption);
   const scale = useSelector((state) => state.tool.scale);
-
+  const bezierShape = useSelector(state => state.tool.bezierShape);
+  const bezierScale = useSelector(state => state.tool.bezierScale || 1);
   const handleOptionSelect = (option) => {
     dispatch(setBezierOption(option));
     dispatch(clearPoints());
@@ -6127,7 +6129,29 @@ function BezierTopbar() {
           />
         </div>
       </div>
-
+      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+        <label>Shape:&nbsp;</label>
+        <select
+          value={bezierShape}
+          onChange={e => dispatch(setBezierShape(e.target.value))}
+          style={{ height: 30 }}
+        >
+          <option value="plain">None</option>
+          <option value="triangle-in">Triangle In</option>
+          <option value="triangle-out">Triangle Out</option>
+          <option value="ellipse">Ellipse</option>
+        </select>
+        <label style={{ marginLeft: 16 }}>Scale:&nbsp;</label>
+        <input
+          type="number"
+          min={0.1}
+          max={10}
+          step={0.1}
+          value={bezierScale}
+          onChange={e => dispatch(setBezierScale(Number(e.target.value)))}
+          style={{ width: 60 }}
+        />
+      </div>
       <div className="p-2 value" style={{ display: "flex", alignItems: "center" }}>
         <label htmlFor="scale">Scale: &nbsp;</label>
         <input

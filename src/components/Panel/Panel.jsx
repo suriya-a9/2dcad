@@ -831,6 +831,29 @@ export function renderShape(shape, { dispatch, selectedShapeId, selectedShapeIds
       />
     );
   }
+  if (shape.type === "Text") {
+    let y = shape.y;
+    let fontSize = shape.fontSize;
+    if (shape.verticalAlign === "super") {
+      y -= fontSize * 0.3;
+      fontSize *= 0.7;
+    } else if (shape.verticalAlign === "sub") {
+      y += fontSize * 0.3;
+      fontSize *= 0.7;
+    }
+    return (
+      <KonvaText
+        x={shape.x}
+        y={y}
+        text={shape.text}
+        fontSize={fontSize}
+        fill={shape.fill}
+        rotation={shape.rotation || 0}
+        scaleX={shape.scaleX || 1}
+        scaleY={shape.scaleY || 1}
+      />
+    );
+  }
   return null;
 }
 const Panel = React.forwardRef(({
@@ -973,6 +996,251 @@ const Panel = React.forwardRef(({
   function showMessage(type, text) {
     setMessages(msgs => [...msgs, { type, text }]);
     setShowMessagesModal(true);
+  }
+
+  const snappingOptions = useSelector(state => state.tool.snappingOptions);
+  const grids = useSelector(state => state.tool.grids || []);
+
+  const pageMargin = useSelector(state => state.tool.pageMargin || { left: 0, right: 0, top: 0, bottom: 0 });
+
+
+  function getSnappedPosition(pos, shapes, grids, guides = []) {
+    let snapped = { ...pos };
+    let snapLabel = null;
+
+    if (!isSnappingEnabled) {
+      setSnapText(null);
+      return snapped;
+    }
+
+    // --- Bounding Box Snapping ---
+    if (snappingOptions.boundingBoxes) {
+      shapes.forEach(shape => {
+        // Edges
+        if (snappingOptions.edges) {
+          if (Math.abs(pos.x - shape.x) < 10) { snapped.x = shape.x; snapLabel = "Edge Snap"; }
+          if (Math.abs(pos.x - (shape.x + shape.width)) < 10) { snapped.x = shape.x + shape.width; snapLabel = "Edge Snap"; }
+          if (Math.abs(pos.y - shape.y) < 10) { snapped.y = shape.y; snapLabel = "Edge Snap"; }
+          if (Math.abs(pos.y - (shape.y + shape.height)) < 10) { snapped.y = shape.y + shape.height; snapLabel = "Edge Snap"; }
+        }
+        // Corners
+        if (snappingOptions.corners) {
+          [
+            { x: shape.x, y: shape.y },
+            { x: shape.x + shape.width, y: shape.y },
+            { x: shape.x, y: shape.y + shape.height },
+            { x: shape.x + shape.width, y: shape.y + shape.height }
+          ].forEach(corner => {
+            if (Math.abs(pos.x - corner.x) < 10 && Math.abs(pos.y - corner.y) < 10) {
+              snapped.x = corner.x; snapped.y = corner.y; snapLabel = "Corner Snap";
+            }
+          });
+        }
+        // Edge Midpoints
+        if (snappingOptions.edgeMidpoints) {
+          [
+            { x: shape.x + shape.width / 2, y: shape.y },
+            { x: shape.x + shape.width / 2, y: shape.y + shape.height },
+            { x: shape.x, y: shape.y + shape.height / 2 },
+            { x: shape.x + shape.width, y: shape.y + shape.height / 2 }
+          ].forEach(mid => {
+            if (Math.abs(pos.x - mid.x) < 10 && Math.abs(pos.y - mid.y) < 10) {
+              snapped.x = mid.x; snapped.y = mid.y; snapLabel = "Edge Midpoint Snap";
+            }
+          });
+        }
+        // Center
+        if (snappingOptions.centers) {
+          const center = { x: shape.x + shape.width / 2, y: shape.y + shape.height / 2 };
+          if (Math.abs(pos.x - center.x) < 10 && Math.abs(pos.y - center.y) < 10) {
+            snapped.x = center.x; snapped.y = center.y; snapLabel = "Center Snap";
+          }
+        }
+      });
+    }
+
+    // --- Nodes / Paths Snapping ---
+    shapes.forEach(shape => {
+      if (Array.isArray(shape.points)) {
+        // Nodes
+        if (snappingOptions.nodes) {
+          shape.points.forEach(pt => {
+            const px = pt.x ?? pt[0];
+            const py = pt.y ?? pt[1];
+            if (Math.abs(pos.x - px) < 10 && Math.abs(pos.y - py) < 10) {
+              snapped.x = px; snapped.y = py; snapLabel = "Node Snap";
+            }
+          });
+        }
+        // Path Intersections (stub, needs real intersection logic)
+        if (snappingOptions.pathIntersections) {
+          // TODO: Implement intersection detection between paths
+        }
+        // Cusp Nodes (stub, needs node type info)
+        if (snappingOptions.cuspNodes) {
+          // TODO: Snap to sharp nodes if shape.points[i].type === "cusp"
+        }
+        // Smooth Nodes (stub, needs node type info)
+        if (snappingOptions.smoothNodes) {
+          // TODO: Snap to smooth nodes if shape.points[i].type === "smooth"
+        }
+        // Line Midpoints
+        if (snappingOptions.lineMidpoints) {
+          for (let i = 1; i < shape.points.length; i++) {
+            const p1 = shape.points[i - 1];
+            const p2 = shape.points[i];
+            const mx = ((p1.x ?? p1[0]) + (p2.x ?? p2[0])) / 2;
+            const my = ((p1.y ?? p1[1]) + (p2.y ?? p2[1])) / 2;
+            if (Math.abs(pos.x - mx) < 10 && Math.abs(pos.y - my) < 10) {
+              snapped.x = mx; snapped.y = my; snapLabel = "Segment Midpoint Snap";
+            }
+          }
+        }
+        // Perpendicular Lines (stub)
+        if (snappingOptions.perpendicularLines) {
+          // TODO: Implement perpendicular snapping
+        }
+        // Tangential Lines (stub)
+        if (snappingOptions.tangentialLines) {
+          // TODO: Implement tangent snapping
+        }
+        // Alignment Nodes (nodes in same path)
+        if (snappingOptions.alignmentNodes) {
+          shape.points.forEach(pt => {
+            if (Math.abs(pos.x - pt.x) < 10 || Math.abs(pos.y - pt.y) < 10) {
+              snapped.x = pt.x; snapped.y = pt.y; snapLabel = "Alignment Node Snap";
+            }
+          });
+        }
+        // Same Distances (equal spacing)
+        if (snappingOptions.alignmentDistances) {
+          let referenceDistance = 50; // Example, make configurable
+          shape.points.forEach(pt => {
+            const dx = Math.abs(pos.x - pt.x);
+            const dy = Math.abs(pos.y - pt.y);
+            if (Math.abs(dx - referenceDistance) < 10 || Math.abs(dy - referenceDistance) < 10) {
+              snapLabel = "Same Distance Snap";
+            }
+          });
+        }
+      }
+    });
+    for (const shape of shapes) {
+      if (shape.id === pos.id) continue;
+      // Rectangle, Polygon, Star, etc.
+      let corners = [];
+      if (shape.type === "Rectangle") {
+        corners = [
+          { x: shape.x, y: shape.y },
+          { x: shape.x + shape.width, y: shape.y },
+          { x: shape.x, y: shape.y + shape.height },
+          { x: shape.x + shape.width, y: shape.y + shape.height }
+        ];
+      } else if (Array.isArray(shape.points)) {
+        corners = shape.points.map(pt => ({
+          x: pt.x ?? pt[0],
+          y: pt.y ?? pt[1]
+        }));
+      } else if (shape.type === "Circle") {
+        // Circles don't have corners, skip
+        continue;
+      }
+      for (const corner of corners) {
+        if (Math.abs(pos.x - corner.x) < 10 && Math.abs(pos.y - corner.y) < 10) {
+          snapped.x = corner.x;
+          snapped.y = corner.y;
+          snapLabel = "Corner Snap";
+          break;
+        }
+      }
+      if (snapLabel) break;
+    }
+    // Object Midpoints
+    if (snappingOptions.objectMidpoints) {
+      shapes.forEach(shape => {
+        const midX = shape.x + (shape.width || shape.radius || 0) / 2;
+        const midY = shape.y + (shape.height || shape.radius || 0) / 2;
+        if (Math.abs(pos.x - midX) < 10 && Math.abs(pos.y - midY) < 10) {
+          snapped.x = midX; snapped.y = midY; snapLabel = "Object Midpoint Snap";
+        }
+      });
+    }
+
+    // Rotation Center
+    if (snappingOptions.objectRotationCenters) {
+      shapes.forEach(shape => {
+        if (shape.rotationCenter) {
+          if (Math.abs(pos.x - shape.rotationCenter.x) < 10 && Math.abs(pos.y - shape.rotationCenter.y) < 10) {
+            snapped.x = shape.rotationCenter.x; snapped.y = shape.rotationCenter.y; snapLabel = "Rotation Center Snap";
+          }
+        }
+      });
+    }
+
+    // Text Baselines
+    if (snappingOptions.textBaselines) {
+      shapes.forEach(shape => {
+        if (shape.type === "Text" && shape.y !== undefined) {
+          if (Math.abs(pos.y - shape.y) < 10) {
+            snapped.y = shape.y; snapLabel = "Text Baseline Snap";
+          }
+        }
+      });
+    }
+
+    // Masks and Clips (stub)
+    if (snappingOptions.masks || snappingOptions.clips) {
+      // TODO: Snap to mask/clip edges if shape data supports it
+    }
+
+    // --- Edges / Segments Snapping ---
+    // Grids
+    if (snappingOptions.grids && grids.length) {
+      const gridSize = grids[0]?.size || 20;
+      const gridX = Math.round(pos.x / gridSize) * gridSize;
+      const gridY = Math.round(pos.y / gridSize) * gridSize;
+      if (Math.abs(pos.x - gridX) < 10 || Math.abs(pos.y - gridY) < 10) {
+        snapped.x = gridX; snapped.y = gridY; snapLabel = "Grid Snap";
+      }
+    }
+    // Guide Lines
+    if (snappingOptions.guideLines && guides.length) {
+      guides.forEach(guide => {
+        if (guide.orientation === "vertical" && Math.abs(pos.x - guide.position) < 10) {
+          snapped.x = guide.position; snapLabel = "Guide Snap";
+        }
+        if (guide.orientation === "horizontal" && Math.abs(pos.y - guide.position) < 10) {
+          snapped.y = guide.position; snapLabel = "Guide Snap";
+        }
+      });
+    }
+    // Page Borders
+    if (snappingOptions.pageBorders) {
+      if (Math.abs(pos.x) < 10) { snapped.x = 0; snapLabel = "Page Border Snap"; }
+      if (Math.abs(pos.y) < 10) { snapped.y = 0; snapLabel = "Page Border Snap"; }
+      if (Math.abs(pos.x - width) < 10) { snapped.x = width; snapLabel = "Page Border Snap"; }
+      if (Math.abs(pos.y - height) < 10) { snapped.y = height; snapLabel = "Page Border Snap"; }
+    }
+    // Page Margins
+    if (snappingOptions.pageMargins && pageMargin) {
+      if (Math.abs(pos.x - pageMargin.left) < 10) { snapped.x = pageMargin.left; snapLabel = "Page Margin Snap"; }
+      if (Math.abs(pos.x - (width - pageMargin.right)) < 10) { snapped.x = width - pageMargin.right; snapLabel = "Page Margin Snap"; }
+      if (Math.abs(pos.y - pageMargin.top) < 10) { snapped.y = pageMargin.top; snapLabel = "Page Margin Snap"; }
+      if (Math.abs(pos.y - (height - pageMargin.bottom)) < 10) { snapped.y = height - pageMargin.bottom; snapLabel = "Page Margin Snap"; }
+    }
+
+    // --- Tooltip ---
+    if (snapLabel) {
+      setSnapText({
+        x: snapped.x * scale + position.x + 12,
+        y: snapped.y * scale + position.y - 24,
+        text: snapLabel
+      });
+    } else {
+      setSnapText(null);
+    }
+
+    return snapped;
   }
   function pushMeasurementLine(x1, y1, x2, y2) {
     if (reverseMeasure) {
@@ -1361,6 +1629,7 @@ const Panel = React.forwardRef(({
             alignment: selectedAlignment,
             textDirection: selectedShape?.textDirection || "ltr",
             blockProgression: selectedShape?.blockProgression || "normal",
+            verticalAlign: selectedShape?.verticalAlign || "normal",
           })
         );
       } else {
@@ -1379,6 +1648,7 @@ const Panel = React.forwardRef(({
           alignment: selectedAlignment,
           fill: strokeColor,
           width: 200,
+          verticalAlign: "normal",
         };
         console.log("Selected Text Direction:", selectedShape?.textDirection);
         console.log("Textarea Direction Attribute:", selectedShape?.textDirection || "ltr");
@@ -2349,9 +2619,13 @@ const Panel = React.forwardRef(({
     console.log("Text Content:", textContent);
   }, [textAreaVisible, textAreaPosition, textContent]);
 
-  const handleDragMove = (e, index) => {
-    console.log("handleDragMove triggered for:", e.target);
+  const handleDragMove = (e, index, shapeId) => {
     const node = e.target;
+    const pos = { x: e.target.x(), y: e.target.y(), id: shapeId };
+    const snapped = getSnappedPosition(pos, shapes, grids, guides);
+    // Update shape position
+    dispatch(updateShapePosition({ id: shapeId, x: snapped.x, y: snapped.y }));
+
     if (selectedTool === "Node" && selectedShapeId) {
       const { x, y } = e.target.position();
       dispatch(updateNodePosition({ shapeId: selectedShapeId, nodeIndex: index, newPosition: { x, y } }));
@@ -6563,7 +6837,7 @@ const Panel = React.forwardRef(({
                       )
                     )
                   )}
-                  {snapText && (
+                  {/* {snapText && (
                     <Text
                       x={snapText.x}
                       y={snapText.y}
@@ -6576,7 +6850,7 @@ const Panel = React.forwardRef(({
                       padding={4}
                       align="center"
                     />
-                  )}
+                  )} */}
                   {/* {selectedTool === "Bezier" && bezierOption !== "Spiro Path" && (
                   <Path
                     data={getBezierPath()}
@@ -11418,6 +11692,27 @@ const Panel = React.forwardRef(({
           </div>
         </div>
       </div>
+      {snapText && (
+        <div
+          style={{
+            position: "absolute",
+            left: snapText.x,
+            top: snapText.y,
+            background: "rgba(255,255,255,0.95)",
+            color: "#222",
+            fontWeight: "bold",
+            padding: "4px 10px",
+            borderRadius: 6,
+            boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
+            pointerEvents: "none",
+            zIndex: 9999,
+            fontSize: 15,
+            border: "1px solid #ccc"
+          }}
+        >
+          {snapText.text}
+        </div>
+      )}
       {dragSelectRect && (
         <Rect
           x={dragSelectRect.x}

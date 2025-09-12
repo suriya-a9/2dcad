@@ -24,7 +24,7 @@ const Main = () => {
   const guideliness = useSelector(state => state.tool.guidelines);
   const showGuides = useSelector(state => state.tool.showGuides);
   const guideColor = useSelector(state => state.tool.guideColor);
-  const [zindex,setZidex] = useState(false)
+  const [zindex, setZidex] = useState(false)
   const [draggingGuide, setDraggingGuide] = useState(null);
   const [shiftPressed, setShiftPressed] = useState(false);
   const [hasRotatedGuide, setHasRotatedGuide] = useState(false);
@@ -57,7 +57,6 @@ const Main = () => {
   const wideScreen = useSelector(state => state.tool.wideScreen);
   const [isDocPropsOpen, setIsDocPropsOpen] = useState(false);
   const handleOpenFillStrokeDialog = () => {
-    console.log("Open Fill & Stroke dialog");
     setIsFillStrokeDialogOpen(true);
   };
   const isDirty = useSelector(state => state.tool.isDirty);
@@ -174,7 +173,7 @@ const Main = () => {
     }
   };
   const { width, height } = useSelector((state) => state.tool);
-  console.log("main width and height", width, height);
+
   const stageRef = useRef(null);
 
   const downloadURI = (uri, name) => {
@@ -235,7 +234,7 @@ const Main = () => {
 
     stage.getChildren().forEach((layer) => {
       layer.getChildren().forEach((shape) => {
-        console.log("Shape Class Name: ", shape.className);
+
         const {
           x,
           y,
@@ -895,7 +894,7 @@ const Main = () => {
         onClick={closeContextMenu}
       >
         <div style={{ display: 'flex', alignItems: 'stretch' }}>
-          <div style={{ flexGrow: '1', position: 'fixed', width: '100%', zIndex: '1' }}>
+          <div style={{ flexGrow: '1', position: 'fixed', width: '100%', zIndex: 99999 }}>
             <Topbar editorState={editorState} onEditorStateChange={onEditorStateChange} handleSave={handleSave} setIsSidebarOpen={setIsSidebarOpen} activeTab={activeTab} setActiveTab={setActiveTab} handleDownloadPdf={handleDownloadPdf} selectedGroupId={selectedGroupId} setSelectedGroupId={setSelectedGroupId} zoomLevel={zoomLevel}
               onZoomIn={handleZoomIn}
               onZoomOut={handleZoomOut}
@@ -915,9 +914,14 @@ const Main = () => {
         </div>
         <div style={{ display: 'flex', alignItems: 'stretch' }}>
           {!wideScreen && (
-            <div 
-            style={{ flexGrow: '1', position: 'fixed', top: '108px',...(zindex ? { zIndex: 99999 } : {})}}
-             onClick={() => setZidex(prev => !prev)}>
+            <div
+              style={{
+                flexGrow: 1,
+                position: 'fixed',
+                top: '108px',
+                zIndex: !wideScreen ? 999 : 'auto'
+              }}
+            >
               <LeftSidebar />
             </div>
           )}
@@ -941,7 +945,7 @@ const Main = () => {
                   : null
               }
               onDragGuide={(orientation, position) => handleDragGuide(orientation, position)}
-              style={{ zIndex: '20' , zIndex: 99999 }}
+              style={{ zIndex: '20', zIndex: 99999 }}
             />
           )}
           {!wideScreen && (
@@ -1273,7 +1277,7 @@ const Main = () => {
           </div>
           {!wideScreen && (
             <div style={{ flexGrow: '1', position: 'fixed', top: '108px', bottom: '50px', right: '0px', zIndex: 99999 }}>
-              <RightSidebar toggleSidebar={toggleSidebar} isSidebarOpen={isSidebarOpen} handleSave={handleSave} activeTab={activeTab} setActiveTab={(tab) => console.log("Active Tab:", tab)} handleDownloadPdf={handleDownloadPdf} selectedGroupId={selectedGroupId} setSelectedGroupId={setSelectedGroupId} onZoomIn={handleZoomIn} onZoomOut={handleZoomOut} handleOpenFillStrokeDialog={handleOpenFillStrokeDialog} isFillStrokeDialogOpen={isFillStrokeDialogOpen} handleCloseFillStrokeDialog={handleCloseFillStrokeDialog} isAlignPanelOpen={isAlignPanelOpen} setIsAlignPanelOpen={setIsAlignPanelOpen} isDocPropsOpen={isDocPropsOpen} setIsDocPropsOpen={setIsDocPropsOpen} />
+              <RightSidebar toggleSidebar={toggleSidebar} isSidebarOpen={isSidebarOpen} handleSave={handleSave} activeTab={activeTab} handleDownloadPdf={handleDownloadPdf} selectedGroupId={selectedGroupId} setSelectedGroupId={setSelectedGroupId} onZoomIn={handleZoomIn} onZoomOut={handleZoomOut} handleOpenFillStrokeDialog={handleOpenFillStrokeDialog} isFillStrokeDialogOpen={isFillStrokeDialogOpen} handleCloseFillStrokeDialog={handleCloseFillStrokeDialog} isAlignPanelOpen={isAlignPanelOpen} setIsAlignPanelOpen={setIsAlignPanelOpen} isDocPropsOpen={isDocPropsOpen} setIsDocPropsOpen={setIsDocPropsOpen} />
             </div>
           )}
         </div>

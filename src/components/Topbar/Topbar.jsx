@@ -149,6 +149,7 @@ import {
   loadDocument,
   availableColorProfiles,
   setBezierShape,
+  setSnappingOption
 } from "../../Redux/Slice/toolSlice";
 import {
   TbDeselect,
@@ -5287,8 +5288,53 @@ function DefaultTopbar() {
   const [circleArcMode, setCircleArcMode] = useState(null);
   const [unit, setUnit] = useState("px");
   const shapeBuilderMode = useSelector((state) => state.tool.shapeBuilderMode);
-
+  const snappingOptions = useSelector(state => state.tool.snappingOptions);
   const [isSnappingEnabled, setIsSnappingEnabled] = useState(false);
+
+  const [showSnappingPanel, setShowSnappingPanel] = useState(false);
+  const snappingGroups = [
+    {
+      title: "1. Bounding Boxes",
+      options: [
+        { key: "boundingBoxes", label: "Bounding Boxes" },
+        { key: "edges", label: "Edges" },
+        { key: "corners", label: "Corners" },
+        { key: "edgeMidpoints", label: "Edge Midpoints" },
+        { key: "centers", label: "Center" },
+      ],
+
+    },
+    {
+      title: "2. Nodes / Paths",
+      options: [
+        { key: "nodes", label: "Nodes", },
+        { key: "pathIntersections", label: "Path Intersections", },
+        { key: "cuspNodes", label: "Cusp Nodes" },
+        { key: "smoothNodes", label: "Smooth Nodes" },
+        { key: "lineMidpoints", label: "Midpoints" },
+        { key: "perpendicularLines", label: "Perpendicular Lines" },
+        { key: "tangentialLines", label: "Tangents" },
+        { key: "objectMidpoints", label: "Object Midpoints" },
+        { key: "objectRotationCenters", label: "Rotation Center" },
+        { key: "textBaselines", label: "Text Baselines" },
+        { key: "masks", label: "Masks" },
+        { key: "clips", label: "Clips" },
+      ],
+
+    },
+    {
+      title: "3. Edges / Segments",
+      options: [
+        { key: "grids", label: "Grids", },
+        { key: "guideLines", label: "Guide Lines", },
+        { key: "pageBorders", label: "Page Borders", },
+        { key: "pageMargins", label: "Page Margins", },
+        { key: "alignmentNodes", label: "Nodes in same path", },
+        { key: "alignmentDistances", label: "Same distances", },
+      ],
+
+    }
+  ];
   const handleSelectAll = () => {
     dispatch(selecteAllShapes());
   };
@@ -5495,6 +5541,60 @@ function DefaultTopbar() {
             data-tooltip-id="tool-top"
           />
         </div>
+
+        <div className="p-2 top-icon" onClick={() => setShowSnappingPanel(v => !v)}>
+          <span title="Snapping Options">⛶</span>
+        </div>
+
+        {showSnappingPanel && (
+          <div style={{
+            position: "absolute",
+            top: 90,
+            left: 50,
+            background: "#222",
+            color: "#fff",
+            borderRadius: 8,
+            boxShadow: "0 2px 8px rgba(0,0,0,0.2)",
+            zIndex: 9999999,
+            padding: 16,
+            minWidth: 320,
+            maxHeight: 460,
+            overflowY: "auto",
+          }}>
+            {snappingGroups.map(group => (
+              <div key={group.title} style={{ marginBottom: 18 }}>
+                <div style={{ fontWeight: "bold", color: "#7fff00", marginBottom: 4 }}>{group.title}</div>
+                <div style={{ marginLeft: 8 }}>
+                  {group.options.map(opt => (
+                    <label key={opt.key} style={{ display: "flex", alignItems: "center", marginBottom: 4, fontSize: 14 }}>
+                      <input
+                        type="checkbox"
+                        checked={!!snappingOptions[opt.key]}
+                        onChange={e => dispatch(setSnappingOption({ key: opt.key, value: e.target.checked }))}
+                        style={{ marginRight: 8 }}
+                      />
+                      <span style={{ fontWeight: 500 }}>{opt.label}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            ))}
+            <button
+              onClick={() => setShowSnappingPanel(false)}
+              style={{
+                marginTop: 12,
+                padding: "6px 12px",
+                background: "#c00",
+                color: "#fff",
+                border: "1px solid #900",
+                borderRadius: 4,
+                cursor: "pointer",
+              }}
+            >
+              Close
+            </button>
+          </div>
+        )}
         {/* <div className="p-2 value">
           <button
             style={{
@@ -8412,6 +8512,28 @@ function TextEditorTopbar({ onStyleChange, selectedShapeId, shapes }) {
 
   const [showModal, setShowModal] = useState(false);
   const [modalData, setModalData] = useState([]);
+  const handleSuperscript = () => {
+    if (selectedShapeId && selectedShape) {
+      const newAlign = selectedShape.verticalAlign === "super" ? "normal" : "super";
+      dispatch(
+        updateShapePosition({
+          id: selectedShapeId,
+          verticalAlign: newAlign,
+        })
+      );
+    }
+  };
+  const handleSubscript = () => {
+    if (selectedShapeId && selectedShape) {
+      const newAlign = selectedShape.verticalAlign === "sub" ? "normal" : "sub";
+      dispatch(
+        updateShapePosition({
+          id: selectedShapeId,
+          verticalAlign: newAlign,
+        })
+      );
+    }
+  };
 
   const openModal = () => {
     console.log("text shapess", shapes);
@@ -8681,6 +8803,33 @@ function TextEditorTopbar({ onStyleChange, selectedShapeId, shapes }) {
         onClick={() => openModal()}
       >
         Check Spell
+      </button>
+      <button
+        style={{
+          background: selectedShape?.verticalAlign === "super" ? "#007bff" : "#222",
+          color: "white",
+          border: "none",
+          borderRadius: 4,
+          marginRight: 8,
+          cursor: "pointer"
+        }}
+        title="Superscript"
+        onClick={handleSuperscript}
+      >
+        x<sup>2</sup>
+      </button>
+      <button
+        style={{
+          background: selectedShape?.verticalAlign === "sub" ? "#007bff" : "#222",
+          color: "white",
+          border: "none",
+          borderRadius: 4,
+          cursor: "pointer"
+        }}
+        title="Subscript"
+        onClick={handleSubscript}
+      >
+        x<sub>2</sub>
       </button>
       {showModal && (
         <div style={modalStyle}>

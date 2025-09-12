@@ -4,19 +4,33 @@ import { useState } from "react";
 import { Tooltip } from "react-tooltip";
 import "react-tooltip/dist/react-tooltip.css";
 import { useSelector } from 'react-redux';
-import { setStrokeColor, setFillColor } from '../../Redux/Slice/toolSlice';
-
+import {
+  setStrokeColor,
+  setFillColor,
+  setStrokeColorForSelectedShape,
+  setFillColorForSelectedShape,
+  setPickedColor,
+  setDropperTarget
+} from '../../Redux/Slice/toolSlice';
 import { useDispatch } from 'react-redux';
 
 const ColorPalette = () => {
-
+  const dispatch = useDispatch();
   const handleColorChange = (newColor) => {
     dispatch(setStrokeColor(newColor));
   };
   const showToolbox = useSelector((state) => state.tool.visibleIcons.Palette);
   if (!showToolbox) return null;
 
-  const dispatch = useDispatch();
+  const selectedTool = useSelector(state => state.tool.selectedTool);
+  const dropperMode = useSelector(state => state.tool.dropperMode);
+  const selectedShapeId = useSelector(state => state.tool.selectedShapeId);
+  const pickedColor = useSelector(state => state.tool.pickedColor);
+  const dropperTarget = useSelector(state => state.tool.dropperTarget || "fill");
+
+  const [assignTo, setAssignTo] = useState(dropperTarget);
+
+
   const colors = [
     { color: "#000000", name: "Black" },
     { color: "#2E2E2E", name: "Black Light" },
@@ -93,22 +107,95 @@ const ColorPalette = () => {
     { color: "#E5C100", name: "Gold Medium" },
     { color: "#B8860B", name: "Gold Dark" }
   ];
+  const handleColorClick = (color) => {
+    dispatch(setPickedColor(color));
+    if (selectedTool === "Dropper" && dropperMode === "pick" && selectedShapeId) {
+      if (assignTo === "fill") {
+        dispatch(setFillColorForSelectedShape(color));
+      } else {
+        dispatch(setStrokeColorForSelectedShape(color));
+      }
+    } else {
+      if (assignTo === "fill") {
+        dispatch(setFillColor(color));
+      } else {
+        dispatch(setStrokeColor(color));
+      }
+    }
+  };
+
+  const handleAssignToChange = (e) => {
+    setAssignTo(e.target.value);
+    dispatch(setDropperTarget(e.target.value));
+  };
   return (
+
+
+    //     <div className='bottom-color-palette'>
+    //   <div className='colors'>
+    //     {colors.map(({ color, name }) => (
+    //       <div
+    //         key={`${color}-${name}`}
+    //         style={{ backgroundColor: color }}
+    //         onClick={() => handleColorClick(color)}
+    //         data-tooltip-id="color-tooltip"
+    //       ></div>
+    //     ))}
+
+    //     <Tooltip id="color-tooltip" place="top" />
+    //   </div>
+    // </div>
+
     <div className='bottom-color-palette'>
-      {/* <h1>Color</h1> */}
+      {/* <div style={{ marginBottom: 8 }}>
+        <strong>Picked Color:</strong>
+        {pickedColor && (
+          <span style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            marginLeft: 8,
+            gap: 8
+          }}>
+            <span style={{
+              width: 24,
+              height: 24,
+              background: pickedColor,
+              border: '1px solid #ccc',
+              borderRadius: 4,
+              display: 'inline-block'
+            }} />
+            <span style={{ fontFamily: 'monospace', fontSize: 14 }}>{pickedColor}</span>
+          </span>
+        )}
+      </div> */}
+      {/* <div style={{ marginBottom: 8 }}>
+        <strong>Assign to:</strong>
+        <label style={{ marginLeft: 8 }}>
+          <input
+            type="radio"
+            name="assignTo"
+            value="fill"
+            checked={assignTo === "fill"}
+            onChange={handleAssignToChange}
+          /> Fill
+        </label>
+        <label style={{ marginLeft: 16 }}>
+          <input
+            type="radio"
+            name="assignTo"
+            value="stroke"
+            checked={assignTo === "stroke"}
+            onChange={handleAssignToChange}
+          /> Stroke
+        </label>
+      </div> */}
       <div className='colors'>
         {colors.map(({ color, name }) => (
           <div
             key={`${color}-${name}`}
-            style={{
-              backgroundColor: color,
-            }}
-            onClick={() => {
-              dispatch(setStrokeColor(color));
-              dispatch(setFillColor(color));
-            }}
+            style={{ backgroundColor: color }}
+            onClick={() => handleColorClick(color)}
             data-tooltip-id="color-tooltip"
-          // data-tooltip-content={name}
           ></div>
         ))}
         <Tooltip id="color-tooltip" place="top" />

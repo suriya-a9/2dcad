@@ -23,6 +23,31 @@ const toolSlice = createSlice({
     spiroPoints: [],
     bsplinePoints: [],
     shapes: [],
+    snappingOptions: {
+      boundingBoxes: true,
+      edges: true,
+      corners: true,
+      edgeMidpoints: false,
+      centers: true,
+      nodes: true,
+      pathIntersections: false,
+      cuspNodes: false,
+      smoothNodes: true,
+      lineMidpoints: true,
+      perpendicularLines: false,
+      tangentialLines: false,
+      objectMidpoints: true,
+      objectRotationCenters: false,
+      textBaselines: true,
+      masks: true,
+      clips: true,
+      alignmentNodes: false,
+      alignmentDistances: false,
+      grids: true,
+      guideLines: true,
+      pageBorders: true,
+      pageMargins: true,
+    },
     calligraphyOption: "Marker",
     calligraphyWidth: 5,
     calligraphySettings: {
@@ -180,7 +205,13 @@ const toolSlice = createSlice({
   },
 
   reducers: {
-
+    setSnappingOption: (state, action) => {
+      const { key, value } = action.payload;
+      state.snappingOptions = {
+        ...state.snappingOptions,
+        [key]: value
+      };
+    },
     clearSelectedNodePoints: (state) => {
       const layer = state.layers[state.selectedLayerIndex];
       if (!layer) return;
@@ -680,23 +711,29 @@ const toolSlice = createSlice({
     },
     updateShapePosition: (state, action) => {
       const { id, ...updates } = action.payload;
-      const selectedLayer = state.layers[state.selectedLayerIndex];
-      if (selectedLayer) {
-        const shape = selectedLayer.shapes.find((shape) => shape.id === id);
-        if (shape) {
-          if ('rotation' in updates && shape.rotationLocked) {
-            delete updates.rotation;
-          }
-          Object.assign(shape, updates);
-          state.isDirty = true;
-          console.log("Updated Shape:", shape);
-        } else {
-          console.error("Shape not found in the current layer.");
-        }
-      } else {
+      const selectedLayerIndex = state.selectedLayerIndex;
+      const selectedLayer = state.layers[selectedLayerIndex];
+
+      if (!selectedLayer) {
         console.error("No selected layer found.");
+        return;
       }
+
+      const updatedShapes = selectedLayer.shapes.map((shape) => {
+        if (shape.id === id) {
+          if ('rotation' in updates && shape.rotationLocked) {
+            const { rotation, ...safeUpdates } = updates;
+            return { ...shape, ...safeUpdates };
+          }
+          return { ...shape, ...updates };
+        }
+        return shape;
+      });
+
+      state.layers[selectedLayerIndex].shapes = updatedShapes;
+      state.isDirty = true;
     },
+
     raiseShapeToTop: (state, action) => {
       const shapeId = action.payload;
       const selectedLayer = state.layers[state.selectedLayerIndex];
@@ -6878,6 +6915,7 @@ export const {
   setShowHandles,
   setShapeBuilderTemplate,
   setBezierShape,
+  setSnappingOption
 } = toolSlice.actions;
 
 export default toolSlice.reducer;

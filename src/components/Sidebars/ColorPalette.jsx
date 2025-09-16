@@ -135,7 +135,7 @@ const ColorPalette = () => {
     //   <div className='colors'>
     //     {colors.map(({ color, name }) => (
     //       <div
-    //         key={`${color}-${name}`}
+    //         key={${color}-${name}}
     //         style={{ backgroundColor: color }}
     //         onClick={() => handleColorClick(color)}
     //         data-tooltip-id="color-tooltip"

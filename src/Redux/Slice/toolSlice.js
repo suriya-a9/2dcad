@@ -6621,6 +6621,14 @@ const toolSlice = createSlice({
     setBezierShape(state, action) {
       state.bezierShape = action.payload;
     },
+    updateLatticePoint: (state, action) => {
+      const { shapeId, idx, point } = action.payload;
+      const selectedLayer = state.layers[state.selectedLayerIndex];
+      const shape = selectedLayer.shapes.find(s => s.id === shapeId);
+      if (shape && Array.isArray(shape.latticePoints)) {
+        shape.latticePoints[idx] = point;
+      }
+    },
   },
 });
 
@@ -6915,7 +6923,8 @@ export const {
   setShowHandles,
   setShapeBuilderTemplate,
   setBezierShape,
-  setSnappingOption
+  setSnappingOption,
+  updateLatticePoint,
 } = toolSlice.actions;
 
 export default toolSlice.reducer;

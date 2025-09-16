@@ -6935,7 +6935,7 @@ const Panel = React.forwardRef(({
                       />
                     );
                   })()}
-                  {shapes.map((shape) => renderShape(shape, { dispatch, selectedShapeId, selectedShapeIds, shapeRefs }))}
+                  
                   {shapes.map((shape) => {
 
                     if (shape.visible === false) return null;
@@ -7102,7 +7102,7 @@ const Panel = React.forwardRef(({
                           width={shape.width}
                           height={shape.height}
                           fill={shape.fill}
-                          stroke={shape.stroke}
+                          stroke="#888"
                           strokeWidth={shape.powerStrokeWidth || shape.strokeWidth || 10}
                           draggable={!shape.locked}
                           onDragEnd={e => handleDragEnd(e, shape.id)}
@@ -7389,103 +7389,43 @@ const Panel = React.forwardRef(({
                     }
                     if (
                       shape.lpeEffect === "Lattice Deformation" &&
-                      ["Pencil", "Calligraphy", "Bezier"].includes(shape.type) &&
-                      Array.isArray(shape.points) &&
                       Array.isArray(shape.latticePoints) &&
-                      shape.latticeRows && shape.latticeCols
+                      shape.latticePoints.length >= 4
                     ) {
-                      const normPoints = shape.points.map(p =>
-                        Array.isArray(p) ? { x: p[0], y: p[1] } : { x: p.x, y: p.y }
-                      );
-                      const minX = Math.min(...normPoints.map(p => p.x));
-                      const maxX = Math.max(...normPoints.map(p => p.x));
-                      const minY = Math.min(...normPoints.map(p => p.y));
-                      const maxY = Math.max(...normPoints.map(p => p.y));
-
-                      const getLatticePoint = (row, col) => {
-                        const idx = row * shape.latticeCols + col;
-                        return shape.latticePoints[idx] || [0, 0];
-                      };
-
-                      function latticeMap(x, y) {
-                        const u = (x - minX) / (maxX - minX || 1);
-                        const v = (y - minY) / (maxY - minY || 1);
-
-                        const fx = u * (shape.latticeCols - 1);
-                        const fy = v * (shape.latticeRows - 1);
-
-                        const col = Math.floor(fx);
-                        const row = Math.floor(fy);
-
-                        const du = fx - col;
-                        const dv = fy - row;
-
-                        const col1 = Math.min(col, shape.latticeCols - 2);
-                        const row1 = Math.min(row, shape.latticeRows - 2);
-
-                        const p00 = getLatticePoint(row1, col1);
-                        const p10 = getLatticePoint(row1, col1 + 1);
-                        const p01 = getLatticePoint(row1 + 1, col1);
-                        const p11 = getLatticePoint(row1 + 1, col1 + 1);
-
-                        const xMapped =
-                          (1 - du) * (1 - dv) * p00[0] +
-                          du * (1 - dv) * p10[0] +
-                          (1 - du) * dv * p01[0] +
-                          du * dv * p11[0];
-                        const yMapped =
-                          (1 - du) * (1 - dv) * p00[1] +
-                          du * (1 - dv) * p10[1] +
-                          (1 - du) * dv * p01[1] +
-                          du * dv * p11[1];
-
-                        return { x: xMapped, y: yMapped };
-                      }
-
-                      const mappedPoints = normPoints.map(pt => latticeMap(pt.x, pt.y));
-                      const isSelected = selectedShapeIds.includes(shape.id);
                       return (
-                        <>
-                          <Line
-                            key={shape.id + "-lattice"}
-                            points={mappedPoints.flatMap(p => [p.x, p.y])}
-                            stroke={shape.stroke || "black"}
+                        <React.Fragment key={shape.id + "-lattice"}>
+                          <Path
+                            data={
+                              "M " +
+                              shape.latticePoints.map(([x, y]) => `${x},${y}`).join(" L ") +
+                              " Z"
+                            }
+                            fill={shape.fill || "#e0e0e0"}
+                            stroke={shape.stroke || "#888"}
                             strokeWidth={shape.strokeWidth || 2}
-                            fill={shape.fill || "transparent"}
-                            closed={shape.closed || false}
+                            closed
                           />
-                          {isSelected && shape.latticePoints.map(([x, y], idx) => (
+                          {shape.latticePoints.map(([x, y], idx) => (
                             <Circle
-                              key={shape.id + "-lattice-handle-" + idx}
+                              key={idx}
                               x={x}
                               y={y}
-                              radius={7}
+                              radius={8}
                               fill="#fff"
                               stroke="#007bff"
                               strokeWidth={2}
                               draggable
                               onDragMove={e => {
-                                const newX = e.target.x();
-                                const newY = e.target.y();
-                                const newLatticePoints = [...shape.latticePoints];
-                                newLatticePoints[idx] = [newX, newY];
+                                const newPoints = [...shape.latticePoints];
+                                newPoints[idx] = [e.target.x(), e.target.y()];
                                 dispatch({
-                                  type: "tool/updateShapePosition",
-                                  payload: {
-                                    id: shape.id,
-                                    latticePoints: newLatticePoints,
-                                  }
+                                  type: "tool/updateLatticePoint",
+                                  payload: { shapeId: shape.id, idx, point: [e.target.x(), e.target.y()] }
                                 });
-                              }}
-                              onMouseEnter={e => {
-                                e.target.getStage().container().style.cursor = "pointer";
-                              }}
-                              onMouseLeave={e => {
-                                e.target.getStage().container().style.cursor = "default";
                               }}
                             />
                           ))}
-                        </>
+                        </React.Fragment>
                       );
                     }
                     if (
@@ -10657,7 +10597,7 @@ const Panel = React.forwardRef(({
                         );
                       }
                     }
-                    return null;
+                    return renderShape(shape, { dispatch, selectedShapeId, selectedShapeIds, shapeRefs });
                   })}
 
                   {selectedTool === "Node" &&

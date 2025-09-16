@@ -41,6 +41,7 @@ export default function PathEffectsDialog({ isOpen, onClose, onApply, selectedSh
     const [offsetAmount, setOffsetAmount] = useState(selectedShape?.offsetAmount || 10);
     const [showPowerStrokeDialog, setShowPowerStrokeDialog] = useState(false);
     const [powerStrokeWidth, setPowerStrokeWidth] = useState(selectedShape?.powerStrokeWidth || 10);
+    const [powerStrokeJoin, setPowerStrokeJoin] = useState(selectedShape?.powerStrokeJoin || "Miter");
     const [showTaperStrokeDialog, setShowTaperStrokeDialog] = useState(false);
     const [taperStrokeWidth, setTaperStrokeWidth] = useState(selectedShape?.taperStrokeWidth || 10);
     const [taperStart, setTaperStart] = useState(selectedShape?.taperStart ?? 1);
@@ -388,7 +389,7 @@ export default function PathEffectsDialog({ isOpen, onClose, onApply, selectedSh
 
     const handleApplyPowerStroke = () => {
         if (onSetPowerStroke && selectedShape) {
-            onSetPowerStroke(selectedShape.id, powerStrokeWidth);
+            onSetPowerStroke(selectedShape.id, powerStrokeWidth, powerStrokeJoin);
         }
         setShowPowerStrokeDialog(false);
         onApply && onApply("Power stroke");
@@ -578,6 +579,18 @@ export default function PathEffectsDialog({ isOpen, onClose, onApply, selectedSh
                                 onChange={e => setPowerStrokeWidth(Number(e.target.value))}
                                 style={{ width: 80, marginLeft: 8 }}
                             />
+                            <label>
+                                join
+                                <select
+                                    name="join"
+                                    value={powerStrokeJoin}
+                                    onChange={e => setPowerStrokeJoin(e.target.value)}
+                                >
+                                    <option value="Beleved">Beleved</option>
+                                    <option value="Miter">Miter</option>
+                                    <option value="Rounded">Rounded</option>
+                                </select>
+                            </label>
                         </div>
                         <button onClick={handleApplyPowerStroke} style={{ marginRight: 8 }}>Apply</button>
                         <button onClick={() => setShowPowerStrokeDialog(false)}>Cancel</button>

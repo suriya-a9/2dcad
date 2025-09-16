@@ -1,41 +1,101 @@
+/* Base styles for large screens (desktop) */
 .home {
   display: block;
   padding: 50px 230px;
 }
+
 .create-box {
   background: #dadada;
-  border: 2px dashed #6d6d6d ;
+  border: 2px dashed #6d6d6d;
   border-radius: 10px;
   display: flex;
   flex-direction: column;
   gap: 20px;
-  padding: 70px 0px;
+  padding: 70px 20px;
   margin-top: 50px;
 }
+
 .create-box h2 {
-  font-size: 32px;
+  font-size: 2rem;
   font-weight: 500;
   text-align: center;
 }
+
 .boxes {
   display: flex;
-  flex-direction: row;
-  justify-content: space-evenly;
-  align-items: center;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 30px;
 }
+
 .boxes .box {
   background-color: #fff;
-  width: 30%;
-  border: none;
+  flex: 1 1 30%;
+  max-width: 300px;
+  min-width: 220px;
   border-radius: 8px;
-  padding: 50px 10px;
-  cursor: pointer;
+  padding: 40px 10px;
   box-shadow: 3px 3px 8px #888888;
+  text-align: center;
+  transition: transform 0.2s ease-in-out;
 }
+
+.boxes .box:hover {
+  transform: translateY(-4px);
+}
+
 .boxes .box h4 {
-  font-size: 25px;
+  font-size: 1.5rem;
   font-weight: 500;
   color: #000;
-  text-decoration: none;
-  text-align: center;
+}
+
+/* Medium screens (tablets) */
+@media (max-width: 1024px) {
+  .home {
+    padding: 40px 80px;
+  }
+
+  .boxes .box {
+    flex: 1 1 40%;
+    max-width: 100%;
+  }
+
+  .create-box {
+    padding: 50px 15px;
+  }
+
+  .create-box h2 {
+    font-size: 1.8rem;
+  }
+}
+
+/* Small screens (phones) */
+@media (max-width: 768px) {
+  .home {
+    padding: 30px 20px;
+  }
+
+  .boxes {
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .boxes .box {
+    width: 90%;
+    max-width: none;
+    padding: 30px 10px;
+  }
+
+  .create-box {
+    padding: 30px 10px;
+  }
+
+  .create-box h2 {
+    font-size: 1.5rem;
+  }
+
+  .boxes .box h4 {
+    font-size: 1.3rem;
+  }
 }

@@ -4,34 +4,47 @@
   padding-right: 10px;
 }
 
+/* Hide scrollbar on Webkit browsers */
 ::-webkit-scrollbar {
   display: none;
 }
 
+/* Responsive grid */
 .grid-container {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 3px;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
 }
 
+/* Card responsiveness */
 .page-card {
   cursor: pointer;
   transition: 0.3s ease-in-out;
   border: 1px solid #ddd;
+  border-radius: 8px;
+  min-height: 160px;
+  max-height: 200px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
 }
 
 .cardcolor {
   border: none;
-  width: 116px;
-  height: 180px;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 3 / 4;
+  /* keeps proportions instead of fixed px */
 }
 
-
+/* Hover */
 .cardcolor:hover {
   background-color: #0d6efd;
+  color: white;
   border-radius: 5px;
 }
 
+/* Dark / Light Mode */
 .modal-dark {
   background-color: #121212;
   color: white;
@@ -42,9 +55,34 @@
   color: black;
 }
 
+/* Card content */
 .card-body.p-2 {
   justify-content: center;
   display: flex;
   flex-direction: column;
   align-items: center;
+}
+
+/* Media Queries */
+@media (max-width: 992px) {
+  .grid-container {
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  }
+}
+
+@media (max-width: 768px) {
+  .grid-container {
+    grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+  }
+}
+
+@media (max-width: 576px) {
+  .grid-container {
+    grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
+  }
+
+  .scroll-container {
+    height: 300px;
+    /* reduce modal height for small screens */
+  }
 }

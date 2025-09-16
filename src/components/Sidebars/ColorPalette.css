@@ -1,63 +1,63 @@
+.bottom-color-palette {
+  background: white;
+  width: 100%;
+  padding: 10px 26px;
+  margin-bottom: -10px;
+  box-sizing: border-box;
+}
+
 .colors {
   display: flex;
-  flex-direction: row;
-  gap: 5px;
-  width: 100%;
   flex-wrap: wrap;
-  margin-bottom: -10px;
-  padding-bottom: 10px;
-  padding-top: 10px;
-  z-index: 20;
-}
-
-.bottom-color-palette {
-  background: white;
-}
-
-.colors div {
-  border-radius: 0px !important;
-  /* width: 100px !important; */
-}
-
-.bottom-color-palette {
-  background: white;
-  /* margin-top: 10%; */
-  padding: 0;
-  /* display: flex; */
-  /* height: 400px !important; */
   justify-content: center;
-  align-items: center;
-}
-
-.colors {
-  /* display: grid; */
-  grid-template-columns: repeat(3, 1fr);
-  gap: 0px;
+  gap: 6px;
   width: 100%;
-  /* height: 100px; */
-  /* overflow-y: scroll; */
-  padding-top: 0px;
-  padding-bottom: 0px;
-  /* overflow-y: scroll;
-  scrollbar-width: thin; */
+  padding-left: 30px;
 }
 
 .colors div {
-  width: 30px;
-
-  height: 20px;
+  width: 25px;
+  height: 25px;
   background-color: transparent;
   cursor: pointer;
-  border-radius: 50%;
-
+  border-radius: 25%;
   transition: transform 0.2s ease, box-shadow 0.2s ease;
   border: 1px solid #ddd;
-
 }
 
 .colors div:hover {
-  /* transform: scale(1.1); */
   box-shadow: 0 0 5px rgba(0, 0, 0, 0.2);
   border-color: #aaa;
+}
 
+/* Tablets (768px - 1024px) */
+@media (max-width: 1024px) {
+  .colors div {
+    width: 26px;
+    height: 26px;
+  }
+}
+
+/* Phones (less than 768px) */
+@media (max-width: 768px) {
+  .bottom-color-palette {
+    padding: 8px;
+  }
+
+  .colors div {
+    width: 22px;
+    height: 22px;
+  }
+}
+
+/* Small phones (less than 480px) */
+@media (max-width: 480px) {
+  .colors {
+    gap: 4px;
+  }
+
+  .colors div {
+    width: 18px;
+    height: 18px;
+  }
 }

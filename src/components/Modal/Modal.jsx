@@ -636,24 +636,7 @@ const Modal = () => {
                               ))}
                             </ul>
                           </div>
-                          {/* {label === "Appearance:" && (
-                            <div className="form-check form-switch ms-3 d-flex align-items-center gap-2 ps-0">
-                              <span
-                                className="form-check-label mt-1"
-                                htmlFor="flexSwitchCheckDefault"
-                              >
-                                Dark
-                              </span>
-                              <input
-                                className="form-check-input ms-2 fs-5"
-                                type="checkbox"
-                                role="switch"
-                                id="flexSwitchCheckDefault"
-                                checked={isDarkMode}
-                                onChange={() => setIsDarkMode(!isDarkMode)}
-                              />
-                            </div>
-                          )} */}
+
                         </div>
                       ))}
                     </div>
@@ -914,7 +897,7 @@ const Modal = () => {
                                 }`}
                               onClick={() => {
                                 setSelectedSize(item.name);
-                                dispatch(setPageSize({ width: 1024, height: 768 , unit: "px" }))
+                                dispatch(setPageSize({ width: 1024, height: 768, unit: "px" }))
                                 dispatch({ type: "tool/setShapeBuilderTemplate", payload: item.name });
                                 navigate("/2d-panel");
                               }}
